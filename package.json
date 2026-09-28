@@ -1,0 +1,25 @@
+{
+  "name": "myself-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MySelf Research Dashboard — secure monitoring, completeness, review and export for the MySelf survey",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint:privacy": "node scripts/check-privacy.mjs",
+    "test:rules": "pnpm --filter @myself-dashboard/rules-tests test:emulator",
+    "test:e2e": "firebase emulators:exec --only auth,firestore,functions,storage --project demo-myself-dashboard --config firebase.emulators.json \"node scripts/emulator-setup.mjs && playwright test\"",
+    "dev:emulators": "firebase emulators:start --only auth,firestore,functions,storage --project demo-myself-dashboard --config firebase.emulators.json",
+    "seed:emulators": "node scripts/emulator-setup.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "firebase-tools": "^14.19.0",
+    "typescript": "^5.6.0"
+  }
+}

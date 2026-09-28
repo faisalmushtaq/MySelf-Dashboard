@@ -1,0 +1,20 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+  - "firestore"
+
+# Dependencies allowed to run install scripts (same policy as the survey repo):
+#   esbuild        platform binary for Vite and the functions bundle
+#   protobufjs     used by firebase-admin
+#   @firebase/util part of the Firebase SDK
+# Both spellings, because pnpm 10 reads onlyBuiltDependencies and pnpm 11 reads
+# allowBuilds.
+allowBuilds:
+  "@firebase/util": true
+  esbuild: true
+  protobufjs: true
+
+onlyBuiltDependencies:
+  - "@firebase/util"
+  - esbuild
+  - protobufjs
