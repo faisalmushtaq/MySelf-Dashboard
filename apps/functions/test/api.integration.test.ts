@@ -8,6 +8,7 @@ import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittin
 import { dash } from "../src/env.js";
 import { registerRelease } from "../src/releases.js";
 import { summariseSitting } from "../src/summaries.js";
+import { handleOpsRequest } from "../src/ops.js";
 import { invalidateSettings } from "../src/settings.js";
 import { resetStore } from "../src/store.js";
 import { whoAmI } from "../src/api/access.js";
@@ -277,6 +278,25 @@ describe("administration", () => {
 
   it("an administrator cannot remove their own access", async () => {
     await expect(run(updateAccessPolicy, admin, { emails: [], domains: ["brainpop.example"] })).rejects.toMatchObject({ code: "failed-precondition" });
+  });
+});
+
+describe("deploy-time operations", () => {
+  it("rebuilds every summary on request and records the result", async () => {
+    const ref = dash().doc("ops/test-rebuild");
+    await ref.set({ kind: "rebuild_summaries", requestedBy: "test" });
+    await handleOpsRequest(ref, (await ref.get()).data());
+    const done = (await ref.get()).data()!;
+    expect(done["status"]).toBe("done");
+    expect(done["scanned"]).toBeGreaterThanOrEqual(sittings.length);
+    expect((await auditRows("summaries.rebuilt")).some((r) => r["detail"]?.via === "ops request")).toBe(true);
+  });
+
+  it("refuses unknown requests", async () => {
+    const ref = dash().doc("ops/test-unknown");
+    await ref.set({ kind: "drop_everything" });
+    await handleOpsRequest(ref, (await ref.get()).data());
+    expect((await ref.get()).data()!["status"]).toBe("rejected");
   });
 });
 

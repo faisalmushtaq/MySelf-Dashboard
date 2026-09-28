@@ -318,4 +318,9 @@ describe("everything else", () => {
     await denied(setDoc(doc(db(ADMIN), `${S}/notAThing/x`), { a: 1 }));
     await denied(getDoc(doc(db(ADMIN), "studies/demo")));
   });
+
+  it("keeps deploy-time operation requests server-only", async () => {
+    await denied(setDoc(doc(db(ADMIN), "ops/x"), { kind: "rebuild_summaries" }));
+    await denied(getDoc(doc(db(ADMIN), "ops/x")));
+  });
 });

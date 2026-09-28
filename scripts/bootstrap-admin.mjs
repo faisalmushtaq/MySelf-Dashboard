@@ -52,6 +52,10 @@ try {
   console.error(`${email} has not signed in yet. Open the dashboard, sign in with Google once (you will see "Access not granted"), then run this again.`);
   process.exit(1);
 }
+if (user.customClaims?.role === "owner") {
+  console.log(`${email} is already an Administrator; role unchanged.`);
+  process.exit(0);
+}
 const claims = { ...(user.customClaims ?? {}), role: "owner" };
 await getAuth(app).setCustomUserClaims(user.uid, claims);
 await getAuth(app).revokeRefreshTokens(user.uid);

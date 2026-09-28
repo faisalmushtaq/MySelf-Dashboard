@@ -118,6 +118,31 @@ in [05-plan.md §5.2](05-plan.md). Changing required levels needs a rebuild.
 
 ## 5. Deploying into `myself-research`
 
+### 5.0 Automated first-time setup (GitHub Actions)
+
+`.github/workflows/firebase-setup.yml` does everything below with the
+`FIREBASE_SERVICE_ACCOUNT` secret (a JSON key for a service account with the
+Editor role), in two stages chosen by `MODE` in `.github/firebase-setup/request.env`:
+
+- **preflight** — read-only: confirms the key, lists databases, Hosting sites, web
+  apps, sign-in settings, API-key restrictions, buckets, deployed functions (and
+  any name clashes), the functions runtime account's roles, and whether the
+  administrator account exists. Changes nothing.
+- **setup** — creates the `dashboard` database (same location as `(default)`,
+  delete-protected, point-in-time recovery, daily backups kept 7 days), the
+  Hosting site, a "MySelf Research Dashboard" web app, adds the dashboard domains
+  to the authorised sign-in domains (and to the browser key's referrers if it has
+  any); deploys rules/indexes, the `dashboard` functions codebase and the Hosting
+  site; registers the survey versions in `releases/`; makes
+  `brainpopresearch@gmail.com` an Administrator (only if it is not one already);
+  asks the deployed `onOpsRequest` function to summarise every existing sitting
+  — inside Google Cloud, so no participant data passes through GitHub — and
+  smoke-tests the site and the backend.
+
+Every step is idempotent: re-running setup after fixing a problem is safe.
+
+### 5.1 By hand
+
 One-time, by a project owner:
 
 ```bash
@@ -125,7 +150,7 @@ One-time, by a project owner:
 gcloud firestore databases create --database=dashboard --location=europe-west2 --project=myself-research
 #    Recommended: point-in-time recovery and daily backups for review data.
 gcloud firestore databases update --database=dashboard --enable-pitr --project=myself-research
-gcloud firestore backups schedules create --database=dashboard --recurrence=daily --retention=14w --project=myself-research
+gcloud firestore backups schedules create --database=dashboard --recurrence=daily --retention=7d --project=myself-research
 
 # 2. A separate Hosting site (the survey's lab keeps the default site).
 firebase hosting:sites:create myself-research-dashboard --project myself-research
