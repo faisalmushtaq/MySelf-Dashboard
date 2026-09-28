@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "myself-research",
+    "demo": "demo-myself-dashboard"
+  },
+  "targets": {
+    "myself-research": {
+      "hosting": {
+        "dashboard": ["myself-research-dashboard"]
+      }
+    }
+  }
+}
