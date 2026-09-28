@@ -167,6 +167,7 @@ async function preflight() {
     ["firebaseauth.users.update", "make the first Administrator", "Firebase Authentication Admin"],
     ["cloudfunctions.functions.create", "deploy the functions", "Cloud Functions Admin"],
     ["run.services.setIamPolicy", "let browsers call the functions (public invoker)", "Cloud Run Admin"],
+    ["cloudfunctions.functions.setIamPolicy", "make the HTTPS download function public", "Cloud Functions Admin"],
     ["iam.serviceAccounts.actAs", "run functions as the runtime account", "Service Account User"],
     ["eventarc.triggers.create", "deploy the Firestore triggers", "Eventarc Admin"],
     ["cloudscheduler.jobs.create", "schedule export clean-up", "Cloud Scheduler Admin"],
