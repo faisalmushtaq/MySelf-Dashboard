@@ -155,6 +155,33 @@ async function preflight() {
     (compute.length ? ok : bad)("functions runtime account roles", compute.join(", ") || "none — functions could not read Firestore");
   } else note("IAM policy not readable", errorOf(iam));
 
+  // What the setup stage will do, as permissions: the answer comes from IAM
+  // itself (testIamPermissions), not from guessing what a role contains.
+  const needs = [
+    ["datastore.databases.create", "create the dashboard database", "Cloud Datastore Owner"],
+    ["datastore.indexes.create", "deploy the dashboard's indexes", "Cloud Datastore Index Admin"],
+    ["firebaserules.releases.create", "deploy the dashboard's rules", "Firebase Rules Admin"],
+    ["firebasehosting.sites.create", "create the Hosting site", "Firebase Hosting Admin"],
+    ["firebase.clients.create", "register the web app", "Firebase Admin"],
+    ["firebaseauth.configs.update", "authorise the dashboard's sign-in domain", "Firebase Authentication Admin"],
+    ["firebaseauth.users.update", "make the first Administrator", "Firebase Authentication Admin"],
+    ["cloudfunctions.functions.create", "deploy the functions", "Cloud Functions Admin"],
+    ["run.services.setIamPolicy", "let browsers call the functions (public invoker)", "Cloud Run Admin"],
+    ["iam.serviceAccounts.actAs", "run functions as the runtime account", "Service Account User"],
+    ["eventarc.triggers.create", "deploy the Firestore triggers", "Eventarc Admin"],
+    ["cloudscheduler.jobs.create", "schedule export clean-up", "Cloud Scheduler Admin"],
+    ["serviceusage.services.enable", "enable any missing API", "Service Usage Admin"],
+    ["datastore.entities.create", "register survey versions and the access list", "Cloud Datastore User"],
+  ];
+  const test = await api("POST", `https://cloudresourcemanager.googleapis.com/v1/projects/${PROJECT}:testIamPermissions`, { permissions: needs.map(([p]) => p) });
+  if (test.ok) {
+    const granted = new Set(test.json.permissions ?? []);
+    const missing = needs.filter(([p]) => !granted.has(p));
+    if (missing.length) {
+      for (const [p, why, role] of missing) bad(`missing permission to ${why}`, `${p} — role "${role}"`);
+    } else ok("the deploy account has every permission setup needs");
+  } else note("permissions could not be tested", errorOf(test));
+
   section("APIs");
   const enabled = new Set();
   let token = "";
