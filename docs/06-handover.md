@@ -121,8 +121,11 @@ in [05-plan.md §5.2](05-plan.md). Changing required levels needs a rebuild.
 ### 5.0 Automated first-time setup (GitHub Actions)
 
 `.github/workflows/firebase-setup.yml` does everything below with the
-`FIREBASE_SERVICE_ACCOUNT` secret (a JSON key for a service account with the
-Editor role), in two stages chosen by `MODE` in `.github/firebase-setup/request.env`:
+`FIREBASE_SERVICE_ACCOUNT` secret — a JSON key for a service account with
+**Editor**, **Cloud Run Admin** and **Cloud Functions Admin** (needed to make the
+functions callable from browsers), plus **Cloud Datastore Owner** for the first
+run only (creating the database; remove it afterwards) — in two stages chosen by
+`MODE` in `.github/firebase-setup/request.env`:
 
 - **preflight** — read-only: confirms the key, lists databases, Hosting sites, web
   apps, sign-in settings, API-key restrictions, buckets, deployed functions (and
@@ -139,7 +142,12 @@ Editor role), in two stages chosen by `MODE` in `.github/firebase-setup/request.
   — inside Google Cloud, so no participant data passes through GitHub — and
   smoke-tests the site and the backend.
 
-Every step is idempotent: re-running setup after fixing a problem is safe.
+Every step is idempotent: re-running setup after fixing a problem is safe, and
+re-running it later is how an update is deployed.
+
+First deployed 28 September 2026 (run 36489628110): database `dashboard`
+(europe-west2), site https://myself-research-dashboard.web.app, 22 functions in
+codebase `dashboard`, 10 survey versions registered, existing sittings summarised.
 
 ### 5.1 By hand
 
