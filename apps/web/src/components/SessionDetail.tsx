@@ -397,7 +397,17 @@ export function SessionDetail({
             </section>
           ) : null}
         </div>
-        <ReviewPanel detail={data} onChange={(review) => setData({ ...data, review, item: { ...data.item, reviewStatus: review.status } })} onNoteAdded={reload} />
+        <ReviewPanel
+          detail={data}
+          onChange={(review) => {
+            // Show the change at once, then reload: the session's status (e.g. "Needs
+            // review") is derived on the server from the review, and so are the
+            // neighbours for "Next flagged".
+            setData({ ...data, review, item: { ...data.item, reviewStatus: review.status } });
+            void reload();
+          }}
+          onNoteAdded={reload}
+        />
       </div>
       <ExportDialog
         open={exportOpen}

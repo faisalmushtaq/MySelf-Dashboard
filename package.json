@@ -15,13 +15,15 @@
     "test:rules": "pnpm --filter @myself-dashboard/rules-tests test:emulator",
     "test:e2e": "firebase emulators:exec --only auth,firestore,functions,storage --project demo-myself-dashboard --config firebase.emulators.json \"node scripts/emulator-setup.mjs && playwright test\"",
     "dev:emulators": "firebase emulators:start --only auth,firestore,functions,storage --project demo-myself-dashboard --config firebase.emulators.json",
-    "seed:emulators": "node scripts/emulator-setup.mjs"
+    "seed:emulators": "node scripts/emulator-setup.mjs",
+    "e2e:build": "pnpm --filter @myself-dashboard/core build && pnpm --filter @myself-dashboard/functions build && pnpm --filter @myself-dashboard/web build:emulators"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.0",
-    "firebase-tools": "^14.19.0",
-    "typescript": "^5.6.0",
+    "@axe-core/playwright": "^4.13.0",
     "@myself-dashboard/core": "workspace:*",
-    "firebase-admin": "^13.10.0"
+    "@playwright/test": "^1.56.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-tools": "^14.19.0",
+    "typescript": "^5.6.0"
   }
 }
