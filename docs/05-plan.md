@@ -1,5 +1,9 @@
 # 5. Implementation plan, assumptions and open questions
 
+> **Status (2026-09-28): steps 1–17 are implemented and tested against the Firebase
+> Emulator Suite.** Deployment into `myself-research` is the procedure in
+> [06-handover.md §5](06-handover.md); the open questions below still need answers.
+
 ## 5.1 Sequence
 
 | Step | Deliverable | Verified by |
