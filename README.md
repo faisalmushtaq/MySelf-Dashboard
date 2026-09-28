@@ -19,6 +19,11 @@ the survey's rules, functions or data — and needs no change to the survey to r
   components are never shown or exported; exports are generated server-side,
   downloaded through an authenticated endpoint, audited and deleted after 24 hours.
 
+Screenshots (emulator seed, synthetic sittings only):
+[Overview](docs/screenshots/overview.png) ·
+[Sessions split view](docs/screenshots/sessions-split-view.png) ·
+[Questions](docs/screenshots/questions.png)
+
 ## Documents
 
 1. [Audit of the existing system](docs/01-audit.md)
