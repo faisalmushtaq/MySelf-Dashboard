@@ -70,6 +70,9 @@ export interface VersionStat {
   incomplete: number;
   abandoned: number;
   completionRate: number | null;
+  /** Denominator and numerator of completionRate: finished, valid sessions and those complete. */
+  finished: number;
+  finishedComplete: number;
   meanCompletion: number | null;
   medianDurationMs: number | null;
   firstStartedAt: string | null;
@@ -89,7 +92,68 @@ export interface Analytics {
   versions: VersionStat[];
   durationHistogram: { label: string; fromMin: number; toMin: number | null; count: number }[];
   signals: { code: string; count: number }[];
-  sites: { site: string; count: number }[];
+  sites: SiteStat[];
+  /** Completion times on even bins, for figures; null below MIN_DURATION_N. */
+  durationDistribution: DurationDistribution | null;
+}
+
+export interface SiteStat {
+  site: string;
+  count: number;
+  /** Finished, valid sessions and those complete (the completion-rate fraction). */
+  finished: number;
+  finishedComplete: number;
+}
+
+export interface DurationDistribution {
+  n: number;
+  binMinutes: number;
+  bins: { fromMin: number; toMin: number; count: number }[];
+  /** Sessions at or beyond the last bin, reported rather than drawn. */
+  overflowFromMin: number;
+  overflow: number;
+  medianMin: number;
+  q1Min: number;
+  q3Min: number;
+}
+
+/** Linear-interpolated quantile of sorted values. */
+export function quantile(sorted: readonly number[], q: number): number {
+  if (sorted.length === 0) return NaN;
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (pos - lo);
+}
+
+/**
+ * Even bins up to the 95th percentile (so one very long sitting cannot squash
+ * the histogram), with a width from 1–2–5 minutes giving 8–20 bars.
+ */
+export function durationDistributionOf(durationsMs: readonly number[]): DurationDistribution | null {
+  if (durationsMs.length < MIN_DURATION_N) return null;
+  const mins = durationsMs.map((d) => d / 60_000).sort((a, b) => a - b);
+  const p95 = quantile(mins, 0.95);
+  const widths = [0.5, 1, 2, 5, 10, 15, 30, 60];
+  const binMinutes = widths.find((w) => Math.ceil(p95 / w) <= 20) ?? 60;
+  const nBins = Math.max(1, Math.ceil(Math.max(p95, binMinutes) / binMinutes));
+  const cap = nBins * binMinutes;
+  const bins = Array.from({ length: nBins }, (_, i) => ({ fromMin: i * binMinutes, toMin: (i + 1) * binMinutes, count: 0 }));
+  let overflow = 0;
+  for (const m of mins) {
+    if (m >= cap) overflow += 1;
+    else bins[Math.min(nBins - 1, Math.floor(m / binMinutes))]!.count += 1;
+  }
+  return {
+    n: mins.length,
+    binMinutes,
+    bins,
+    overflowFromMin: cap,
+    overflow,
+    medianMin: quantile(mins, 0.5),
+    q1Min: quantile(mins, 0.25),
+    q3Min: quantile(mins, 0.75),
+  };
 }
 
 export function median(values: number[]): number | null {
@@ -256,7 +320,7 @@ export function computeAnalytics(rows: readonly SessionRow[], ctx: AnalyticsCont
   const drop = new Map<string, number>();
   const dropSec = new Map<string, number>();
   const signals = new Map<string, number>();
-  const sites = new Map<string, number>();
+  const sites = new Map<string, SiteStat>();
   for (const r of usable) {
     const s = r.summary;
     for (const sec of s.sections) {
@@ -276,7 +340,15 @@ export function computeAnalytics(rows: readonly SessionRow[], ctx: AnalyticsCont
       if (s.lastPresentedKey) drop.set(s.lastPresentedKey, (drop.get(s.lastPresentedKey) ?? 0) + 1);
       if (s.finalSectionKey) dropSec.set(s.finalSectionKey, (dropSec.get(s.finalSectionKey) ?? 0) + 1);
     }
-    if (s.site) sites.set(s.site, (sites.get(s.site) ?? 0) + 1);
+    if (s.site) {
+      const st = sites.get(s.site) ?? { site: s.site, count: 0, finished: 0, finishedComplete: 0 };
+      st.count += 1;
+      if (["complete", "incomplete", "abandoned"].includes(r.status.lifecycle)) {
+        st.finished += 1;
+        if (r.status.lifecycle === "complete") st.finishedComplete += 1;
+      }
+      sites.set(s.site, st);
+    }
   }
   for (const r of rows) for (const w of r.status.signals) signals.set(w, (signals.get(w) ?? 0) + 1);
   for (const a of sectionAgg.values()) a.completion = a.required > 0 ? a.resolved / a.required : null;
@@ -313,6 +385,8 @@ export function computeAnalytics(rows: readonly SessionRow[], ctx: AnalyticsCont
       incomplete: list.filter((r) => r.status.lifecycle === "incomplete").length,
       abandoned: list.filter((r) => r.status.lifecycle === "abandoned").length,
       completionRate: d.length ? d.filter((r) => r.status.lifecycle === "complete").length / d.length : null,
+      finished: d.length,
+      finishedComplete: d.filter((r) => r.status.lifecycle === "complete").length,
       meanCompletion: mean(u.filter((r) => r.summary.terminal && r.summary.requiredCompletion !== null).map((r) => r.summary.requiredCompletion!)),
       medianDurationMs: durs.length >= MIN_DURATION_N ? median(durs) : null,
       firstStartedAt: started[0] ?? null,
@@ -344,6 +418,7 @@ export function computeAnalytics(rows: readonly SessionRow[], ctx: AnalyticsCont
     versions,
     durationHistogram,
     signals: [...signals.entries()].sort((a, b) => b[1] - a[1]).map(([code, count]) => ({ code, count })),
-    sites: [...sites.entries()].sort((a, b) => b[1] - a[1]).map(([site, count]) => ({ site, count })),
+    sites: [...sites.values()].sort((a, b) => b.count - a.count),
+    durationDistribution: durationDistributionOf(durations),
   };
 }

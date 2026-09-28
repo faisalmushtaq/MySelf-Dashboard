@@ -19,3 +19,4 @@ export * from "./csv.js";
 export * from "./exportSpec.js";
 export * from "./exportData.js";
 export * from "./api.js";
+export * from "./figures/index.js";
