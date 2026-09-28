@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { demoManifest, DEMO_VERSIONS, generateDemoSittings, verifyManifestHash } from "@myself-dashboard/core/node";
 import { indexRelease } from "@myself-dashboard/core";
 
@@ -85,8 +85,10 @@ for (const v of DEMO_VERSIONS) {
   });
 }
 
+const uids = {};
 for (const [who, p] of Object.entries(PEOPLE)) {
   const uid = await googleUser(p.email);
+  uids[who] = uid;
   await getAuth(app).setCustomUserClaims(uid, { role: p.role });
   console.log(`  ${who.padEnd(10)} ${p.email} (${p.role})`);
 }
@@ -110,5 +112,47 @@ if (n < sittings.length) {
   console.error(`only ${n} of ${sittings.length} sittings were summarised — is the Functions emulator running?`);
   process.exit(1);
 }
+// A few sittings already flagged by a researcher, with a note each — in the
+// same shape updateReview/addNote write, with their audit rows.
+const toFlag = [
+  ["speeder", "speeding", "Most answers under a second."],
+  ["invalid_answer", "technical", "Sleep quality recorded an option code the survey does not have."],
+  ["clock_ahead", "clock", "Device clock looks three hours fast."],
+];
+const at = new Date().toISOString();
+for (const [scenario, reason, note] of toFlag) {
+  const s = sittings.find((x) => x.scenario === scenario);
+  if (!s) continue;
+  const id = s.doc.sessionId;
+  await dash.doc(`studies/${STUDY}/reviews/${id}`).set({
+    sessionId: id,
+    status: "needs_review",
+    flags: [{ id: `seed-${reason}`, reason, note, open: true, createdBy: uids.researcher, createdByEmail: PEOPLE.researcher.email, createdAt: at, resolvedBy: null, resolvedAt: null }],
+    qualityConcerns: reason === "speeding" ? ["low_effort"] : [],
+    markedTest: false,
+    markedInvalid: false,
+    lastReviewedAt: null,
+    lastReviewedBy: null,
+    updatedAt: at,
+    updatedBy: uids.researcher,
+    noteCount: 1,
+    rev: 2,
+    _ts: FieldValue.serverTimestamp(),
+  });
+  await dash.collection(`studies/${STUDY}/reviews/${id}/notes`).add({ text: `Seeded note: ${note}`, authorUid: uids.researcher, authorEmail: PEOPLE.researcher.email, createdAt: FieldValue.serverTimestamp() });
+  for (const action of ["review.updated", "note.added"]) {
+    await dash.collection(`studies/${STUDY}/auditLog`).add({
+      action,
+      actorUid: uids.researcher,
+      actorEmail: PEOPLE.researcher.email,
+      actorRole: "researcher",
+      target: { type: "session", id },
+      detail: { seeded: true },
+      outcome: "success",
+      at: FieldValue.serverTimestamp(),
+    });
+  }
+}
+
 console.log(`seeded ${sittings.length} synthetic sittings across ${DEMO_VERSIONS.length} versions, summarised by the trigger, in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(0);

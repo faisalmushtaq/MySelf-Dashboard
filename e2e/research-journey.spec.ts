@@ -36,10 +36,15 @@ test("a researcher reviews incomplete sessions and exports them; a stranger is d
   await expect(page.locator(".result-count")).toContainText(`${incompleteCount} session`);
   const rows = page.locator("tbody tr[data-row]");
   await expect(rows).toHaveCount(incompleteCount);
+  await expect(page.locator(".table-scroll")).toHaveAttribute("aria-busy", "false");
   // Sort by completion ascending so the order is something the researcher chose.
   await page.getByRole("button", { name: /Sort by Completion/ }).click();
   await page.getByRole("button", { name: /Sort by Completion, currently descending/ }).click();
   await expect(page).toHaveURL(/sort=completion&dir=asc|dir=asc&.*sort=completion|sort=completion.*dir=asc/);
+  // The list keeps the previous rows on screen (dimmed) while a new sort loads;
+  // read the rows only once the sorted result has arrived.
+  await expect(page.locator(".table-scroll")).toHaveAttribute("aria-busy", "false");
+  await expect(page.getByRole("button", { name: /Sort by Completion, currently ascending/ })).toBeVisible();
   const firstId = await rows.first().getAttribute("data-row");
   const secondId = await rows.nth(1).getAttribute("data-row");
   const firstVersion = (await rows.first().locator("td").nth(4).innerText()).trim();
