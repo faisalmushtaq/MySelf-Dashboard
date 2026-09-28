@@ -312,6 +312,10 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 
 - **Not deployed**; production deployment, first admin and backfill are §5.
 - Browser tests run Chromium only here; WebKit/Firefox should be added to CI.
+- The Hosting security headers (CSP, HSTS, frame-ancestors) in `firebase.json` are
+  not applied by the emulators, so they have not been exercised against a live
+  site. After the first deploy, sign in, open a session and run an export with the
+  browser console open: a CSP violation there names the host to add.
 - In-memory aggregation is designed for ≤ 20,000 sittings per study (tested); past
   ~50k, move aggregation to the Firestore→BigQuery extension.
 - A removed role stops backend access within a minute; direct Firestore reads by an

@@ -203,7 +203,9 @@ export default function Sessions() {
 
   void byNewest;
 
-  const visible = COLUMNS.filter((c) => cols.includes(c.id));
+  // Split view keeps the list narrow: the columns that identify and triage a session.
+  const SPLIT_COLS = ["session", "code", "started", "completion", "status", "flags"];
+  const visible = COLUMNS.filter((c) => cols.includes(c.id) && (!split || SPLIT_COLS.includes(c.id)));
   const items = data?.items ?? [];
   const allOnPage = items.length > 0 && items.every((i) => selected.includes(i.sessionId));
 

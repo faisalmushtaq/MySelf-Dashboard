@@ -1293,6 +1293,8 @@ table.data tbody tr:last-child td {
 }
 .sessions-table tr.row-open td {
   background: #eef6f1;
+}
+.sessions-table tr.row-open td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 .density-compact td,
