@@ -2,6 +2,7 @@ import {
   buildSummary,
   can,
   compareVersions,
+  definitionsFrom,
   deriveStatus,
   emptyReview,
   neighbours,
@@ -23,7 +24,7 @@ import { actorFields, audit } from "../audit.js";
 import { requireActor } from "../authz.js";
 import { dash } from "../env.js";
 import { dpaths } from "../paths.js";
-import { releaseIndex, releaseList } from "../releases.js";
+import { allReleaseIndexes, releaseIndex, releaseList } from "../releases.js";
 import { readSitting } from "../sittings.js";
 import { currentRows } from "../store.js";
 import { callableOptions, clampInt, releaseView, searchArg, sessionIdArg } from "./common.js";
@@ -36,7 +37,8 @@ export const querySessions = onCall({ ...callableOptions, memory: "1GiB" }, asyn
   const actor = await requireActor(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const now = new Date();
-  const { rows } = await currentRows(now);
+  const [{ rows }, releases] = await Promise.all([currentRows(now), allReleaseIndexes()]);
+  const defs = definitionsFrom(releases);
   const studyCodes = can(actor.role, "view.studyCode", actor.policy);
   const pageSize = (PAGE_SIZES as readonly number[]).includes(data["pageSize"] as number) ? (data["pageSize"] as number) : 50;
   const result = runQuery(
@@ -52,7 +54,7 @@ export const querySessions = onCall({ ...callableOptions, memory: "1GiB" }, asyn
     { studyCodes },
   );
   return {
-    items: result.rows.map((r) => toListItem(r, { studyCodes })),
+    items: result.rows.map((r) => toListItem(r, { studyCodes, sectionTitle: defs.section })),
     total: result.total,
     page: result.page,
     pageSize: result.pageSize,
@@ -121,7 +123,7 @@ export const getSessionDetail = onCall({ ...callableOptions, memory: "1GiB" }, a
   await audit({ action: "session.viewed", ...actorFields(actor), target: { type: "session", id: sessionId } });
 
   return {
-    item: toListItem(row, { studyCodes }),
+    item: toListItem(row, { studyCodes, ...(release ? { sectionTitle: (k: string) => release.sections.find((x) => x.key === k)?.title } : {}) }),
     counts: summary.releaseKnown ? summary.counts : null,
     sections: summary.sections,
     estimateReasons: summary.estimateReasons,

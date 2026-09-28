@@ -58,6 +58,7 @@ export interface SessionListItem {
   requiredMissing: number | null;
   invalidCount: number | null;
   finalSectionKey: string | null;
+  finalSectionTitle: string | null;
   lastPresentedKey: string | null;
   status: StatusView;
   reviewStatus: ReviewStatus;
@@ -65,7 +66,7 @@ export interface SessionListItem {
   flagReasons: string[];
 }
 
-export function toListItem(row: SessionRow, options: { studyCodes: boolean }): SessionListItem {
+export function toListItem(row: SessionRow, options: { studyCodes: boolean; sectionTitle?: (key: string) => string | undefined }): SessionListItem {
   const s = row.summary;
   return {
     sessionId: s.sessionId,
@@ -89,6 +90,7 @@ export function toListItem(row: SessionRow, options: { studyCodes: boolean }): S
     requiredMissing: s.releaseKnown ? s.counts.requiredMissing : null,
     invalidCount: s.releaseKnown ? s.counts.invalid : null,
     finalSectionKey: s.finalSectionKey,
+    finalSectionTitle: s.finalSectionKey ? (options.sectionTitle?.(s.finalSectionKey) ?? null) : null,
     lastPresentedKey: s.lastPresentedKey,
     status: {
       display: row.status.display,
