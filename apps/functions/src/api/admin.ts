@@ -1,7 +1,9 @@
 import {
   can,
   emailAllowed,
+  FIGURE_WIDTHS,
   isRole,
+  PANEL_KINDS,
   policySchema,
   ROLES,
   type PersonView,
@@ -164,6 +166,37 @@ export const registerReleaseManifest = onCall({ ...callableOptions, memory: "512
 });
 
 /** A chart's data table downloaded from the browser (aggregate, non-sensitive) — recorded. */
+const FIGURE_FORMATS = ["pdf", "svg", "png", "tiff", "csv"] as const;
+
+/**
+ * Figures are drawn in the browser from aggregates the server already
+ * authorised; this records each figure file (and its source data) leaving the
+ * dashboard, like any other download.
+ */
+export const logFigureExport = onCall(callableOptions, async (request) => {
+  const actor = await requireActor(request, "export.aggregate");
+  const data = (request.data ?? {}) as Record<string, unknown>;
+  const format = data["format"];
+  const panels = data["panels"];
+  const width = data["width"];
+  const dpi = data["dpi"];
+  if (typeof format !== "string" || !(FIGURE_FORMATS as readonly string[]).includes(format)) throw new HttpsError("invalid-argument", "unknown figure format");
+  if (!Array.isArray(panels) || panels.length < 1 || panels.length > 6 || !panels.every((p) => (PANEL_KINDS as readonly unknown[]).includes(p))) {
+    throw new HttpsError("invalid-argument", "unknown figure panels");
+  }
+  if (typeof width !== "string" || !(width in FIGURE_WIDTHS)) throw new HttpsError("invalid-argument", "unknown figure width");
+  if (dpi !== undefined && dpi !== null && !(typeof dpi === "number" && Number.isInteger(dpi) && dpi >= 72 && dpi <= 1200)) {
+    throw new HttpsError("invalid-argument", "resolution out of range");
+  }
+  await audit({
+    action: "figure.exported",
+    ...actorFields(actor),
+    target: { type: "figure", id: (panels as string[]).join("+") },
+    detail: { format, width, dpi: typeof dpi === "number" ? dpi : null, colour: data["colour"] === "greyscale" ? "greyscale" : "colour" },
+  });
+  return { ok: true };
+});
+
 export const logChartDownload = onCall(callableOptions, async (request) => {
   const actor = await requireActor(request, "export.aggregate");
   const chart = typeof (request.data as Record<string, unknown> | undefined)?.["chart"] === "string" ? String((request.data as Record<string, unknown>)["chart"]).slice(0, 80) : "unknown";

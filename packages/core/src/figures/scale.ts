@@ -29,7 +29,8 @@ export interface Ticks {
 export function niceTicks(min: number, max: number, target = 5, integer = false): Ticks {
   if (!(max > min)) max = min + (integer ? 1 : 1);
   let step = niceStep(max - min, target);
-  if (integer && !Number.isInteger(step)) step = Math.max(1, Math.ceil(step));
+  // Whole-number axes keep to 1–2–5 steps (2.5 would print as 3).
+  if (integer && !Number.isInteger(step)) step = step < 1 ? 1 : Math.floor(step);
   const lo = Math.floor(min / step + 1e-9) * step;
   const hi = Math.ceil(max / step - 1e-9) * step;
   const values: number[] = [];

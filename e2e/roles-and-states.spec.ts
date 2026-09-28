@@ -58,4 +58,8 @@ test("the main screens have no serious accessibility violations (axe, WCAG 2.1 A
   await page.getByRole("link", { name: "Questions" }).click();
   await expect(page.locator("table.questions-table")).toBeVisible();
   await check("questions");
+  await page.getByRole("link", { name: "Figures" }).click();
+  await expect(page.locator(".paper svg")).toBeVisible();
+  await page.getByText("Source data: the numbers drawn in each panel").click();
+  await check("figures");
 });

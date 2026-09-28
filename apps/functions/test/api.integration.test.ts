@@ -14,7 +14,7 @@ import { whoAmI } from "../src/api/access.js";
 import { getSessionDetail, querySessions } from "../src/api/sessions.js";
 import { getAnalytics, getQuestionAnalytics, getQuestionHistory } from "../src/api/analytics.js";
 import { addNote, updateReview } from "../src/api/review.js";
-import { setDashboardRole, updateAccessPolicy, getSettings } from "../src/api/admin.js";
+import { logFigureExport, setDashboardRole, updateAccessPolicy, getSettings } from "../src/api/admin.js";
 import { createExport, downloadExport, expireExports, previewExport } from "../src/api/exports.js";
 
 /**
@@ -239,6 +239,15 @@ describe("exports", () => {
       const job = await run<{ status: string }>(createExport, reviewer, { kind: "completeness_summary", format, scope: "filtered", filters: DEFAULT_FILTERS });
       expect(job.status).toBe("ready");
     }
+  });
+
+  it("records every figure file leaving the dashboard, and refuses malformed requests", async () => {
+    await run(logFigureExport, reviewer, { format: "pdf", panels: ["participation", "completion"], width: "double", colour: "colour" });
+    const rows = await auditRows("figure.exported");
+    expect(rows.some((r) => r["actorEmail"] === "reviewer@brainpop.example" && r["target"]?.id === "participation+completion" && r["detail"]?.format === "pdf")).toBe(true);
+    await expect(run(logFigureExport, reviewer, { format: "exe", panels: ["status"], width: "double" })).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(run(logFigureExport, reviewer, { format: "png", panels: ["status"], width: "double", dpi: 99_999 })).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(run(logFigureExport, stranger, { format: "svg", panels: ["status"], width: "single" })).rejects.toMatchObject({ code: "permission-denied" });
   });
 
   it("a formatted single-session report", async () => {

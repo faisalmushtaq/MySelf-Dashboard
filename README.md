@@ -18,11 +18,17 @@ the survey's rules, functions or data — and needs no change to the survey to r
 - **Privacy:** raw logs never reach a browser; names, dates of birth and code
   components are never shown or exported; exports are generated server-side,
   downloaded through an authenticated endpoint, audited and deleted after 24 hours.
+- **Publication figures:** multi-panel figures at journal column widths (89/120/183
+  mm), Arial/Helvetica at 6–8 pt, colour-blind-safe or greyscale, exported as vector
+  PDF/SVG or 300–1200 dpi PNG/TIFF with a draft legend and source data
+  ([guide](docs/07-figures.md)).
 
 Screenshots (emulator seed, synthetic sittings only):
 [Overview](docs/screenshots/overview.png) ·
 [Sessions split view](docs/screenshots/sessions-split-view.png) ·
-[Questions](docs/screenshots/questions.png)
+[Questions](docs/screenshots/questions.png) ·
+[Figures](docs/screenshots/figures.png) ·
+[an exported figure (300 dpi)](docs/screenshots/figure-example-300dpi.png)
 
 ## Documents
 
@@ -32,6 +38,7 @@ Screenshots (emulator seed, synthetic sittings only):
 4. [Risks and survey-side changes](docs/04-risks.md)
 5. [Plan, assumptions, open questions](docs/05-plan.md)
 6. [**Handover**: setup, configuration, deployment, roles, rollback, limitations](docs/06-handover.md)
+7. [Publication figures: panels, house style, files, privacy](docs/07-figures.md)
 
 ## Quick start (local, synthetic data)
 
@@ -50,10 +57,10 @@ Sign in on the emulator page as `brainpopresearch@gmail.com` (Administrator),
 ## Tests
 
 ```bash
-pnpm -r test            # 145 unit tests (core, functions, web)
+pnpm -r test            # 176 unit tests (core, functions, web)
 pnpm test:rules         # 28 Firestore rules tests (emulator)
-pnpm test:integration   # 24 backend tests against the emulators
-pnpm test:e2e           # Playwright: the full research journey, roles, a11y (after pnpm e2e:build)
+pnpm test:integration   # 25 backend tests against the emulators
+pnpm test:e2e           # Playwright: the research journey, figures, roles, a11y (after pnpm e2e:build)
 ```
 
 ## Layout

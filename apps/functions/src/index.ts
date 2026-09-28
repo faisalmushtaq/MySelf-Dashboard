@@ -16,5 +16,6 @@ export {
   rebuildSummaries,
   registerReleaseManifest,
   logChartDownload,
+  logFigureExport,
 } from "./api/admin.js";
 export { previewExport, createExport, downloadExport, cleanupExports } from "./api/exports.js";

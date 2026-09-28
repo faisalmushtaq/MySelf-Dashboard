@@ -288,10 +288,10 @@ end in a catch-all deny. If those rules are ever loosened, add an explicit
 
 | Suite | Command | What |
 |---|---|---|
-| Unit | `pnpm -r test` | 121 core (completeness, statuses, filters, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, 20k-session performance, real YBM manifests) + 16 functions (access decisions, release verification, encoders) + 8 web components |
+| Unit | `pnpm -r test` | 152 core (completeness, statuses, filters, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, 20k-session performance, real YBM manifests, figure layout/typography/escaping/Wilson intervals/PNG and TIFF encoding) + 16 functions (access decisions, release verification, encoders) + 8 web components |
 | Rules | `pnpm test:rules` | 28 emulator tests (Firestore emulator) |
-| Integration | `pnpm test:integration` | 24 backend tests against Auth/Firestore/Storage emulators with real Google-provider ID tokens |
-| End to end | `pnpm e2e:build && pnpm test:e2e` | 4 Playwright tests: the brief's 11-step research journey, reviewer restrictions, administrator screens and empty states, axe WCAG 2.1 AA on the main screens |
+| Integration | `pnpm test:integration` | 25 backend tests against Auth/Firestore/Storage emulators with real Google-provider ID tokens |
+| End to end | `pnpm e2e:build && pnpm test:e2e` | 5 Playwright tests: the brief's 11-step research journey, a publication figure downloaded in every format (each file opened and checked), reviewer restrictions, administrator screens and empty states, axe WCAG 2.1 AA on the main screens including Figures |
 | Privacy lint | `pnpm lint:privacy` | no console logging or analytics in the web app |
 | Drift | `pnpm check:vendored ../MySelf` | the vendored evaluator still matches the survey |
 
@@ -309,6 +309,10 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 | Remove the dashboard entirely | Delete the `dashboard` functions codebase (`firebase functions:delete <names> --region europe-west2`), the Hosting site, and the database (`gcloud firestore databases delete --database=dashboard`). The survey is untouched: nothing in this repository writes to `(default)`. |
 
 ## 13. Known limitations
+
+- Figure PDFs set text in the standard Helvetica font without embedding it;
+  embed fonts in Acrobat or Illustrator if a journal's checker requires it
+  ([07-figures.md](07-figures.md) §7.6).
 
 - **Not deployed**; production deployment, first admin and backfill are §5.
 - Browser tests run Chromium only here; WebKit/Firefox should be added to CI.

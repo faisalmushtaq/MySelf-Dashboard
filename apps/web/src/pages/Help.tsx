@@ -65,6 +65,12 @@ export function HelpContent() {
         </dl>
       </section>
       <section>
+        <h3>Figures</h3>
+        <p>
+          The Figures page builds publication-ready figures from the current filters: journal column widths, Arial/Helvetica at 6–8 pt, colour-blind-safe
+          or greyscale colours, 95% confidence intervals where proportions are compared, a draft figure legend and the source data behind each panel. Figures
+          use aggregates only; every downloaded file is recorded in the audit log first.
+        </p>
         <h3>Keyboard</h3>
         <dl className="defs keys">
           <div><dt><kbd>/</kbd></dt><dd>Focus the session search</dd></div>

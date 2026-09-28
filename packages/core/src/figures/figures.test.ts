@@ -151,6 +151,7 @@ describe("scales", () => {
   it("chooses whole-number ticks for counts", () => {
     expect(niceTicks(0, 62, 4, true).values).toEqual([0, 20, 40, 60, 80]);
     expect(niceTicks(0, 3, 4, true).values).toEqual([0, 1, 2, 3]);
+    expect(niceTicks(0, 12, 5, true).values).toEqual([0, 2, 4, 6, 8, 10, 12]);
   });
 
   it("prints as many decimals as the step needs", () => {
