@@ -1,9 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import "@fontsource/newsreader/400.css";
-import "@fontsource/newsreader/500.css";
-import "@fontsource/newsreader/600.css";
-import "@fontsource/newsreader/700.css";
+// Inter (400–700) is imported at the top of styles.css, as in the survey.
 import "./styles.css";
 import { App } from "./App";
 
