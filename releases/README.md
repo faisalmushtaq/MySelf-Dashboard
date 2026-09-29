@@ -1,7 +1,7 @@
 # Survey release manifests (snapshot)
 
 The published MySelf survey versions, copied from `faisalmushtaq/MySelf`
-`releases/` (r1.0.0–r7.1.0 at commit `ee554ac`, r7.2.0 at `e28e383`; the unhashed
+`releases/` (r1.0.0–r7.1.0 at commit `ee554ac`, r7.2.0 at `e28e383`, r7.3.0 at `20e0e9d`; the unhashed
 preview manifest is left out). They are survey definitions — questions, options, display rules — and
 contain no participant data.
 

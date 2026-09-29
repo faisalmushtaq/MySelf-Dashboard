@@ -363,11 +363,11 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 - Scores: RCADS T-score norms are not included; the SWEMWBS bands are adult-
   derived and the SDQ British norms date from 1999; every cut-point and norm is
   shipped unverified until an administrator checks it (docs/08 §8.6). The
-  survey's own SWEMWBS and STAI-5 scoring is blank before r7.2.0 (S6, fixed in
-  the survey from r7.2.0), its SDQ and RCADS totals are blank in every
-  release (S7) and its RCADS subscales swap items 18 and 24 (S8), neither yet
-  fixed; the dashboard is the scoring source for all data and exports only its
-  own scores (docs/08 §8.5).
+  survey's own SWEMWBS and STAI-5 scoring is blank before r7.2.0 (S6) and its
+  RCADS subscales swap items 18 and 24 before r7.3.0 (S8); its SDQ and RCADS
+  totals were blank in every release until its reading was fixed (S7). All
+  three are fixed in the survey; the dashboard is the scoring source for all
+  data and exports only its own scores (docs/08 §8.5).
 - Data quality (docs/09): the SDQ's wording mixes the 11–17 and adult forms and
   per-app "time in one go" code 1 changed meaning in r5.0.0 — both need a
   decision before analysis. Every new survey version must have its new

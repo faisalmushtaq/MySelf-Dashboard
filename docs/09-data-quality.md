@@ -1,15 +1,15 @@
 # 9. Codebook and data-quality review
 
 What every question is called, and whether each answer means and scores what its
-label says. Reviewed 29 September 2026 against survey versions r1.0.0–r7.2.0 and
+label says. Reviewed 29 September 2026 against survey versions r1.0.0–r7.3.0 and
 the dashboard's scoring schemes. Code: `packages/core/src/codebook/`,
 `packages/core/src/quality/`; server: `apps/functions/src/api/codebook.ts`;
 screen: **Codebook**.
 
 ## 9.1 What was reviewed, and how
 
-- **Every question in every version**: 147 distinct questions across 11 survey
-  versions (143 in r7.2.0; information screens are not questions): wording, the context shown above it, the instrument's instructions,
+- **Every question in every version**: 147 distinct questions across 12 survey
+  versions (143 in r7.2.0 and r7.3.0; information screens are not questions): wording, the context shown above it, the instrument's instructions,
   the answer type, and every response code with its label and kind (a real answer,
   or "don't know" / "prefer not to say").
 - **Against the published instruments**: the SDQ against youthinmind's 11–17
@@ -72,8 +72,8 @@ exports.
 | | Problem | Status |
 |---|---|---|
 | S6 | SWEMWBS and STAI-5 definitions named items `q1`… the instruments never had: totals always blank | Fixed in the survey from r7.2.0 (D-49, [faisalmushtaq/MySelf#98](https://github.com/faisalmushtaq/MySelf/pull/98)); earlier versions keep blank survey-side totals |
-| S7 | The survey's ingest hides subscales from the step that adds them up: its SDQ total difficulties and RCADS total are always blank | Open; a few lines in `packages/store/src/ingest.ts` |
-| S8 | The survey's RCADS definition swaps items 18 and 24, as in §9.3 | Open; a new scoring-definition version, frozen in the next release |
+| S7 | The survey's ingest hid subscales from the step that adds them up: its SDQ total difficulties and RCADS total were always blank | Fixed in the survey's reading (D-50, [faisalmushtaq/MySelf#100](https://github.com/faisalmushtaq/MySelf/pull/100)), for every version once a dataset is rebuilt |
+| S8 | The survey's RCADS definition swapped items 18 and 24, as in §9.3 | Fixed from r7.3.0 (D-50, [faisalmushtaq/MySelf#100](https://github.com/faisalmushtaq/MySelf/pull/100)); r1.0.0–r7.2.0 keep the swapped survey-side subscales |
 
 ## 9.5 Questions against their labels, instrument by instrument
 
@@ -191,8 +191,8 @@ schemes:
 Severity: an **error** means scores or names are wrong — fix before analysis; a
 **warning** changes what the data mean or how they may be pooled and needs a
 decision; a **note** is worth knowing. With the default schemes, the review of
-r1.0.0–r7.2.0 has no errors and four warnings (the SDQ form, per-app time code 1,
-and the survey-side S7 and S8). Tests (`quality.test.ts`) pin that result and show
+r1.0.0–r7.3.0 has no errors and two warnings (the SDQ form and per-app time
+code 1); the survey-side S6–S8 are notes, fixed in the survey. Tests (`quality.test.ts`) pin that result and show
 the review catching each kind of mistake: the old RCADS key, an unreversed SDQ
 strength item, an agree-first item scored backwards, a scrambled recode,
 parent-report cut-points, and "don't know" recorded as a real answer.
@@ -206,8 +206,8 @@ parent-report cut-points, and "don't know" recorded as a real answer.
    raw or metric scores, and whether to report them at 11–16.
 3. **Per-app time, code 1.** Decide how analyses treat "0 minutes" (r1–r4) against
    "I have it but barely use it" (r5 on).
-4. **Survey-side fixes S7 and S8** (docs/04 §4.2), and, at the next survey version,
-   the small wording corrections in §9.5.
+4. **Wording corrections** in §9.5, at the next survey version (S7 and S8 are
+   fixed in the survey from r7.3.0; docs/04 §4.2).
 5. **Doomscrolling source (A-23)** and the **BIS/BAS subset (A-22)**: record the
    source and prior use.
 

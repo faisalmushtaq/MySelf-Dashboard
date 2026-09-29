@@ -23,7 +23,7 @@ describe("the quality review of the real survey and the default schemes", () => 
 
   it("warns about what needs a decision or care in analysis", () => {
     const warnings = findings.filter((f) => f.severity === "warning");
-    expect(warnings.map((f) => f.id).sort()).toEqual(["scoring.survey_rcads", "scoring.survey_totals", "versions.options.5.0.0.3", "wording.sdq_form"].sort());
+    expect(warnings.map((f) => f.id).sort()).toEqual(["versions.options.5.0.0.3", "wording.sdq_form"]);
     const platforms = warnings.find((f) => f.id === "versions.options.5.0.0.3")!;
     expect(platforms.keys).toHaveLength(11);
     expect(platforms.detail).toContain("'0 minutes'");
@@ -102,7 +102,7 @@ describe("the codebook of one version", () => {
     const q7 = report.rows.find((r) => r.key === "sdq25_s.q7")!;
     expect(q7).toMatchObject({ name: "sdq_07_obeys", variable: "sdq25_q7", legacyVariable: "sdq_7" });
     expect(q7.scoring).toEqual([{ scheme: "sdq25_s", schemeName: "SDQ", schemeVersion: "1.1.0", output: "conduct", outputLabel: "Conduct problems", values: [2, 1, 0], transform: "reversed" }]);
-    expect(q7.versions).toHaveLength(11);
+    expect(q7.versions).toHaveLength(releases.length);
     expect(report.rows.find((r) => r.key === "sdq25_s.q20")!.findings).toContain("wording.sdq_form");
   });
 
@@ -113,7 +113,7 @@ describe("the codebook of one version", () => {
   });
 
   it("counts the findings by severity", () => {
-    expect(report.counts).toEqual({ error: 0, warning: 4, note: report.findings.length - 4 });
+    expect(report.counts).toEqual({ error: 0, warning: 2, note: report.findings.length - 2 });
   });
 
   it("uses the engine's own arithmetic", () => {

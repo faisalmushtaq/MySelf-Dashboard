@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@e28e383 packages/scoring/src/references.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@20e0e9d packages/scoring/src/references.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { ScoringDefinition } from "../schema/index.js";
@@ -34,4 +34,25 @@ export function scoringReferenceProblems(
     if ("output" in step && step.op !== "recode") outputs.add(step.output);
   });
   return problems;
+}
+
+/**
+ * The item keys a definition reads: every name a step reads that is not the
+ * output of an earlier step.
+ *
+ * Whoever calls the executor fills these from the answers and nothing else. The
+ * executor reads a name it was given before it looks at the outputs it has
+ * computed, so handing it a blank for "emotional" hides the emotional subscale
+ * from the step that adds up total difficulties — which is how the survey's own
+ * SDQ total and RCADS total came out blank in every sitting (S7).
+ */
+export function scoringItemKeys(def: Pick<ScoringDefinition, "steps">): string[] {
+  const keys = new Set<string>();
+  const outputs = new Set<string>();
+  for (const step of def.steps) {
+    const reads = [...("items" in step ? step.items : []), ...("input" in step ? [step.input] : [])];
+    for (const name of reads) if (!outputs.has(name)) keys.add(name);
+    if ("output" in step && step.op !== "recode") outputs.add(step.output);
+  }
+  return [...keys];
 }

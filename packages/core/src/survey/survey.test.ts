@@ -396,11 +396,15 @@ describe("the Participants page", () => {
   });
 });
 
-describe("the survey's own scores under r7.2.0 agree with the dashboard's", () => {
-  // Made-up sittings under the real r7.2.0 release: every question answered at
-  // random (a fixed seed), one in sixteen left unanswered, so the missing-data
-  // rules are compared too. Never real data.
-  const raw = release("7.2.0") as { hash: string };
+/**
+ * Made-up sittings under a real survey version, scored by the survey's own
+ * reading (vendored ingest, the version's frozen definitions) and by the
+ * dashboard's schemes. Every question answered at
+ * random (a fixed seed), one in sixteen left unanswered, so the missing-data
+ * rules are compared too. Never real data.
+ */
+function crossCheck(version: string) {
+  const raw = release(version) as { hash: string };
   const idx = indexRelease(raw);
   const parsed = parseSurveyManifest(raw);
   const manifest = "manifest" in parsed ? parsed.manifest : null;
@@ -438,6 +442,11 @@ describe("the survey's own scores under r7.2.0 agree with the dashboard's", () =
   const dashboard = new Map(scoreStudy(data, { schemes: DEFAULT_SCHEMES, releases: new Map([[raw.hash, idx]]), groups: DEFAULT_GROUP_SETTINGS }).map((s) => [s.sessionId, s.scores]));
   const survey = (key: string, output: string) => data.dataset.scores.filter((r) => r.scoringKey === key && r.output === output);
   const ours = (sessionId: string, scheme: string, output: string) => dashboard.get(sessionId)?.[scheme]?.outputs[output]?.value ?? null;
+  return { data, sittings, survey, ours };
+}
+
+describe("the survey's own scores under r7.2.0 agree with the dashboard's", () => {
+  const { data, sittings, survey, ours } = crossCheck("7.2.0");
 
   const same: [string, string, string, string][] = [
     ["score.swemwbs", "raw_total", "swemwbs", "raw_total"],
@@ -448,6 +457,9 @@ describe("the survey's own scores under r7.2.0 agree with the dashboard's", () =
     ["score.sdq25_s", "peer", "sdq25_s", "peer"],
     ["score.sdq25_s", "prosocial", "sdq25_s", "prosocial"],
     ["score.ehi_sf", "lq", "ehi_sf", "lq"],
+    // The survey's reading once hid subscales from the step that totals them (S7, fixed).
+    ["score.sdq25_s", "total_difficulties", "sdq25_s", "total_difficulties"],
+    ["score.rcads25", "total", "rcads25", "total"],
   ];
 
   it.each(same)("%s %s equals the dashboard's %s %s, sitting by sitting", (key, output, scheme, ourOutput) => {
@@ -458,31 +470,7 @@ describe("the survey's own scores under r7.2.0 agree with the dashboard's", () =
     for (const r of rows) expect(ours(r.sessionId, scheme, ourOutput), `${r.sessionId} ${key} ${output}`).toBe(r.value);
   });
 
-  it("SDQ total difficulties and RCADS total: blank in the survey's own dataset (S7), the sum of its subscales in the dashboard's", () => {
-    // The survey's ingest hands the executor a null for every name a step reads,
-    // earlier outputs included, and the null hides the subscale it just computed
-    // (docs/04 S7). The definitions are right: the dashboard's totals are exactly
-    // the sums they describe.
-    const totals: [string, string, string[], string, string][] = [
-      ["score.sdq25_s", "total_difficulties", ["emotional", "conduct", "hyperactivity", "peer"], "sdq25_s", "total_difficulties"],
-      ["score.rcads25", "total", ["depression", "anxiety"], "rcads25", "total"],
-    ];
-    for (const [key, output, parts, scheme, ourOutput] of totals) {
-      const rows = survey(key, output);
-      expect(rows).toHaveLength(sittings.length);
-      expect(rows.every((r) => r.value === null), `${key} ${output}`).toBe(true);
-      let scored = 0;
-      for (const r of rows) {
-        const values = parts.map((p) => survey(key, p).find((x) => x.sessionId === r.sessionId)!.value as number | null);
-        const expected = values.some((v) => v === null) ? null : values.reduce<number>((a, v) => a + v!, 0);
-        if (expected !== null) scored += 1;
-        expect(ours(r.sessionId, scheme, ourOutput), `${r.sessionId} ${key} ${output}`).toBe(expected);
-      }
-      expect(scored, `${key} ${output}`).toBeGreaterThan(0);
-    }
-  });
-
-  it("RCADS subscales differ by design: the survey counts item 18 as depression and 24 as anxiety, the published key the reverse (S8)", () => {
+  it("RCADS subscales differ before r7.3.0: the survey counted item 18 as depression and 24 as anxiety, the published key the reverse (S8)", () => {
     const code = (sessionId: string, item: string) => data.dataset.responses.find((r) => r.sessionId === sessionId && r.instrument === "rcads25" && r.item === item)?.value ?? null;
     let compared = 0;
     for (const r of survey("score.rcads25", "depression")) {
@@ -511,5 +499,20 @@ describe("the survey's own scores under r7.2.0 agree with the dashboard's", () =
       // Four items coded 1–4, each reversed as 5 − code: the dashboard's score is 20 − the survey's.
       for (const r of rows) expect(ours(r.sessionId, "bisbas12_ybm", mine)).toBe(r.value === null ? null : 20 - (r.value as number));
     }
+  });
+});
+
+describe("the survey's own scores under r7.3.0 agree with the dashboard's, RCADS included", () => {
+  const { sittings, survey, ours } = crossCheck("7.3.0");
+  it.each([
+    ["score.rcads25", "depression", "rcads25", "depression"],
+    ["score.rcads25", "anxiety", "rcads25", "anxiety"],
+    ["score.rcads25", "total", "rcads25", "total"],
+    ["score.sdq25_s", "total_difficulties", "sdq25_s", "total_difficulties"],
+  ])("%s %s equals the dashboard's %s %s", (key, output, scheme, ourOutput) => {
+    const rows = survey(key, output);
+    expect(rows).toHaveLength(sittings.length);
+    expect(rows.some((r) => r.value !== null)).toBe(true);
+    for (const r of rows) expect(ours(r.sessionId, scheme, ourOutput), `${r.sessionId} ${key} ${output}`).toBe(r.value);
   });
 });

@@ -445,6 +445,28 @@ async function finish() {
   }
   if (!["done", "failed", "rejected"].includes(last)) bad("summary backfill", "still running after 15 minutes — check the onOpsRequest function logs");
 
+  // What the dashboard now shows for the last week: counts only, by day (UK time) and survey version.
+  section("Sittings in the dashboard, last seven days");
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const recent = await db.collection(`studies/${STUDY}/sessionSummaries`).where("startedAt", ">=", since).select("startedAt", "completedAt", "releaseVersion", "releaseKnown", "deleted").get();
+  const dayOf = (iso) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+  const days = new Map();
+  let unregistered = 0;
+  for (const d of recent.docs) {
+    const x = d.data();
+    if (x.deleted) continue;
+    const e = days.get(dayOf(x.startedAt)) ?? { n: 0, finished: 0, versions: new Map() };
+    const v = x.releaseKnown && x.releaseVersion ? `v${x.releaseVersion}` : "an unregistered version";
+    if (v === "an unregistered version") unregistered += 1;
+    e.n += 1;
+    if (x.completedAt) e.finished += 1;
+    e.versions.set(v, (e.versions.get(v) ?? 0) + 1);
+    days.set(dayOf(x.startedAt), e);
+  }
+  if (!days.size) note("none", "no sittings started in the last seven days");
+  for (const [day, e] of [...days].sort()) note(day, `${e.n} sittings, ${e.finished} finished — ${[...e.versions].map(([v, n]) => `${v}: ${n}`).join(", ")}`);
+  if (unregistered) bad("sittings under a survey version the dashboard does not know", `${unregistered}; register it (Settings → Survey versions, or releases/ and run setup again)`);
+
   section("Smoke test");
   const url = `https://${SITE}.web.app/`;
   const page = await fetch(url);

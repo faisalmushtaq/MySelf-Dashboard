@@ -30,7 +30,7 @@ Scoring**, **Reports → School report**.
 
 ## 8.2 The default schemes
 
-Item keys are those of the survey's releases r1.0.0–r7.2.0; every scheme is
+Item keys are those of the survey's releases r1.0.0–r7.3.0; every scheme is
 checked against every registered release (§8.5).
 
 | Instrument | Status | Scores | Method | Bands | Benchmark |
@@ -98,19 +98,22 @@ dashboard never uses or exports them:
   blank. The survey fixed this in r7.2.0 and now refuses to publish such a
   definition (survey-side change **S6**, docs/04 §4.2), but a release is never
   edited, so every sitting collected before r7.2.0 keeps the broken definition;
-- the survey's own reading of the answers leaves SDQ total difficulties and the
-  RCADS total blank in every release (**S7**, not yet fixed);
-- the survey's own RCADS definition swaps items 18 and 24 between depression and
-  anxiety (**S8**, not yet fixed).
+- the survey's own reading of the answers left SDQ total difficulties and the
+  RCADS total blank in every release (**S7**); the survey fixed the reading
+  (D-50), which is not frozen in any release, so a rebuilt survey dataset has
+  them for every version;
+- the survey's own RCADS definition swapped items 18 and 24 between depression
+  and anxiety (**S8**); fixed from r7.3.0 (D-50), and sittings under
+  r1.0.0–r7.2.0 keep the swapped survey-side subscales.
 
 The dashboard's schemes key on the real items for every release, so a sitting
-from r1.0.0 and one from r7.2.0 are scored the same way, by the same versioned
+from r1.0.0 and one from r7.3.0 are scored the same way, by the same versioned
 scheme. The BIDS export carries only the dashboard's scores. A test
 (`packages/core/src/survey/survey.test.ts`) scores made-up sittings under the
-real r7.2.0 with both and checks that, sitting by sitting, the survey's own
-SWEMWBS, STAI-5, SDQ subscale and EHI scores equal the dashboard's, that the
-dashboard's SDQ and RCADS totals equal the sums of the survey's subscales, and
-that its RCADS subscales differ from the survey's by exactly items 18 and 24.
+real r7.2.0 and r7.3.0 with both and checks that, sitting by sitting, the
+survey's own SWEMWBS, STAI-5, SDQ (subscales and total), RCADS total and EHI
+scores equal the dashboard's; that under r7.3.0 the RCADS subscales are equal
+too; and that under r7.2.0 they differ by exactly items 18 and 24.
 BIS/BAS differ by design: the survey sums the raw codes, the dashboard reverses
 them so a higher score means more of the trait.
 
