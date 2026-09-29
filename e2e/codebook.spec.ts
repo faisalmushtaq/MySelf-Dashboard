@@ -13,7 +13,7 @@ test("any member reads the codebook: readable names, what each answer scores, an
 
   // The review names what needs a decision, with its evidence.
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^Warnings/ }).click();
-  const sdqForm = page.locator(".finding", { hasText: "SDQ items 19, 20 and 22 use the adult (18+) wording" });
+  const sdqForm = page.locator(".finding", { hasText: "SDQ items 19, 20 and 22 used the adult (18+) wording" });
   await expect(sdqForm).toContainText("Needs a decision");
   await expect(sdqForm).toContainText("youthinmind");
 

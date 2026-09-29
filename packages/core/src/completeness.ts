@@ -177,12 +177,12 @@ const emptyCounts = (): Counts => ({
  * is judged exactly as the device judged it. `all`/`any`/`not` combine with the
  * usual short-circuits: `any(true, unknown)` is true, `all(false, unknown)` is false.
  */
-function evaluate3(expr: LogicExpr, store: AnswerStore, unknownKeys: ReadonlySet<string>): Eligibility {
+function evaluate3(expr: LogicExpr, store: AnswerStore, unknownKeys: ReadonlySet<string>, asOf: Date | undefined): Eligibility {
   switch (expr.op) {
     case "all": {
       let sawUnknown = false;
       for (const a of expr.args) {
-        const r = evaluate3(a, store, unknownKeys);
+        const r = evaluate3(a, store, unknownKeys, asOf);
         if (r === "no") return "no";
         if (r === "unknown") sawUnknown = true;
       }
@@ -191,26 +191,31 @@ function evaluate3(expr: LogicExpr, store: AnswerStore, unknownKeys: ReadonlySet
     case "any": {
       let sawUnknown = false;
       for (const a of expr.args) {
-        const r = evaluate3(a, store, unknownKeys);
+        const r = evaluate3(a, store, unknownKeys, asOf);
         if (r === "yes") return "yes";
         if (r === "unknown") sawUnknown = true;
       }
       return sawUnknown ? "unknown" : "no";
     }
     case "not": {
-      const r = evaluate3(expr.arg, store, unknownKeys);
+      const r = evaluate3(expr.arg, store, unknownKeys, asOf);
       return r === "unknown" ? "unknown" : r === "yes" ? "no" : "yes";
     }
     default: {
       const key = `${expr.target.item.instrument}.${expr.target.item.item}`;
       if (unknownKeys.has(key)) return "unknown";
-      return evaluate(expr, store) ? "yes" : "no";
+      return evaluate(expr, store, asOf) ? "yes" : "no";
     }
   }
 }
 
 export interface AssessOptions {
   requiredLevels: readonly RequiredLevel[];
+  /**
+   * When the sitting started (ISO). Age conditions are judged on this day, as the
+   * device judged them (D-51); without it they are false, as on the device.
+   */
+  sittingStart?: string | null;
 }
 
 /**
@@ -242,6 +247,8 @@ export function assessSitting(replay: ReplayResult, release: ReleaseIndex | null
 
   // The answer state the device's walker would see: answered items with their
   // values, skips and declines as statuses.
+  const started = options.sittingStart ? new Date(options.sittingStart) : undefined;
+  const asOf = started && !Number.isNaN(started.getTime()) ? started : undefined;
   const store = new AnswerStore();
   for (const f of replay.items.values()) {
     if (!f.response) continue;
@@ -270,7 +277,7 @@ export function assessSitting(replay: ReplayResult, release: ReleaseIndex | null
 
   for (const q of release.questions) {
     const f = replay.items.get(q.key);
-    const eligibility: Eligibility = q.displayIf ? evaluate3(q.displayIf, store, unknownKeys) : "yes";
+    const eligibility: Eligibility = q.displayIf ? evaluate3(q.displayIf, store, unknownKeys, asOf) : "yes";
     const presentedCount = f?.presentedCount ?? 0;
     const shown = presentedCount > 0 || (!replay.hasPresentationEvents && (f?.response ?? null) !== null);
     let outcome: Outcome;

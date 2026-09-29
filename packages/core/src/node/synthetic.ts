@@ -427,7 +427,7 @@ function walk(release: ReleaseIndex, start: number, rnd: () => number, opts: Wal
   let invalidDone = false;
   let declineDone = false;
   for (const q of release.questions) {
-    if (q.displayIf && !evaluate(q.displayIf, store)) continue;
+    if (q.displayIf && !evaluate(q.displayIf, store, new Date(start))) continue;
     if (opts.stopAfter !== undefined && asked >= opts.stopAfter) {
       stopped = true;
       break;

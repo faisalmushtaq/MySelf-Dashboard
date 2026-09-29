@@ -138,7 +138,10 @@ export function buildSummary(
   options: SummaryOptions,
 ): { summary: SessionSummary; assessment: Assessment; replay: ReplayResult } {
   const replay = replaySitting(sitting);
-  const assessment = assessSitting(replay, release, { requiredLevels: policy.requiredLevels });
+  const assessment = assessSitting(replay, release, {
+    requiredLevels: policy.requiredLevels,
+    sittingStart: sitting.startedAt ?? replay.firstEventAt ?? null,
+  });
 
   const warnings = new Set<string>();
   if (sitting.quarantined) warnings.add("quarantined");

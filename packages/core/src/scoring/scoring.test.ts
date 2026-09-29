@@ -13,8 +13,8 @@ const sdqItems = Array.from({ length: 25 }, (_, i) => `q${i + 1}`);
 
 describe("default schemes against the survey's real releases", () => {
   it("parse, and cover every scored instrument the survey administers", () => {
-    expect(DEFAULT_SCHEMES).toHaveLength(13);
-    const latest = releases.find((r) => r.version === "7.2.0")!;
+    expect(DEFAULT_SCHEMES).toHaveLength(14);
+    const latest = releases.find((r) => r.version === "8.0.0")!;
     for (const s of DEFAULT_SCHEMES) expect(checkScheme(s, latest).applies, s.key).toBe(true);
   });
 

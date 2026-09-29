@@ -2,7 +2,7 @@ import { scoringScheme, type ScoringScheme, type ScoringSchemeInput, type Thresh
 
 /**
  * The dashboard's default scoring schemes for the instruments the MySelf
- * survey administers (item keys as in releases r1.0.0–r7.3.0).
+ * survey administers (item keys as in releases r1.0.0–r8.0.0).
  *
  * Every cut-point and reference value here is transcribed from the source it
  * names and ships with `verified: false`: the Scoring settings page shows that,
@@ -118,6 +118,31 @@ export const sdq: Input = {
       higherIs: "worse",
     },
   ],
+};
+
+// ── SDQ (self-report, 18+) ─────────────────────────────────────────────────
+
+/**
+ * Given to participants 18 or over on the day of the sitting from survey
+ * version 8.0.0 (D-51). Scored exactly as the 11–17 self-report, with no bands
+ * and no norms: those were set on 4–17 year olds.
+ */
+export const sdq18: Input = {
+  key: "sdq25_s18",
+  version: "1.0.0",
+  instrument: "sdq25_s18",
+  name: "Strengths and Difficulties Questionnaire (self-report, 18+)",
+  abbreviation: "SDQ 18+",
+  status: "official",
+  method: sdq.method,
+  notes:
+    "The adult self-report form (S18+), given from survey version 8.0.0 to participants aged 18 or over on the day of the sitting. youthinmind's scoring instructions are 'identical for the similarly-worded 18+ SDQ', but its cut-points 'have not been validated for use with the 18+ SDQ, so we suggest that it is safest to use continuous scores rather than categories' ('Scoring the SDQ for age 4-17 or 18+', 20 June 2016). No bands and no benchmarks; report scores as continuous, and separately from the 11–17 form.",
+  transforms: sdq.transforms,
+  outputs: sdq.outputs.map(({ thresholds: _bands, benchmarks: _norms, ...output }) =>
+    output.key === "peer"
+      ? { ...output, description: "Being alone, lacking friends, being picked on, getting on better with older people." }
+      : output,
+  ),
 };
 
 // ── RCADS-25 ───────────────────────────────────────────────────────────────
@@ -423,6 +448,6 @@ export const smartphone: Input = {
 };
 
 /** Every default, in the order instruments appear in the survey. */
-export const DEFAULT_SCHEME_INPUTS: readonly Input[] = [ehi, macarthur, kss, swemwbs, sdq, rcads, smartphone, socialMedia, screenAttitudes, doomscroll, gaming, stai5, bisbas];
+export const DEFAULT_SCHEME_INPUTS: readonly Input[] = [ehi, macarthur, kss, swemwbs, sdq, sdq18, rcads, smartphone, socialMedia, screenAttitudes, doomscroll, gaming, stai5, bisbas];
 
 export const DEFAULT_SCHEMES: readonly ScoringScheme[] = DEFAULT_SCHEME_INPUTS.map((s) => scoringScheme.parse(s));

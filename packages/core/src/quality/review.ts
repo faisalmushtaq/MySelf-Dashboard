@@ -2,7 +2,7 @@ import { BUILT_IN_CODEBOOK, codebookProblems, type Codebook } from "../codebook/
 import { compareVersions, type QuestionDef, type ReleaseIndex } from "../manifest.js";
 import { checkScheme } from "../scoring/check.js";
 import type { ScoringScheme } from "../scoring/scheme.js";
-import { LABEL_EXPECTATIONS, PUBLISHED_BANDS, PUBLISHED_KEYS, REVIEW_NOTES, VERSION_ESCALATIONS } from "./expectations.js";
+import { LABEL_EXPECTATIONS, NO_PUBLISHED_BANDS, PUBLISHED_BANDS, PUBLISHED_KEYS, REVIEW_NOTES, VERSION_ESCALATIONS } from "./expectations.js";
 import type { CodebookRow, QualityFinding, QualityReport, QualitySeverity, ScoringUse } from "./types.js";
 
 /**
@@ -251,6 +251,26 @@ export function reviewQuality(input: { releases: readonly ReleaseIndex[]; scheme
         keys: [],
         source: b.source,
       });
+    }
+  }
+
+  // Instruments with no validated cut-points: any bands are the study's own.
+  for (const nb of NO_PUBLISHED_BANDS) {
+    const s = input.schemes.find((x) => x.key === nb.scheme);
+    for (const o of s?.outputs ?? []) {
+      for (const set of o.thresholds) {
+        findings.push({
+          id: `scoring.unvalidated_bands.${s!.key}.${o.key}.${set.key}`,
+          severity: "warning",
+          area: "scoring",
+          scheme: s!.key,
+          instrument: s!.instrument,
+          title: `${s!.abbreviation ?? s!.name} ${o.key.replace(/_/g, " ")}: '${set.label}' has no validated cut-points`,
+          detail: "No cut-points have been validated for this form, so these bands are the study's own. Report scores as continuous, or say where the bands are reported that they were set by the study.",
+          keys: [],
+          source: nb.source,
+        });
+      }
     }
   }
 

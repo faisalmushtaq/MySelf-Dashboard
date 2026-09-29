@@ -368,9 +368,10 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
   totals were blank in every release until its reading was fixed (S7). All
   three are fixed in the survey; the dashboard is the scoring source for all
   data and exports only its own scores (docs/08 §8.5).
-- Data quality (docs/09): the SDQ's wording mixes the 11–17 and adult forms and
-  per-app "time in one go" code 1 changed meaning in r5.0.0 — both need a
-  decision before analysis. Every new survey version must have its new
+- Data quality (docs/09): up to r7.3.0 the SDQ's wording mixes the 11–17 and
+  adult forms (from r8.0.0 each age gets its own form, and the 18+ form is scored
+  without bands) and per-app "time in one go" code 1 changed meaning in r5.0.0 —
+  both need a decision before analysis. Every new survey version must have its new
   questions named in `packages/core/src/codebook/names.ts`; the Codebook page
   reports any that are not.
 - Twins who share a secret code are detected by the survey's own ingest, which

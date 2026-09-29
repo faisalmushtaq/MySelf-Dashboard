@@ -21,6 +21,7 @@ export interface PublishedKey {
 }
 
 const SDQ_KEY = "youthinmind, 'Scoring the Strengths & Difficulties Questionnaire for age 4-17' (11 May 2015); Goodman (1997).";
+const SDQ18_KEY = "youthinmind, 'Scoring the Strengths & Difficulties Questionnaire for age 4-17 or 18+' (20 June 2016): the scoring instructions are 'identical for the similarly-worded 18+ SDQ'.";
 const RCADS_KEY =
   "RCADS-25 (Ebesutani et al., 2012, Psychological Assessment 24(4)): depression = items 1, 4, 8, 10, 13, 15, 16, 19, 21, 24 — the full RCADS's ten major-depression items (RCADS-47 items 2, 6, 11, 15, 19, 21, 25, 29, 40, 47); anxiety = the other 15.";
 
@@ -30,6 +31,13 @@ export const PUBLISHED_KEYS: readonly PublishedKey[] = [
   { scheme: "sdq25_s", output: "hyperactivity", items: ["q2", "q10", "q15", "q21", "q25"], source: SDQ_KEY },
   { scheme: "sdq25_s", output: "peer", items: ["q6", "q11", "q14", "q19", "q23"], source: SDQ_KEY },
   { scheme: "sdq25_s", output: "prosocial", items: ["q1", "q4", "q9", "q17", "q20"], source: SDQ_KEY },
+  // The 18+ self-report (r8.0.0 on, D-51) is scored with the same key.
+  ...(["emotional", "conduct", "hyperactivity", "peer", "prosocial"] as const).map((output) => ({
+    scheme: "sdq25_s18",
+    output,
+    items: { emotional: ["q3", "q8", "q13", "q16", "q24"], conduct: ["q5", "q7", "q12", "q18", "q22"], hyperactivity: ["q2", "q10", "q15", "q21", "q25"], peer: ["q6", "q11", "q14", "q19", "q23"], prosocial: ["q1", "q4", "q9", "q17", "q20"] }[output],
+    source: SDQ18_KEY,
+  })),
   { scheme: "rcads25", output: "depression", items: ["q1", "q4", "q8", "q10", "q13", "q15", "q16", "q19", "q21", "q24"], source: RCADS_KEY },
   { scheme: "rcads25", output: "anxiety", items: ["q2", "q3", "q5", "q6", "q7", "q9", "q11", "q12", "q14", "q17", "q18", "q20", "q22", "q23", "q25"], source: RCADS_KEY },
   { scheme: "swemwbs", output: "raw_total", items: ["optimistic", "useful", "relaxed", "problems", "thinking", "close", "mind"], source: "Stewart-Brown et al. (2009): the seven SWEMWBS items." },
@@ -61,11 +69,19 @@ const range = (prefix: string, n: number) => Array.from({ length: n }, (_, i) =>
 const SDQ_REVERSED = ["q7", "q11", "q14", "q21", "q25"];
 const SDQ_FORWARD = range("q", 25).filter((q) => !SDQ_REVERSED.includes(q));
 
+/** The 18+ form's answers score exactly as the 11–17 form's (D-51). */
+const LABEL_SDQ18: LabelExpectation[] = [
+  { scheme: "sdq25_s18", items: SDQ_FORWARD, label: /^certainly true$/i, value: 2, why: "SDQ 18+ items score 0–2, as the 11–17 form; 'Certainly true' is 2 except on the five reversed items." },
+  { scheme: "sdq25_s18", items: SDQ_FORWARD, label: /^not true$/i, value: 0, why: "SDQ 18+: 'Not true' scores 0 on the unreversed items." },
+  { scheme: "sdq25_s18", items: SDQ_REVERSED, label: /^certainly true$/i, value: 0, why: "SDQ 18+ items 7, 11, 14, 21 and 25 describe strengths and are reversed: 'Certainly true' scores 0." },
+  { scheme: "sdq25_s18", items: SDQ_REVERSED, label: /^not true$/i, value: 2, why: "SDQ 18+ reversed items: 'Not true' scores 2." },
+];
 export const LABEL_EXPECTATIONS: readonly LabelExpectation[] = [
   { scheme: "sdq25_s", items: SDQ_FORWARD, label: /^certainly true$/i, value: 2, why: "SDQ items score 0–2; 'Certainly true' is 2 on every item except the five reversed ones." },
   { scheme: "sdq25_s", items: SDQ_FORWARD, label: /^not true$/i, value: 0, why: "SDQ: 'Not true' scores 0 on the unreversed items." },
   { scheme: "sdq25_s", items: SDQ_REVERSED, label: /^certainly true$/i, value: 0, why: "SDQ items 7, 11, 14, 21 and 25 describe strengths and are reversed: 'Certainly true' scores 0." },
   { scheme: "sdq25_s", items: SDQ_REVERSED, label: /^not true$/i, value: 2, why: "SDQ reversed items: 'Not true' scores 2." },
+  ...LABEL_SDQ18,
   { scheme: "rcads25", items: range("q", 25), label: /^always$/i, value: 3, why: "RCADS items score Never 0 … Always 3; none is reversed." },
   { scheme: "rcads25", items: range("q", 25), label: /^never$/i, value: 0, why: "RCADS: 'Never' scores 0." },
   { scheme: "swemwbs", items: ["optimistic", "useful", "relaxed", "problems", "thinking", "close", "mind"], label: /^all of the time$/i, value: 5, why: "SWEMWBS items score None of the time 1 … All of the time 5; none is reversed." },
@@ -107,6 +123,17 @@ export interface PublishedBands {
 }
 
 const SDQ_BANDS = "youthinmind, 'Scoring the SDQ for age 4-17' (11 May 2015), Table 3, self-completed SDQ.";
+
+/**
+ * Instruments with no validated cut-points: any bands a scheme gives them are
+ * flagged, so the study's own bands are never reported as published ones.
+ */
+export const NO_PUBLISHED_BANDS: readonly { scheme: string; source: string }[] = [
+  {
+    scheme: "sdq25_s18",
+    source: "youthinmind, 'Scoring the SDQ for age 4-17 or 18+' (20 June 2016): the 4–17 cut-points 'have not been validated for use with the 18+ SDQ, so we suggest that it is safest to use continuous scores rather than categories'.",
+  },
+];
 
 export const PUBLISHED_BANDS: readonly PublishedBands[] = [
   { scheme: "sdq25_s", output: "total_difficulties", set: "four_band", uppers: [14, 17, 19, null], source: SDQ_BANDS },
@@ -151,10 +178,10 @@ export const REVIEW_NOTES: readonly ReviewNote[] = [
     area: "wording",
     instrument: "sdq25_s",
     keys: ["sdq25_s.q19", "sdq25_s.q20", "sdq25_s.q22"],
-    title: "SDQ items 19, 20 and 22 use the adult (18+) wording, not the 11–17 self-report",
+    title: "SDQ items 19, 20 and 22 used the adult (18+) wording up to r7.3.0",
     detail:
-      "The other 22 items are word for word youthinmind's UK English 11–17 self-report (S11-17, © Robert Goodman 2005); these three are word for word its adult self-report (S18+, © 2009): 19 'Other people pick on me or bully me' (S11-17: 'Other children or young people pick on me or bully me'), 20 'I often offer to help others (family members, friends, colleagues)' (S11-17: 'I often volunteer to help others (parents, teachers, children)') and 22 'I take things that are not mine from home, work or elsewhere' (S11-17: '…from home, school or elsewhere'). The wording is the same in every survey version, and the items and their scoring are the same, so scores are computed correctly; but the cut-points and British norms are for the S11-17 wording. Item 19 is peer problems, 20 prosocial and 22 conduct problems. Whether the norms apply to this wording is a question for youthinmind, and future versions should use one form verbatim. Survey anomaly A-7.",
-    source: "youthinmind SDQ S11-17 (English, UK; © Robert Goodman, 2005) and S18+ (© 2009), from sdqinfo.org; survey docs/02 A-7.",
+      "Up to r7.3.0 everyone was given one SDQ whose other 22 items are word for word youthinmind's UK English 11–17 self-report (S11-17, © Robert Goodman 2005) and these three its adult self-report (S18+, © 2009): 19 'Other people pick on me or bully me' (S11-17: 'Other children or young people pick on me or bully me'), 20 'I often offer to help others (family members, friends, colleagues)' (S11-17: 'I often volunteer to help others (parents, teachers, children)') and 22 'I take things that are not mine from home, work or elsewhere' (S11-17: '…from home, school or elsewhere'). From r8.0.0 (survey D-51) under-18s get the S11-17 word for word and those 18 or over the S18+ (scored separately, as SDQ 18+). Scores are computed correctly throughout; what needs a decision is whether the 11–17 cut-points and British norms apply to the sittings before r8.0.0, and how items 19 (peer problems), 20 (prosocial) and 22 (conduct problems) are pooled across the change. Survey anomaly A-7.",
+    source: "youthinmind SDQ S11-17 (English, UK; © Robert Goodman, 2005) and S18+ (© 2009), from sdqinfo.org; survey docs/02 A-7 and docs/06 (D-51).",
     status: "decision",
   },
   {

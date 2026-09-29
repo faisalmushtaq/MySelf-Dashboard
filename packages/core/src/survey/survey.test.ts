@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { assessSitting } from "../completeness.js";
 import { indexRelease } from "../manifest.js";
+import { replaySitting } from "../replay.js";
+import { AnswerStore, evaluate, type AnswerValue } from "../vendor/engine.js";
 import type { Sitting, SittingEvent } from "../types.js";
 import { demoReleases, generateDemoSittings } from "../node/synthetic.js";
 import { buildDashboardBids, deriveStudyDataset, parseSurveyManifest, participantsOverview, pseudonymiseDataset, scoreStudy, subsetDataset, type BidsExportInput } from "./index.js";
@@ -269,7 +272,9 @@ describe("scoring the real survey with the dashboard's schemes", () => {
   const value = (scheme: string, output: string) => scored!.scores[scheme]!.outputs[output]!.value;
 
   it("scores every instrument the release administers", () => {
-    expect(Object.keys(scored!.scores).sort()).toEqual(DEFAULT_SCHEMES.map((s) => s.key).sort());
+    const administered = DEFAULT_SCHEMES.filter((s) => idx.questions.some((q) => q.instrument === s.instrument));
+    expect(administered.map((s) => s.key)).not.toContain("sdq25_s18"); // the 18+ form arrives in r8.0.0
+    expect(Object.keys(scored!.scores).sort()).toEqual(administered.map((s) => s.key).sort());
   });
 
   it("gives the official scores for these answers, including the ones the survey's own scoring leaves blank", () => {
@@ -425,13 +430,20 @@ function crossCheck(version: string) {
       "ybm_identity.ps_house_digit": { kind: "text", value: String(n % 10) },
       "ybm_identity.ps_birth_month": { kind: "choice", code: 1 + (n % 12) },
       "ybm_identity.ps_postcode_letters": { kind: "text", value: "ZZ" },
+      // Alternately 14 and 21 on the day, so from r8.0.0 both SDQ forms are given (D-51).
+      "ybm_identity.dob": { kind: "date", iso: n % 2 === 0 ? "2012-03-10" : "2005-03-10" },
     };
+    // Asked as a device would: only what the survey's display conditions show.
+    const store = new AnswerStore();
     for (const q of idx.questions) {
+      if (q.displayIf && !evaluate(q.displayIf, store, new Date(at(0)))) continue;
       let value: unknown = code[q.key];
       if (value === undefined && !q.identifying && random() >= 1 / 16) {
         if (q.responseType === "single_choice" && q.options?.length) value = { kind: "choice", code: q.options[Math.floor(random() * q.options.length)]!.code };
       }
       if (value === undefined) continue;
+      const [instrument = "", item = ""] = q.key.split(".");
+      store.set({ instrument, item, revision: 1 }, { status: "answered", value: value as AnswerValue });
       events.push({ seq: seq++, type: "item.presented", itemKey: q.key, tWall: at(seq), tMono: seq * 5000 });
       events.push({ seq: seq++, type: "response.recorded", itemKey: q.key, payload: { value }, tWall: at(seq), tMono: seq * 5000 });
     }
@@ -514,5 +526,59 @@ describe("the survey's own scores under r7.3.0 agree with the dashboard's, RCADS
     expect(rows).toHaveLength(sittings.length);
     expect(rows.some((r) => r.value !== null)).toBe(true);
     for (const r of rows) expect(ours(r.sessionId, scheme, ourOutput), `${r.sessionId} ${key} ${output}`).toBe(r.value);
+  });
+});
+
+describe("the SDQ by age under r8.0.0 (D-51)", () => {
+  const { data, sittings, survey, ours } = crossCheck("8.0.0");
+  const idx = indexRelease(release("8.0.0"));
+  const adult = (n: number) => n % 2 === 1;
+  const answered = (s: Sitting, instrument: string) =>
+    s.events.some((e) => e.type === "response.recorded" && e.itemKey?.startsWith(`${instrument}.`));
+
+  it("gives each sitting one SDQ form, the one for the participant's age on the day", () => {
+    sittings.forEach((s, n) => {
+      expect(answered(s, "sdq25_s18"), s.sessionId).toBe(adult(n));
+      expect(answered(s, "sdq25_s"), s.sessionId).toBe(!adult(n));
+    });
+  });
+
+  it("scores the 18+ form exactly as the survey does, sitting by sitting, and bands none of it", () => {
+    let compared = 0;
+    for (const output of ["emotional", "conduct", "hyperactivity", "peer", "prosocial", "total_difficulties"]) {
+      for (const row of survey("score.sdq25_s18", output)) {
+        expect(ours(row.sessionId, "sdq25_s18", output), `${row.sessionId} ${output}`).toBe(row.value);
+        if (row.value !== null) compared += 1;
+      }
+    }
+    expect(compared).toBeGreaterThan(40);
+    const scheme = DEFAULT_SCHEMES.find((x) => x.key === "sdq25_s18")!;
+    expect(scheme.outputs.every((o) => (o.thresholds ?? []).length === 0 && (o.benchmarks ?? []).length === 0)).toBe(true);
+    void data;
+  });
+
+  it("scores the 11–17 form as the survey does, with its revised items 19, 20 and 22", () => {
+    for (const output of ["peer", "prosocial", "conduct", "total_difficulties"]) {
+      const rows = survey("score.sdq25_s", output).filter((r) => r.value !== null);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) expect(ours(row.sessionId, "sdq25_s", output), `${row.sessionId} ${output}`).toBe(row.value);
+    }
+    expect(idx.byKey.get("sdq25_s.q20")!.text).toBe("I often volunteer to help others (parents, teachers, children)");
+  });
+
+  it("counts the form not given as not shown, never as missing, judging age on the day the sitting started", () => {
+    const assess = (n: number, sittingStart: string | null) =>
+      assessSitting(replaySitting(sittings[n]!), idx, { requiredLevels: ["hard", "soft"], sittingStart });
+    const outcome = (a: ReturnType<typeof assess>, key: string) => a.outcomes.find((o) => o.key === key)!.outcome;
+    const start = (n: number) => sittings[n]!.startedAt!;
+    const grown = assess(1, start(1));
+    expect(outcome(grown, "sdq25_s.q1")).toBe("hidden_branching");
+    expect(grown.missingRequiredKeys.filter((k) => k.startsWith("sdq25_s."))).toEqual([]);
+    const young = assess(0, start(0));
+    expect(outcome(young, "sdq25_s18.q1")).toBe("hidden_branching");
+    expect(young.missingRequiredKeys.filter((k) => k.startsWith("sdq25_s18."))).toEqual([]);
+    // Without the sitting's start the age rule cannot hold, as on the device: the
+    // adult's 18+ answers would then read as answered-but-hidden.
+    expect(outcome(assess(1, null), "sdq25_s18.q1")).toBe("answered_hidden");
   });
 });

@@ -1,15 +1,15 @@
 # 9. Codebook and data-quality review
 
 What every question is called, and whether each answer means and scores what its
-label says. Reviewed 29 September 2026 against survey versions r1.0.0–r7.3.0 and
+label says. Reviewed 29 September 2026 against survey versions r1.0.0–r8.0.0 and
 the dashboard's scoring schemes. Code: `packages/core/src/codebook/`,
 `packages/core/src/quality/`; server: `apps/functions/src/api/codebook.ts`;
 screen: **Codebook**.
 
 ## 9.1 What was reviewed, and how
 
-- **Every question in every version**: 147 distinct questions across 12 survey
-  versions (143 in r7.2.0 and r7.3.0; information screens are not questions): wording, the context shown above it, the instrument's instructions,
+- **Every question in every version**: 172 distinct questions across 13 survey
+  versions (143 in r7.2.0 and r7.3.0, 168 in r8.0.0; information screens are not questions): wording, the context shown above it, the instrument's instructions,
   the answer type, and every response code with its label and kind (a real answer,
   or "don't know" / "prefer not to say").
 - **Against the published instruments**: the SDQ against youthinmind's 11–17
@@ -79,7 +79,7 @@ exports.
 
 | Instrument | Wording | Response labels and codes | Scoring |
 |---|---|---|---|
-| SDQ (25) | Items 19, 20 and 22 are the **adult (18+) phrasings** ("Other people pick on me…", "(family members, friends, colleagues)", "home, work or elsewhere"); the other 22 are word for word the UK English 11–17 form (S11-17). The US English 11–17 form differs in items 4, 6, 13, 20 and 23 ("for example food, games, pens", "I would rather be alone…", "depressed", "offer", "get along"); the survey follows the UK form there. Same wording in every survey version. Survey anomaly A-7; item-by-item comparison in §9.5.1. | Not True 0, Somewhat True 1, Certainly True 2 in every version | Published allocation and reversals (7, 11, 14, 21, 25); scores are right. Whether the 11–17 cut-points and British norms apply to this mixed wording is a question for youthinmind — **decision needed**. |
+| SDQ (25) | Items 19, 20 and 22 are the **adult (18+) phrasings** ("Other people pick on me…", "(family members, friends, colleagues)", "home, work or elsewhere"); the other 22 are word for word the UK English 11–17 form (S11-17). The US English 11–17 form differs in items 4, 6, 13, 20 and 23 ("for example food, games, pens", "I would rather be alone…", "depressed", "offer", "get along"); the survey follows the UK form there. Same wording in r1.0.0–r7.3.0. **From r8.0.0 (D-51)** under-18s get the S11-17 word for word and those 18 or over the S18+ (`sdq25_s18`, scored separately, no bands). Survey anomaly A-7; item-by-item comparison in §9.5.1. | Not True 0, Somewhat True 1, Certainly True 2 in every version | Published allocation and reversals (7, 11, 14, 21, 25); scores are right. Whether the 11–17 cut-points and British norms apply to the mixed wording before r8.0.0, and how items 19, 20 and 22 pool across r8.0.0, are questions for the team (and youthinmind) — **decision needed**. |
 | RCADS-25 | As the RCADS-47 items; item 17 reads "think special thoughts (like number or words) to stop bad things happening" for "think of special thoughts (like numbers or words) to stop bad things from happening" | Never 0 … Always 3; skippable, as the instructions say | Fixed (§9.3) |
 | SWEMWBS | The seven items verbatim | None of the time 1 … All of the time 5 | Raw total and metric conversion as published; raw 23→20.73, 24→21.54, 30→27.03, 32→29.31 confirmed against a published source. Whether Warwick's bands apply to raw or metric scores, and their use at 11–16, to confirm (the dashboard bands the metric score). |
 | STAI-5 | The five state items verbatim | Not at all 1, Somewhat 2, Moderately 3, Very much 4 — the STAI's anchors are "Moderately so" and "Very much so" | Sum, none reversed: right |
@@ -101,9 +101,9 @@ survey's, and the codebook says which is which.
 Checked word for word against youthinmind's own forms (sdqinfo.org, English (UK)):
 the self-report for 11–17 year olds (S11-17, © Robert Goodman 2005) and the
 self-report for adults (S18+, © 2009). The survey's wording is the same in all
-twelve versions (r1.0.0–r7.3.0).
+twelve versions up to r7.3.0; r8.0.0 replaced it (below).
 
-| Item | Scale | Survey (every version) | S11-17 (UK) | Source of the survey's wording |
+| Item | Scale | Survey, r1.0.0–r7.3.0 | S11-17 (UK) | Source of the survey's wording |
 |---|---|---|---|---|
 | 19 | Peer problems | Other people pick on me or bully me | Other **children or young people** pick on me or bully me | S18+, word for word |
 | 20 | Prosocial | I often **offer** to help others (**family members, friends, colleagues**) | I often **volunteer** to help others (**parents, teachers, children**) | S18+, word for word |
@@ -139,6 +139,23 @@ towards prosocial. A sensitivity check needs no new data: SDQ scoring allows a
 subscale to be prorated from three or more of its five items, so peer problems,
 prosocial and conduct problems can be rescored from their four S11-17 items and
 compared with the full scores.
+
+**From r8.0.0 (survey D-51): each participant gets the form for their age.** On
+the day the sitting started, under 18 → the S11-17 word for word (`sdq25_s` 2.0:
+items 19, 20 and 22 take the S11-17 wording above, as item revision 2, under the
+same variables); 18 or over → the S18+ word for word (`sdq25_s18`, variables
+`sdq25_s18_q1`…, readable names `sdq18_nn_…`). The S18+ differs from the S11-17 in
+12 items (2, 4, 6, 7, 11, 13, 14, 17, 19, 20, 22, 23: "I would rather be alone than
+with other people", "I am generally willing to do what other people want", "I am
+kind to children", …). Age is whole years from the date of birth to the UTC
+calendar date of the sitting's start — the same on the device and in the
+dashboard, which re-runs the survey's own evaluator with that date; without a
+usable date of birth the S11-17 is given. The dashboard scores the S18+ with its
+own scheme, `sdq25_s18`: the same key, and **no bands or norms**, because
+youthinmind's cut-points "have not been validated for use with the 18+ SDQ"
+(scoring guide, 20 June 2016); the review warns if any are added. The two forms
+are separate instruments in every table and export: pool them only with a
+comparability argument, and do not compare 18+ scores with the 11–17 bands.
 
 ## 9.6 Changes between versions
 
@@ -243,9 +260,10 @@ parent-report cut-points, and "don't know" recorded as a real answer.
 
 ## 9.10 Decisions needed
 
-1. **SDQ form (A-7).** Ask youthinmind whether the 11–17 self-report cut-points and
-   norms apply to the wording administered, and choose one form, verbatim, for
-   future versions.
+1. **SDQ form (A-7).** Resolved for r8.0.0 on (each age gets its own form, D-51).
+   Still open for the sittings before it: whether the 11–17 cut-points and norms
+   apply to the mixed wording (ask youthinmind), and how items 19, 20 and 22 pool
+   across r8.0.0. Confirm with youthinmind that the licence covers the S18+ form.
 2. **SWEMWBS bands.** Confirm against Warwick's user guide whether the bands apply to
    raw or metric scores, and whether to report them at 11–16.
 3. **Per-app time, code 1.** Decide how analyses treat "0 minutes" (r1–r4) against

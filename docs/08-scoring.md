@@ -30,12 +30,13 @@ Scoring**, **Reports → School report**.
 
 ## 8.2 The default schemes
 
-Item keys are those of the survey's releases r1.0.0–r7.3.0; every scheme is
+Item keys are those of the survey's releases r1.0.0–r8.0.0; every scheme is
 checked against every registered release (§8.5).
 
 | Instrument | Status | Scores | Method | Bands | Benchmark |
 |---|---|---|---|---|---|
 | SDQ (self-report) | Official | emotional, conduct, hyperactivity, peer, prosocial (0–10); total difficulties (0–40); externalising, internalising (0–20) | Items 0–2; 7, 11, 14, 21, 25 reversed; subscales summed and prorated from ≥ 3 of 5 items (mean × 5, rounded); total needs all four difficulty subscales | youthinmind four-band (close to average / slightly raised / high / very high, expected 80/10/5/5%) and original three-band, self-completed cut-points (1.1.0 corrects the four-band conduct cut-points, docs/09 §9.3) | British norms, 11–15 self-report (Meltzer et al., 2000; n = 4,228) |
+| SDQ 18+ (self-report) | Official | as the SDQ | As the SDQ: youthinmind's scoring is "identical for the similarly-worded 18+ SDQ". Given from r8.0.0 to participants 18 or over on the day of the sitting (D-51) | **None**: the 4–17 cut-points "have not been validated for use with the 18+ SDQ"; the quality review flags any bands given to it | None |
 | RCADS-25 | Official | depression (0–30), anxiety (0–45), total (0–75) | Items 0–3 summed; depression = items 1, 4, 8, 10, 13, 15, 16, 19, 21, 24, anxiety = the other 15 (1.1.0 corrects the swap of items 18 and 24, docs/09 §9.3); all items required by default | None: RCADS cut-offs are T ≥ 65 / 70 on grade- and gender-specific norms, which are not included | None |
 | SWEMWBS | Official | raw total (7–35); **metric score** (7–35, primary) | Items 1–5 summed, all seven required; raw → metric by the Rasch conversion table (Stewart-Brown et al., 2009) | Warwick bands: 7–17 probable depression, 18–20 possible depression, 21–27 average, 28–35 high (metric rounded to the nearest whole number; derived in adults) | None by default (add one in Settings) |
 | STAI-5 (state) | Official | state anxiety (5–20) | Five items 1–4 summed, none reversed (Zsido et al., 2020) | None published | None |

@@ -85,6 +85,26 @@ describe("the quality review catches", () => {
     expect(f.detail).toContain("2 / 3 / 4 / top");
   });
 
+  it("cut-points given to the SDQ 18+, which has none validated (D-51)", () => {
+    const adultRelease = releases.find((r) => r.version === "8.0.0")!;
+    expect(ids(review(DEFAULT_SCHEMES, [adultRelease])).filter((i) => i.startsWith("scoring.unvalidated_bands."))).toEqual([]);
+    const borrowed = scoringScheme.parse({
+      ...scheme("sdq25_s18"),
+      outputs: scheme("sdq25_s18").outputs.map((o) => ({ ...o, thresholds: scheme("sdq25_s").outputs.find((x) => x.key === o.key)?.thresholds ?? [] })),
+    });
+    const f = review(withScheme(borrowed), [adultRelease]).filter((x) => x.id.startsWith("scoring.unvalidated_bands."));
+    expect(f.map((x) => x.id)).toContain("scoring.unvalidated_bands.sdq25_s18.total_difficulties.four_band");
+    expect(f.every((x) => x.severity === "warning")).toBe(true);
+    expect(f[0]!.source).toContain("have not been validated for use with the 18+ SDQ");
+  });
+
+  it("an SDQ 18+ strength item left unreversed", () => {
+    const adultRelease = releases.find((r) => r.version === "8.0.0")!;
+    const s = scoringScheme.parse({ ...scheme("sdq25_s18"), transforms: [{ op: "reverse", items: ["q7", "q14", "q21", "q25"], maxPlusMin: 2 }] });
+    const f = review(withScheme(s), [adultRelease]).filter((x) => x.severity === "error");
+    expect(f.map((x) => x.title)).toEqual(["sdq18_11_friend: 'Certainly True' scores 2, not 0", "sdq18_11_friend: 'Not True' scores 0, not 2"]);
+  });
+
   it("'Don't know' recorded as a real answer", () => {
     const raw = JSON.parse(readFileSync(new URL("ybm_nd2026_standard_r7.2.0.manifest.json", dir), "utf8")) as { scales: Record<string, { options: { label: string; kind?: string }[] }>; hash: string };
     for (const o of raw.scales["scale.agree_5pt_dk"]!.options) if (/know/i.test(o.label)) o.kind = "substantive";

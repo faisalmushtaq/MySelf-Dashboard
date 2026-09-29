@@ -65,6 +65,35 @@ const sdq = scaleItems("sdq25_s", "sdq", "SDQ", [
   ["q25", "attends", "Finishes work, attention is good"],
 ]);
 
+/** The SDQ self-report for 18 and over (r8.0.0 on, D-51): same items and scales, adult wording. */
+const sdq18 = scaleItems("sdq25_s18", "sdq18", "SDQ 18+", [
+  ["q1", "considerate", "Tries to be nice, cares about others' feelings"],
+  ["q2", "restless", "Restless, finds it hard to sit down for long"],
+  ["q3", "somatic", "Gets a lot of headaches, stomach-aches or sickness"],
+  ["q4", "shares", "Usually shares with others"],
+  ["q5", "tantrums", "Gets very angry, often loses temper"],
+  ["q6", "loner", "Would rather be alone than with other people"],
+  ["q7", "obliging", "Generally willing to do what others want"],
+  ["q8", "worries", "Worries a lot"],
+  ["q9", "caring", "Helpful if someone is hurt, upset or ill"],
+  ["q10", "fidgety", "Constantly fidgeting or squirming"],
+  ["q11", "friend", "Has at least one good friend"],
+  ["q12", "fights", "Fights a lot, can make others do what they want"],
+  ["q13", "unhappy", "Often unhappy, depressed or tearful"],
+  ["q14", "popular", "Generally liked by other people"],
+  ["q15", "distractible", "Easily distracted, finds it hard to concentrate"],
+  ["q16", "nervous_new", "Nervous in new situations, easily loses confidence"],
+  ["q17", "kind", "Kind to children"],
+  ["q18", "lies", "Often accused of lying or cheating"],
+  ["q19", "bullied", "Picked on or bullied"],
+  ["q20", "helps_out", "Often offers to help others"],
+  ["q21", "reflective", "Thinks before doing things"],
+  ["q22", "steals", "Takes things that are not theirs"],
+  ["q23", "older_better", "Gets on better with older people than with peers"],
+  ["q24", "fears", "Many fears, easily scared"],
+  ["q25", "attends", "Finishes work, attention is good"],
+]);
+
 const rcads = scaleItems("rcads25", "rcads", "RCADS", [
   ["q1", "sad_empty", "Feels sad or empty"],
   ["q2", "worry_did_poorly", "Worries after doing poorly at something"],
@@ -174,6 +203,7 @@ export const DEFAULT_CODEBOOK: Readonly<Record<string, CodebookEntry>> = {
   // Questionnaires
   ...swemwbs,
   ...sdq,
+  ...sdq18,
   ...rcads,
   ...stai,
   ...bis,

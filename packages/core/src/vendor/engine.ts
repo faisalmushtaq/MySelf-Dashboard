@@ -1,5 +1,5 @@
 /**
- * VENDORED from faisalmushtaq/MySelf at ee554ac — do not edit by hand.
+ * VENDORED from faisalmushtaq/MySelf at b61594c — do not edit by hand.
  *
  *   packages/schema/src/logic.ts   (LogicExpr type)
  *   packages/engine/src/answers.ts (AnswerValue, AnswerRecord, AnswerStore)
@@ -32,7 +32,8 @@ export type LogicExpr =
   | { op: "gt"; target: AnswerTarget; value: number }
   | { op: "gte"; target: AnswerTarget; value: number }
   | { op: "lt"; target: AnswerTarget; value: number }
-  | { op: "lte"; target: AnswerTarget; value: number };
+  | { op: "lte"; target: AnswerTarget; value: number }
+  | { op: "age_gte"; target: AnswerTarget; years: number };
 
 type ResponseStatus =
   | "answered"
@@ -122,14 +123,30 @@ function scalar(value: AnswerValue | undefined): number | string | undefined {
   }
 }
 
-export function evaluate(expr: LogicExpr, store: AnswerStore): boolean {
+/**
+ * Whole years from a date of birth (YYYY-MM-DD) to the UTC calendar date of
+ * `asOf`, or null if the date cannot be read. Calendar arithmetic on the date's
+ * own digits, never a local-time conversion, so every machine agrees (D-51).
+ * Someone born on 29 February turns a year older on 1 March in other years.
+ */
+export function ageOn(iso: string, asOf: Date): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m || Number.isNaN(asOf.getTime())) return null;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const [y, mo, d] = [asOf.getUTCFullYear(), asOf.getUTCMonth() + 1, asOf.getUTCDate()];
+  const age = y - year - (mo < month || (mo === month && d < day) ? 1 : 0);
+  return age < 0 ? null : age;
+}
+
+export function evaluate(expr: LogicExpr, store: AnswerStore, asOf?: Date): boolean {
   switch (expr.op) {
     case "all":
-      return expr.args.every((a) => evaluate(a, store));
+      return expr.args.every((a) => evaluate(a, store, asOf));
     case "any":
-      return expr.args.some((a) => evaluate(a, store));
+      return expr.args.some((a) => evaluate(a, store, asOf));
     case "not":
-      return !evaluate(expr.arg, store);
+      return !evaluate(expr.arg, store, asOf);
     case "answered":
       return store.isAnswered(expr.target.item);
     case "not_empty": {
@@ -177,6 +194,12 @@ export function evaluate(expr: LogicExpr, store: AnswerStore): boolean {
       if (expr.op === "gte") return s >= expr.value;
       if (expr.op === "lt") return s < expr.value;
       return s <= expr.value;
+    }
+    case "age_gte": {
+      const v = targetValue(store, expr.target);
+      if (v?.kind !== "date" || !asOf) return false;
+      const age = ageOn(v.iso, asOf);
+      return age !== null && age >= expr.years;
     }
   }
 }
