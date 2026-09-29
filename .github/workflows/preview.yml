@@ -56,8 +56,9 @@ jobs:
           VITE_FIREBASE_CONFIG: ${{ vars.DASHBOARD_FIREBASE_CONFIG }}
         run: |
           pnpm exec firebase hosting:channel:deploy dashboard-preview --only dashboard \
-            --expires 30d --project myself-research --non-interactive --json > channel.json
-          url=$(node -e 'const r=require("./channel.json").result; const s=Object.values(r)[0]; console.log(s.url + "  (expires " + s.expireTime + ")")')
+            --expires 30d --project myself-research --non-interactive | tee channel.log
+          url=$(grep -oE 'https://[a-z0-9-]+--dashboard-preview-[a-z0-9]+\.web\.app' channel.log | head -1)
+          if [ -z "$url" ]; then echo "::error::Deployed, but no channel URL found in the output above."; exit 1; fi
           echo "Dashboard preview: $url"
           echo "### Dashboard preview: $url" >> "$GITHUB_STEP_SUMMARY"
       # The live functions only when asked, by a change to .github/preview/functions.env

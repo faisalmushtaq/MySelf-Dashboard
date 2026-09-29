@@ -21,3 +21,4 @@ emulator-data/
 !apps/functions/.env.demo-myself-dashboard
 !apps/functions/.env.myself-research
 apps/web/dist-emulators/
+channel.log
