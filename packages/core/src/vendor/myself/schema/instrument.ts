@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@345e8e3 packages/schema/src/instrument.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@c8357ed packages/schema/src/instrument.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import { z } from "zod";
