@@ -71,6 +71,14 @@ export function HelpContent() {
           or greyscale colours, 95% confidence intervals where proportions are compared, a draft figure legend and the source data behind each panel. Figures
           use aggregates only; every downloaded file is recorded in the audit log first.
         </p>
+        <h3>Scores and school reports</h3>
+        <p>
+          The Scores page scores each instrument with the study's scoring schemes — the published method where there is one, a labelled study summary where there
+          is not — and reads the scores against published threshold bands and benchmarks, by school, year group, gender or wave. Choose a school (and year group) to
+          see it against its peers, and make a school report to share: averages only, other schools never named, small groups withheld. How each score is
+          calculated, and every version of it, is in Settings → Scoring; cut-points and norms are marked unverified until an administrator has checked them against
+          the licensed scoring documents.
+        </p>
         <h3>Participants and exports</h3>
         <p>
           The Participants page joins sittings into participants by the survey&apos;s secret code, exactly as the survey&apos;s own export does, and numbers

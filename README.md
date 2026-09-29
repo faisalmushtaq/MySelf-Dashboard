@@ -24,6 +24,12 @@ the survey's rules, functions or data — and needs no change to the survey to r
 - **Exports:** BIDS by default (built with the survey's data layer), with identifiers
   for linkage unless a de-identified copy is chosen; CSV, Excel and clearly laid-out
   PDF reports.
+- **Scores and benchmarks:** every instrument scored by its published method
+  (SDQ, RCADS-25, SWEMWBS with the metric conversion, STAI-5, EHI-SF, KSS,
+  MacArthur, the BIS/BAS subset) or a labelled study summary, read against
+  published threshold bands and norms and compared across schools and year
+  groups; schemes are versioned JSON an administrator can adjust, and school
+  and year-group reports are ready to share ([guide](docs/08-scoring.md)).
 - **Publication figures:** multi-panel figures at journal column widths (89/120/183
   mm), Arial/Helvetica at 6–8 pt, colour-blind-safe or greyscale, exported as vector
   PDF/SVG or 300–1200 dpi PNG/TIFF with a draft legend and source data
@@ -45,6 +51,7 @@ Screenshots (emulator seed, synthetic sittings only):
 5. [Plan, assumptions, open questions](docs/05-plan.md)
 6. [**Handover**: setup, configuration, deployment, roles, rollback, limitations](docs/06-handover.md)
 7. [Publication figures: panels, house style, files, privacy](docs/07-figures.md)
+8. [Scores, benchmarks and school reports](docs/08-scoring.md)
 
 ## Quick start (local, synthetic data)
 

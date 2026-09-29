@@ -40,6 +40,7 @@ the survey repository or production behaviour and needs the team's approval:
 | S3 | Add `firstReceivedAt` (set once) to the sitting document in `storeSitting` | Server-clock creation time (F5) | Small change to `sittings.ts`, additive, tests exist |
 | S4 | When Survey Studio publishes a release, also write it to the dashboard registry (or run `scripts/sync-releases.mjs` in the survey's release workflow) | New versions appear in the dashboard without a manual step | CI change in the survey repo |
 | S5 | Add the allowlist check to the survey's `setRole` | Consistency with the dashboard (F2) | Small change to `admin.ts` |
+| S6 | Fix the survey's SWEMWBS and STAI-5 scoring definitions (`packages/scoring/src/definitions.ts`): they sum items `q1`…`q7` and `q1`…`q5`, but in every release (r1.0.0–r7.1.0) those items are keyed `optimistic`…`mind` and `upset`…`confused`, so the survey's own `swemwbs raw_total` and `stai5 state_anxiety` are **always blank** (proven by `packages/core/src/survey/survey.test.ts`) | The survey's researcher view, its exports and anything read back to participants from these scores are empty; the dashboard's own schemes (docs/08) already key on the real items, so dashboard scores and exports are unaffected | A new scoring-definition version in the survey; releases carry their scoring frozen, so already-published releases keep the broken definition — which is why the dashboard scores from its own schemes rather than the release's |
 
 ## 4.3 Production data
 

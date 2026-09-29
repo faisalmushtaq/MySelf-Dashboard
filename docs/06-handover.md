@@ -263,7 +263,11 @@ Do both. Their past audit entries, notes and flags remain, attributed to them.
 
 Dashboard-only collections: `config/access`, `config/policy`, `users/{uid}`,
 `studies/{s}/releases`, `releaseManifests`, `meta/freshness`, `reviews(+notes)`,
-`savedViews`, `exportJobs`, `auditLog` — shapes in [02 §2.3](02-architecture.md).
+`savedViews`, `exportJobs`, `auditLog` — shapes in [02 §2.3](02-architecture.md) —
+and, for scoring ([08](08-scoring.md)), `config/groups` (school names, year-group
+sources and rules, minimum group size) and `studies/{s}/scoringSchemes/{key}`
+with every saved version under `…/versions/{version}`. Neither is readable or
+writable by a client (the rules' default deny); both go through audited calls.
 
 ## 8. Indexes
 
@@ -356,6 +360,11 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 
 - Deployed to `myself-research` (§5.0). Later changes reach production only when
   the "Firebase setup" workflow is run again (§5.0); nothing deploys on push.
+- Scores: RCADS T-score norms are not included; the SWEMWBS bands are adult-
+  derived and the SDQ British norms date from 1999; every cut-point and norm is
+  shipped unverified until an administrator checks it (docs/08 §8.6). The
+  survey's own SWEMWBS and STAI-5 scoring is broken in every release (S6,
+  docs/04); the dashboard scores from its own schemes.
 - Twins who share a secret code are detected by the survey's own ingest, which
   compares sittings collected under the same survey version. Twins who sat
   different versions are not detected automatically; the Participants page's
