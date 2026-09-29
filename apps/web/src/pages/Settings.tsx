@@ -201,7 +201,7 @@ function Admin() {
             Grant role
           </button>
         </form>
-        <div className="table-scroll">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="People who have signed in">
           <table className="data">
             <caption className="sr-only">People who have signed in</caption>
             <thead>

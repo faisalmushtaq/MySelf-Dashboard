@@ -124,7 +124,7 @@ export default function Audit() {
       {!rows && !error ? <Loading /> : null}
       {rows && rows.length === 0 ? <EmptyState icon="audit" title="No activity recorded" /> : null}
       {rows && rows.length > 0 ? (
-        <div className="table-scroll">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Audit log">
           <table className="data">
             <caption className="sr-only">Audit log</caption>
             <thead>

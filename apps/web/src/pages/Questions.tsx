@@ -165,7 +165,7 @@ export default function Questions() {
             </p>
           )}
 
-          <div className="table-scroll">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label={`Questions in survey version ${data.release.version}`}>
             <table className="data questions-table">
               <caption className="sr-only">Questions in survey version {data.release.version}</caption>
               <thead>

@@ -174,7 +174,7 @@ export default function Participants() {
               {t.participants ? "Clear the search or filters to see everyone." : "Participants appear here once a sitting can be linked: its secret code, or from 8.0.0 its name and date of birth, has been answered."}
             </EmptyState>
           ) : (
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Participants and their sittings">
               <table className="data participants">
                 <caption className="sr-only">Participants and their sittings</caption>
                 <thead>
@@ -215,7 +215,7 @@ export default function Participants() {
               <summary>
                 <strong>Held-back sittings ({data.heldBack.length})</strong> <span className="muted small">— kept, but not linked to anyone</span>
               </summary>
-              <div className="table-scroll">
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="Sittings not linked to a participant">
                 <table className="data">
                   <caption className="sr-only">Sittings not linked to a participant</caption>
                   <thead>

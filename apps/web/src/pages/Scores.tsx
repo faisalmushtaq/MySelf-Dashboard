@@ -473,7 +473,7 @@ function OutputCard({
 function GroupTable({ output: o, result, set, view }: { output: ScoreOutput; result: ScoreResult; set: ScoreOutput["thresholds"][number] | null; view: ScoresView }) {
   const rows = [{ key: "__all", label: "All", n: result.overall?.n ?? 0, small: false, summary: result.overall }, ...result.groups];
   return (
-    <div className="table-scroll">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label={`${o.label} by ${SCORE_GROUP_BY_LABELS[view.groupBy].toLowerCase()}`}>
       <table className="data compact">
         <caption className="sr-only">{o.label} by {SCORE_GROUP_BY_LABELS[view.groupBy].toLowerCase()}</caption>
         <thead>

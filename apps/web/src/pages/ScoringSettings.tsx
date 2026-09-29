@@ -114,7 +114,7 @@ function SchemeList({ data, selected, onSelect }: { data: ScoringSettingsView; s
         The dashboard ships a scheme for each instrument the survey administers, following the published method where there is one. Each is marked verified once an
         administrator has checked it against the instrument's licensed scoring documents.
       </p>
-      <div className="table-scroll">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Scoring schemes">
         <table className="data compact">
           <caption className="sr-only">Scoring schemes</caption>
           <thead>
@@ -338,7 +338,7 @@ function SchemeEditor({ entry, data, onSaved, onClose }: { entry: SchemeSettings
 function PreviewTable({ before, view }: { before: ScoringScheme; view: ScoresView }) {
   const scheme = view.schemes[0]!;
   return (
-    <div className="table-scroll">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="Scores with this draft">
       <table className="data compact">
         <caption>With this draft, over every participant's latest sitting (all filters off)</caption>
         <thead>
@@ -702,7 +702,7 @@ function GroupsCard({ data, onSaved }: { data: ScoringSettingsView; onSaved: () 
         </label>
       </div>
       <h3>School names</h3>
-      <div className="table-scroll">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Schools">
         <table className="data compact">
           <caption className="sr-only">Schools</caption>
           <thead>
