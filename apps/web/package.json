@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@fontsource/arimo": "^5.3.0",
-    "@fontsource/newsreader": "^5.1.0",
+    "@fontsource/inter": "^5.3.0",
     "@myself-dashboard/core": "workspace:*",
     "firebase": "^11.10.0",
     "jspdf": "^4.2.1",
