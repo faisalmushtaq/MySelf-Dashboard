@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Build, typecheck, unit tests, privacy check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @myself-dashboard/core build
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+      - run: pnpm lint:privacy
+      # Production web build with a placeholder (public) config: proves it builds.
+      - run: pnpm --filter @myself-dashboard/web build
+        env:
+          VITE_FIREBASE_CONFIG: '{"apiKey":"ci-placeholder","authDomain":"example.web.app","projectId":"example"}'
+
+  rules:
+    name: Security rules (Firestore emulator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:rules
+
+  integration:
+    name: Backend against Auth/Firestore/Storage emulators
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @myself-dashboard/core build
+      - run: pnpm test:integration
+
+  e2e:
+    name: End to end (browser → functions → emulators)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm e2e:build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: test-results/
+          retention-days: 7
+
+  vendored:
+    name: Vendored survey engine matches the survey
+    runs-on: ubuntu-latest
+    # The survey repository may be private: give this job read access with a
+    # fine-grained token in SURVEY_REPO_TOKEN. Without it the check is skipped.
+    env:
+      SURVEY_REPO_TOKEN: ${{ secrets.SURVEY_REPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        if: ${{ env.SURVEY_REPO_TOKEN != '' }}
+        with:
+          repository: faisalmushtaq/MySelf
+          token: ${{ secrets.SURVEY_REPO_TOKEN }}
+          path: survey
+      - run: node scripts/check-vendored.mjs survey

@@ -1,0 +1,13 @@
+// Vendored from faisalmushtaq/MySelf@06abc00 packages/schema/src/index.ts — do not edit.
+// Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
+// fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
+export * from "./identifiers.js";
+export * from "./response-scale.js";
+export * from "./logic.js";
+export * from "./item.js";
+export * from "./instrument.js";
+// A narrative protocol is defined once, in @myself/narrative, beside the runner
+// that executes it and the publish gate that checks it. There used to be a
+// second, older definition here; the two drifted, and a definition layer that
+// disagrees with itself is worse than no definition layer.
+export * from "./assessment.js";

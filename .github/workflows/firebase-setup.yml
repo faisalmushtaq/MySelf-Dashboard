@@ -1,0 +1,98 @@
+name: Firebase setup
+
+# First-time setup of the dashboard in the survey's Firebase project, in two
+# stages: a read-only preflight, then setup. It creates and deploys only the
+# dashboard's own resources (its named database, functions codebase, Hosting
+# site and web app registration) and never changes the survey's.
+#
+# Run it by changing MODE in .github/firebase-setup/request.env on the dashboard
+# branch, or from the Actions tab once this file is on the default branch.
+on:
+  push:
+    branches: [claude/laughing-lovelace-9qt0j6]
+    paths: [".github/firebase-setup/request.env"]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preflight (read-only) or setup"
+        type: choice
+        options: [preflight, setup]
+        default: preflight
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dashboard
+  cancel-in-progress: false
+
+jobs:
+  firebase:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mode
+        run: |
+          MODE="${{ inputs.mode }}"
+          if [ -z "$MODE" ]; then MODE=$(grep -E '^MODE=' .github/firebase-setup/request.env | cut -d= -f2 | tr -d '[:space:]'); fi
+          case "$MODE" in preflight|setup) ;; *) echo "::error::MODE must be preflight or setup, not '$MODE'"; exit 1 ;; esac
+          echo "MODE=$MODE" >> "$GITHUB_ENV"
+          echo "Running $MODE"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @myself-dashboard/core build
+      - name: Unit tests before touching the project
+        if: env.MODE == 'setup'
+        run: pnpm -r test
+      - name: Credentials
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::The FIREBASE_SERVICE_ACCOUNT secret is not set or is empty"; exit 1; fi
+          printf '%s' "$KEY" > "$RUNNER_TEMP/key.json"
+          chmod 600 "$RUNNER_TEMP/key.json"
+          if ! node -e 'const k=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); if(k.type!=="service_account"||!k.private_key) process.exit(1)' "$RUNNER_TEMP/key.json"; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT is not a service-account JSON key (paste the whole downloaded file)"; exit 1
+          fi
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> "$GITHUB_ENV"
+      - name: Preflight (read-only)
+        run: node scripts/firebase-ops.mjs preflight
+      - name: Prepare the project (database, Hosting site, web app, sign-in domains)
+        if: env.MODE == 'setup'
+        run: node scripts/firebase-ops.mjs prepare
+      - name: Deploy rules and indexes (dashboard database only)
+        if: env.MODE == 'setup'
+        run: pnpm exec firebase deploy --only firestore --project myself-research --non-interactive
+      - name: Deploy functions (dashboard codebase only)
+        if: env.MODE == 'setup'
+        run: |
+          set +e
+          pnpm exec firebase deploy --only functions:dashboard --project myself-research --non-interactive 2>&1 | tee "$RUNNER_TEMP/functions.log"
+          code=${PIPESTATUS[0]}
+          # The functions deploy but the CLI will not set an image cleanup policy on the
+          # shared artifact repository without --force; leave that to the project owner.
+          if [ "$code" -ne 0 ] && grep -q "Functions successfully deployed but could not set up cleanup policy" "$RUNNER_TEMP/functions.log"; then
+            echo "::warning::Functions deployed; no container-image cleanup policy was set (see firebase functions:artifacts:setpolicy)."
+            code=0
+          fi
+          exit $code
+      - name: Deploy the web app
+        if: env.MODE == 'setup'
+        run: pnpm exec firebase deploy --only hosting:dashboard --project myself-research --non-interactive
+      - name: Register the survey versions
+        if: env.MODE == 'setup'
+        run: node scripts/sync-releases.mjs --from releases --project myself-research
+      - name: Administrator, existing sessions, smoke test
+        if: env.MODE == 'setup'
+        run: node scripts/firebase-ops.mjs finish
+      - name: Remove credentials
+        if: always()
+        run: shred -u "$RUNNER_TEMP/key.json" 2>/dev/null || rm -f "$RUNNER_TEMP/key.json"

@@ -1,0 +1,189 @@
+rules_version = '2';
+
+/**
+ * MySelf Research Dashboard — rules for the `dashboard` named database.
+ *
+ * THIS FILE GOVERNS ONLY THE `dashboard` DATABASE. The survey's `(default)`
+ * database — raw sittings — keeps its own rules in faisalmushtaq/MySelf
+ * (infra/firebase/firestore.rules) and this repository never deploys to it.
+ *
+ * Who is a dashboard member (every clause, every time):
+ *   - signed in with Google (`google.com` provider), email verified;
+ *   - not a survey device (no `device` claim; devices sign in anonymously anyway);
+ *   - carries a role claim: owner (Administrator), researcher, analyst (Read-only
+ *     reviewer) — claims are set only by the Admin SDK, never by a client;
+ *   - email on the access policy in `config/access` (allowlist or Workspace domain).
+ *
+ * What clients may do directly is deliberately narrow. Everything that changes
+ * research state — reviews, notes, exports, roles, settings — goes through the
+ * backend, which checks the role and writes an audit row in the same transaction.
+ * So the rules below mostly READ, and they DENY every other write. The one
+ * client-written collection is saved views, which carry no research data.
+ *
+ * Tested from both sides in firestore/test/rules.test.ts.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isGooglePerson() {
+      return signedIn()
+        && request.auth.token.get('device', false) != true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('email', null) is string;
+    }
+
+    function email() {
+      return request.auth.token.email.lower();
+    }
+
+    function accessPolicy() {
+      return get(/databases/$(database)/documents/config/access).data;
+    }
+
+    // An absent access policy admits nobody.
+    function allowlisted() {
+      return exists(/databases/$(database)/documents/config/access)
+        && (email() in accessPolicy().get('emails', [])
+            || email().split('@')[1] in accessPolicy().get('domains', []));
+    }
+
+    function role() {
+      return request.auth.token.get('role', '');
+    }
+
+    function member() {
+      return isGooglePerson()
+        && role() in ['owner', 'researcher', 'analyst']
+        && allowlisted();
+    }
+
+    function isAdmin() {
+      return member() && role() == 'owner';
+    }
+
+    function mayShare() {
+      return member() && role() in ['owner', 'researcher'];
+    }
+
+    // ── Configuration ────────────────────────────────────────────────────
+    // Written only by the backend (updateAccessPolicy, updatePolicy), which
+    // refuses a change that would lock its own caller out.
+    match /config/{doc} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Role mirror for the admin screens. Nobody writes their own role: claims
+    // come from the Admin SDK only.
+    match /users/{uid} {
+      allow read: if member() && (request.auth.uid == uid || isAdmin());
+      allow write: if false;
+    }
+
+    match /studies/{study} {
+
+      // Survey version metadata: question counts, version, publication date.
+      match /releases/{hash} {
+        allow read: if member();
+        allow write: if false;
+      }
+
+      // The manifests themselves: backend only.
+      match /releaseManifests/{hash} {
+        allow read, write: if false;
+      }
+
+      // De-identified per-sitting summaries: backend only. Every list and metric
+      // is served by a callable that applies the caller's role (masking study
+      // codes, withholding free text). A direct read would bypass that.
+      match /sessionSummaries/{sessionId} {
+        allow read, write: if false;
+      }
+
+      // Data freshness for the header indicator.
+      match /meta/{doc} {
+        allow read: if member();
+        allow write: if false;
+      }
+
+      // Review records and notes: every member may read them; changes go
+      // through updateReview / addNote, which audit in the same transaction.
+      // A read-only reviewer therefore cannot change a flag by any route.
+      match /reviews/{sessionId} {
+        allow read: if member();
+        allow write: if false;
+
+        match /notes/{noteId} {
+          allow read: if member();
+          allow write: if false;
+        }
+      }
+
+      // Saved views: filters, sort, columns. Private to their owner unless shared;
+      // only researchers and administrators may share. No search text and no
+      // participant identifiers are ever part of a view's state.
+      match /savedViews/{viewId} {
+        function validView(d) {
+          return d.keys().hasOnly(['name', 'description', 'ownerUid', 'ownerEmail', 'shared', 'state', 'createdAt', 'updatedAt'])
+            && d.keys().hasAll(['name', 'ownerUid', 'shared', 'state', 'createdAt', 'updatedAt'])
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 80
+            && (!('description' in d) || (d.description is string && d.description.size() <= 280))
+            && d.shared is bool
+            && d.state is map
+            && d.state.keys().hasOnly(['path', 'filters', 'sort', 'columns', 'density', 'pageSize', 'versionHash'])
+            && (!('filters' in d.state) || (d.state.filters is map && !('search' in d.state.filters)))
+            && (!('ownerEmail' in d) || d.ownerEmail == email());
+        }
+
+        allow read: if member()
+          && (resource.data.ownerUid == request.auth.uid || resource.data.shared == true);
+
+        allow create: if member()
+          && validView(request.resource.data)
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && (request.resource.data.shared == false || mayShare());
+
+        allow update: if member()
+          && resource.data.ownerUid == request.auth.uid
+          && validView(request.resource.data)
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && (request.resource.data.shared == false || mayShare());
+
+        allow delete: if member()
+          && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      }
+
+      // Export jobs: created only by createExport, which applies the caller's
+      // permissions on the server. The requester (or an administrator) may watch
+      // progress; nobody else learns an export exists.
+      match /exportJobs/{jobId} {
+        allow read: if member()
+          && (resource.data.requestedBy == request.auth.uid || isAdmin());
+        allow write: if false;
+      }
+
+      // The audit log: append-only, written only by the backend. Administrators
+      // read everything; everyone else reads only their own activity. Nobody,
+      // including the person it describes, can edit or delete an entry.
+      match /auditLog/{entryId} {
+        allow read: if isAdmin()
+          || (member() && resource.data.actorUid == request.auth.uid);
+        allow write: if false;
+      }
+    }
+
+    // Anything not named above is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

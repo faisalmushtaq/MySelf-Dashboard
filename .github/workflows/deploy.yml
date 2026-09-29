@@ -1,0 +1,57 @@
+name: Deploy dashboard
+
+# Manual only. The dashboard shares a Firebase project with the survey, so a
+# deploy is a deliberate act — and it can only touch the dashboard's own named
+# database, functions codebase and Hosting site (see docs/06-handover.md).
+on:
+  workflow_dispatch:
+    inputs:
+      what:
+        description: "What to deploy"
+        type: choice
+        options: [all, rules, functions, hosting]
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dashboard
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @myself-dashboard/core build
+      - run: pnpm -r test
+      - name: Credentials
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::FIREBASE_SERVICE_ACCOUNT is not set (docs/06-handover.md §Deploy)"; exit 1; fi
+          echo "$KEY" > "$RUNNER_TEMP/key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> "$GITHUB_ENV"
+      - name: Deploy
+        env:
+          VITE_FIREBASE_CONFIG: ${{ vars.DASHBOARD_FIREBASE_CONFIG }}
+        run: |
+          case "${{ inputs.what }}" in
+            all) pnpm exec firebase deploy --only firestore,functions:dashboard,hosting:dashboard --project myself-research --non-interactive ;;
+            rules) pnpm deploy:rules --non-interactive ;;
+            functions) pnpm deploy:functions --non-interactive ;;
+            hosting) pnpm deploy:hosting --non-interactive ;;
+          esac
+      - name: Remove credentials
+        if: always()
+        run: shred -u "$RUNNER_TEMP/key.json" 2>/dev/null || rm -f "$RUNNER_TEMP/key.json"

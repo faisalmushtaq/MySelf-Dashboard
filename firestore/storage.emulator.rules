@@ -1,0 +1,16 @@
+rules_version = '2';
+
+/**
+ * EMULATOR ONLY. Production Storage rules belong to the survey repository
+ * (infra/firebase/storage.rules) and end in a catch-all deny, which is what keeps
+ * `dashboard-exports/**` unreadable by any client. This file reproduces that for
+ * local runs; it is never deployed from this repository (firebase.json has no
+ * storage section), because deploying it would replace the survey's rules.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

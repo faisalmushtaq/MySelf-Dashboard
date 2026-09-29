@@ -1,0 +1,34 @@
+{
+  "name": "myself-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MySelf Research Dashboard \u2014 secure monitoring, completeness, review and export for the MySelf survey",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint:privacy": "node scripts/check-privacy.mjs",
+    "test:rules": "pnpm --filter @myself-dashboard/rules-tests test:emulator",
+    "test:e2e": "firebase emulators:exec --only auth,firestore,functions,storage --project demo-myself-dashboard --config firebase.emulators.json \"node scripts/emulator-setup.mjs && playwright test\"",
+    "dev:emulators": "firebase emulators:start --only auth,firestore,functions,storage --project demo-myself-dashboard --config firebase.emulators.json",
+    "seed:emulators": "node scripts/emulator-setup.mjs",
+    "e2e:build": "pnpm --filter @myself-dashboard/core build && pnpm --filter @myself-dashboard/functions build && pnpm --filter @myself-dashboard/web build:emulators",
+    "test:integration": "pnpm --filter @myself-dashboard/functions test:integration",
+    "check:vendored": "node scripts/check-vendored.mjs",
+    "deploy:rules": "firebase deploy --only firestore --project myself-research",
+    "deploy:functions": "firebase deploy --only functions:dashboard --project myself-research",
+    "deploy:hosting": "firebase deploy --only hosting:dashboard --project myself-research"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@myself-dashboard/core": "workspace:*",
+    "@playwright/test": "^1.56.0",
+    "firebase-admin": "^13.10.0",
+    "firebase-tools": "^14.19.0",
+    "typescript": "^5.6.0"
+  }
+}
