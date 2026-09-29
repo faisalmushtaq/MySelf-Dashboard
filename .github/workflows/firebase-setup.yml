@@ -5,11 +5,15 @@ name: Firebase setup
 # dashboard's own resources (its named database, functions codebase, Hosting
 # site and web app registration) and never changes the survey's.
 #
-# Run it by changing MODE in .github/firebase-setup/request.env on the dashboard
-# branch, or from the Actions tab once this file is on the default branch.
+# Run it by changing .github/firebase-setup/request.env on main (merge a pull
+# request that changes MODE or bumps REQUEST), or from the Actions tab. A change
+# to the file on any other branch runs nothing, so a request is reviewed and
+# merged before it touches the project. (The first line of request.env still
+# says "the dashboard branch": editing it would itself start a run, so it is
+# corrected alongside the next real request.)
 on:
   push:
-    branches: [claude/laughing-lovelace-9qt0j6]
+    branches: [main]
     paths: [".github/firebase-setup/request.env"]
   workflow_dispatch:
     inputs:

@@ -125,7 +125,10 @@ in [05-plan.md §5.2](05-plan.md). Changing required levels needs a rebuild.
 **Editor**, **Cloud Run Admin** and **Cloud Functions Admin** (needed to make the
 functions callable from browsers), plus **Cloud Datastore Owner** for the first
 run only (creating the database; remove it afterwards) — in two stages chosen by
-`MODE` in `.github/firebase-setup/request.env`:
+`MODE` in `.github/firebase-setup/request.env`. A change to that file runs the
+workflow when it reaches `main` (merge a pull request that changes `MODE` or bumps
+`REQUEST`); a change on any other branch runs nothing. It can also be started from
+the Actions tab.
 
 - **preflight** — read-only: confirms the key, lists databases, Hosting sites, web
   apps, sign-in settings, API-key restrictions, buckets, deployed functions (and
