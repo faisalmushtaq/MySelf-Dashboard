@@ -79,7 +79,7 @@ exports.
 
 | Instrument | Wording | Response labels and codes | Scoring |
 |---|---|---|---|
-| SDQ (25) | Items 19, 20 and 22 are the **adult (18+) phrasings** ("Other people pick on me…", "(family members, friends, colleagues)", "home, work or elsewhere"); 4, 6, 13 and 23 are the original rather than the 2005 11–17 wording. Survey anomaly A-7. | Not True 0, Somewhat True 1, Certainly True 2 in every version | Published allocation and reversals (7, 11, 14, 21, 25); scores are right. Whether the 11–17 cut-points and British norms apply to this mixed wording is a question for youthinmind — **decision needed**. |
+| SDQ (25) | Items 19, 20 and 22 are the **adult (18+) phrasings** ("Other people pick on me…", "(family members, friends, colleagues)", "home, work or elsewhere"); the other 22 are word for word the UK English 11–17 form (S11-17). The US English 11–17 form differs in items 4, 6, 13, 20 and 23 ("for example food, games, pens", "I would rather be alone…", "depressed", "offer", "get along"); the survey follows the UK form there. Same wording in every survey version. Survey anomaly A-7; item-by-item comparison in §9.5.1. | Not True 0, Somewhat True 1, Certainly True 2 in every version | Published allocation and reversals (7, 11, 14, 21, 25); scores are right. Whether the 11–17 cut-points and British norms apply to this mixed wording is a question for youthinmind — **decision needed**. |
 | RCADS-25 | As the RCADS-47 items; item 17 reads "think special thoughts (like number or words) to stop bad things happening" for "think of special thoughts (like numbers or words) to stop bad things from happening" | Never 0 … Always 3; skippable, as the instructions say | Fixed (§9.3) |
 | SWEMWBS | The seven items verbatim | None of the time 1 … All of the time 5 | Raw total and metric conversion as published; raw 23→20.73, 24→21.54, 30→27.03, 32→29.31 confirmed against a published source. Whether Warwick's bands apply to raw or metric scores, and their use at 11–16, to confirm (the dashboard bands the metric score). |
 | STAI-5 | The five state items verbatim | Not at all 1, Somewhat 2, Moderately 3, Very much 4 — the STAI's anchors are "Moderately so" and "Very much so" | Sum, none reversed: right |
@@ -95,6 +95,50 @@ Agreement scales run in **opposite directions** in the same survey (screen,
 social-media impact and "I lose track" agree-first; doomscrolling disagree-first).
 The dashboard's scores put them on one direction; raw codes in exports keep the
 survey's, and the codebook says which is which.
+
+### 9.5.1 SDQ wording, item by item
+
+Checked word for word against youthinmind's own forms (sdqinfo.org, English (UK)):
+the self-report for 11–17 year olds (S11-17, © Robert Goodman 2005) and the
+self-report for adults (S18+, © 2009). The survey's wording is the same in all
+twelve versions (r1.0.0–r7.3.0).
+
+| Item | Scale | Survey (every version) | S11-17 (UK) | Source of the survey's wording |
+|---|---|---|---|---|
+| 19 | Peer problems | Other people pick on me or bully me | Other **children or young people** pick on me or bully me | S18+, word for word |
+| 20 | Prosocial | I often **offer** to help others (**family members, friends, colleagues**) | I often **volunteer** to help others (**parents, teachers, children**) | S18+, word for word |
+| 22 | Conduct problems | I take things that are not mine from home, **work** or elsewhere | I take things that are not mine from home, **school** or elsewhere | S18+, word for word |
+| the other 22 | all five | as S11-17 | | S11-17, word for word |
+
+What each change does to the question:
+
+- **19** widens who does the bullying from peers to anyone, including adults and
+  family.
+- **20** changes both the verb and the examples. "Offer" is the US English 11–17
+  wording, so on its own it is a recognised variant; the examples are not. Helping
+  family and friends is more everyday than helping parents, teachers and other
+  children, and "colleagues" means little to most 11–16 year olds.
+- **22** replaces school, where pupils spend most of the day, with work, which most
+  of them do not have.
+
+Other differences, for completeness:
+
+- **Instructions.** r1.0.0–r3.1.0 use the form's instructions word for word. From
+  r4.0.0 they are adapted for a screen ("For each statement, choose Not True,
+  Somewhat True or Certainly True… Answer on the basis of how things have been for
+  you over the last six months"); the meaning and the six-month period are
+  unchanged.
+- **Answers.** Not True, Somewhat True, Certainly True, scored 0, 1, 2 (reversed for
+  7, 11, 14, 21 and 25), in every version (the Qualtrics original's "Clearly true",
+  A-6, is not in any MySelf version).
+
+The scoring is unaffected: same items, same subscales, same reversals. What is in
+question is whether the S11-17 cut-points and British norms apply. Items 19 and 22
+count towards total difficulties and externalising/internalising; item 20 only
+towards prosocial. A sensitivity check needs no new data: SDQ scoring allows a
+subscale to be prorated from three or more of its five items, so peer problems,
+prosocial and conduct problems can be rescored from their four S11-17 items and
+compared with the full scores.
 
 ## 9.6 Changes between versions
 

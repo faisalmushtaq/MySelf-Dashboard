@@ -150,11 +150,11 @@ export const REVIEW_NOTES: readonly ReviewNote[] = [
     severity: "warning",
     area: "wording",
     instrument: "sdq25_s",
-    keys: ["sdq25_s.q19", "sdq25_s.q20", "sdq25_s.q22", "sdq25_s.q4", "sdq25_s.q6", "sdq25_s.q13", "sdq25_s.q23"],
+    keys: ["sdq25_s.q19", "sdq25_s.q20", "sdq25_s.q22"],
     title: "SDQ items 19, 20 and 22 use the adult (18+) wording, not the 11–17 self-report",
     detail:
-      "Compared with youthinmind's 11–17 self-report (2005 revision): 19 'Other people pick on me or bully me' (11–17: 'Other children or young people…'), 20 '…(family members, friends, colleagues)' (11–17: '(parents, teachers, children)') and 22 '…from home, work or elsewhere' (11–17: '…home, school or elsewhere') are the 18+ phrasings. Items 4, 6, 13 and 23 follow the original 11–17 wording rather than the 2005 revision ('pens etc.', 'play alone', 'down-hearted', 'get on better'). The items and their scoring are the same, so the scores are computed correctly, but the dashboard's cut-points and British norms are for the 11–17 form: whether they apply to this mixed wording is a question for youthinmind, and future versions should use one form verbatim. Survey anomaly A-7.",
-    source: "youthinmind SDQ self-report 11–17 (© Robert Goodman, 2005); survey docs/02 A-7.",
+      "The other 22 items are word for word youthinmind's UK English 11–17 self-report (S11-17, © Robert Goodman 2005); these three are word for word its adult self-report (S18+, © 2009): 19 'Other people pick on me or bully me' (S11-17: 'Other children or young people pick on me or bully me'), 20 'I often offer to help others (family members, friends, colleagues)' (S11-17: 'I often volunteer to help others (parents, teachers, children)') and 22 'I take things that are not mine from home, work or elsewhere' (S11-17: '…from home, school or elsewhere'). The wording is the same in every survey version, and the items and their scoring are the same, so scores are computed correctly; but the cut-points and British norms are for the S11-17 wording. Item 19 is peer problems, 20 prosocial and 22 conduct problems. Whether the norms apply to this wording is a question for youthinmind, and future versions should use one form verbatim. Survey anomaly A-7.",
+    source: "youthinmind SDQ S11-17 (English, UK; © Robert Goodman, 2005) and S18+ (© 2009), from sdqinfo.org; survey docs/02 A-7.",
     status: "decision",
   },
   {
