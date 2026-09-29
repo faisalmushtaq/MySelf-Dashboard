@@ -89,6 +89,7 @@ export function demoManifest(version: DemoVersion): Json {
     ),
     "scale.games": scale("scale.games", [[1, "Yes, most days"], [2, "Sometimes"], [3, "No"]]),
     "scale.travel": scale("scale.travel", [[1, "Walk"], [2, "Bike"], [3, "Bus"], [4, "Car"], [5, "Other"]]),
+    "scale.month": scale("scale.month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => [i + 1, m] as [number, string])),
   };
 
   const instruments: Json = {
@@ -106,6 +107,15 @@ export function demoManifest(version: DemoVersion): Json {
       item("age", "age_years", "numeric", "How old are you?", { min: 10, max: 19, integerOnly: true, required: "hard" }),
       item("year_group", "year_group", "single_choice", "Which year are you in at school?", { scale: "scale.year_group", scaleVersion: "1.0.0", presentation: "cards", spectrumReverse: false, autoAdvance: true }),
       ...(v2 ? [item("school_travel", "school_travel", "single_choice", "How do you usually get to school?", { scale: "scale.travel", scaleVersion: "1.0.0", presentation: "cards", spectrumReverse: false, autoAdvance: true })] : []),
+    ]),
+    // The survey's secret code, with the item keys its ingest derives the
+    // participant code from (MySelf packages/store/src/ingest.ts). Identifying:
+    // the dashboard never shows or aggregates these answers.
+    [refKey("ybm_identity")]: instrument("ybm_identity", [
+      item("ps_mother_initials", "ps_mother_initials", "text_short", "The first two letters of your mum's (or carer's) first name", { identifying: true, required: "optional", maxChars: 2, minChars: 0 }),
+      item("ps_house_digit", "ps_house_digit", "text_short", "The first number of your house", { identifying: true, required: "optional", maxChars: 1, minChars: 0 }),
+      item("ps_birth_month", "ps_birth_month", "single_choice", "The month you were born", { identifying: true, required: "optional", scale: "scale.month", scaleVersion: "1.0.0", presentation: "list", spectrumReverse: false, autoAdvance: true }),
+      item("ps_postcode_letters", "ps_postcode_letters", "text_short", "The last two letters of your postcode", { identifying: true, required: "optional", maxChars: 2, minChars: 0 }),
     ]),
     [refKey("demo_sleep")]: instrument("demo_sleep", [
       item("sleep_hours", "sleep_hours", "numeric", "About how many hours did you sleep last night?", { min: 0, max: 14, integerOnly: true }),
@@ -165,7 +175,7 @@ export function demoManifest(version: DemoVersion): Json {
 
   const sections = [
     { key: "welcome", title: "Welcome", components: [component("demo_consent")] },
-    { key: "about_you", title: "About you", components: [component("demo_about")] },
+    { key: "about_you", title: "About you", components: [component("demo_about"), component("ybm_identity")] },
     { key: "sleep", title: "Sleep", components: [component("demo_sleep")] },
     { key: "phones", title: "Phones", components: [component("demo_phone")] },
     { key: "social_media", title: "Your social media", displayIf: sel("demo_phone", "has_phone", 1), components: [component("demo_social")] },
@@ -287,6 +297,19 @@ interface WalkOptions {
   noPresented?: boolean;
   tooFast?: boolean;
   textOverride?: string;
+  /** The synthetic child answering: their secret-code components and first name. */
+  child?: Child;
+}
+
+/** A synthetic child. Returning children and twins reuse the same components. */
+export interface Child {
+  initials: string;
+  digit: string;
+  month: number;
+  postcode: string;
+  firstName: string;
+  /** Leaves the postcode letters unanswered, so no participant code can be derived. */
+  incomplete?: boolean;
 }
 
 function answerFor(q: QuestionDef, rnd: () => number, opts: WalkOptions): AnswerValue {
@@ -355,6 +378,28 @@ function walk(release: ReleaseIndex, start: number, rnd: () => number, opts: Wal
       stopped = true;
       break;
     }
+    if (q.key.startsWith("ybm_identity.")) {
+      // Answered from the child, with fixed timing and no random draws, so the
+      // rest of the synthetic study is unchanged by their presence.
+      const child = opts.child;
+      const [instrument = "", itemKey = ""] = q.key.split(".");
+      tick(8000);
+      if (!opts.noPresented) push("item.presented", q.key, { visit: 1, returning: false });
+      if (!child || (child.incomplete && itemKey === "ps_postcode_letters")) {
+        push("item.skipped", q.key);
+        store.set(ref(instrument, itemKey), { status: "skipped" });
+      } else {
+        const value: AnswerValue =
+          itemKey === "ps_birth_month"
+            ? { kind: "choice", code: child.month }
+            : { kind: "text", value: itemKey === "ps_mother_initials" ? child.initials : itemKey === "ps_house_digit" ? child.digit : child.postcode };
+        push("response.recorded", q.key, { value, timing: { tooFast: false } });
+        store.set(ref(instrument, itemKey), { status: "answered", value });
+      }
+      tick(300);
+      push("item.left", q.key, { totalDwellMs: 3000, visit: 1 });
+      continue;
+    }
     asked += 1;
     tick(opts.tooFast ? 700 : 12000 + Math.floor(rnd() * 40000));
     if (!opts.noPresented) push("item.presented", q.key, { visit: 1, returning: false });
@@ -370,6 +415,7 @@ function walk(release: ReleaseIndex, start: number, rnd: () => number, opts: Wal
       store.set(ref(instrument, itemKey), { status: "skipped" });
     } else {
       let value = answerFor(q, rnd, opts);
+      if (q.key === "demo_about.first_name" && opts.child) value = { kind: "text", value: opts.child.firstName };
       if (opts.invalid && !invalidDone && q.responseType === "single_choice" && q.key !== "demo_phone.has_phone") {
         value = { kind: "choice", code: 99 };
         invalidDone = true;
@@ -431,6 +477,29 @@ export function generateDemoSittings(options: GenerateOptions = {}): DemoSitting
 
   const sites = ["NDC", "LDS", "BRD"];
   const out: DemoSitting[] = [];
+  // Who each sitting is. Most children take part once; every sixth sitting from
+  // the 24th is a child returning for a second wave; one pair are twins (same
+  // secret code, different names — the collision the survey's ingest reports);
+  // and one child leaves their code incomplete, so their sitting is held back.
+  const idRnd = prng(((options.seed ?? 20260928) ^ 0x5eed) >>> 0);
+  const letters = "ABCDEFGHJKLMNPRSTUVWY";
+  const two = () => letters[Math.floor(idRnd() * letters.length)]! + letters[Math.floor(idRnd() * letters.length)]!;
+  const names = ["Alex", "Sam", "Jordan", "Riley", "Casey", "Morgan", "Taylor", "Jamie", "Robin", "Charlie"];
+  const children: Child[] = [];
+  // The twin's sibling: the last child to finish a sitting, and when they sat.
+  let lastComplete: { child: Child; start: number; release: ReleaseIndex } | null = null;
+  const TWIN = 31;
+  const childFor = (i: number): Child => {
+    if (i >= 24 && i % 6 === 0 && children.length > 4) return children[(i * 7) % Math.min(children.length, 20)]!;
+    if (i === TWIN && lastComplete) {
+      const sibling = lastComplete.child;
+      return { ...sibling, firstName: names.find((n) => n !== sibling.firstName)! };
+    }
+    const child: Child = { initials: two(), digit: String(1 + Math.floor(idRnd() * 9)), month: 1 + Math.floor(idRnd() * 12), postcode: two(), firstName: names[Math.floor(idRnd() * names.length)]! };
+    if (i === 20) child.incomplete = true;
+    children.push(child);
+    return child;
+  };
   scenarios.forEach((scenario, i) => {
     // Spread start times over the period, oldest first; in-progress ones are recent.
     let start =
@@ -442,12 +511,15 @@ export function generateDemoSittings(options: GenerateOptions = {}): DemoSitting
     d.setUTCHours(8 + Math.floor(rnd() * 6), Math.floor(rnd() * 60), 0, 0);
     start = scenario === "in_progress" ? start : d.getTime();
 
-    const release = [...releases].reverse().find((r) => Date.parse(r.publishedAt) <= start) ?? releases[0]!;
+    // Twins sit together: same school visit, twenty minutes apart, same version.
+    if (i === TWIN && lastComplete) start = lastComplete.start + 20 * 60_000;
+    const release = i === TWIN && lastComplete ? lastComplete.release : [...releases].reverse().find((r) => Date.parse(r.publishedAt) <= start) ?? releases[0]!;
     const site = sites[i % sites.length]!;
     const code = scenario === "test" ? `TST${String(1 + i).padStart(4, "0")}` : `${site}${String(1000 + i).padStart(4, "0")}`;
     const sessionId = ulid(start, rnd);
 
-    const opts: WalkOptions = {};
+    if (i === TWIN) scenario = "complete";
+    const opts: WalkOptions = { child: childFor(i) };
     let terminal = true;
     switch (scenario) {
       case "complete":
@@ -501,6 +573,7 @@ export function generateDemoSittings(options: GenerateOptions = {}): DemoSitting
     }
 
     const w = walk(release, start, rnd, opts);
+    if (scenario === "complete" && opts.child && !opts.child.incomplete) lastComplete = { child: opts.child, start, release };
     const events = w.events;
     let t = w.end;
     let mono = w.mono;

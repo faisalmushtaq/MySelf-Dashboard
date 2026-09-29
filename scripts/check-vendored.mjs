@@ -29,5 +29,18 @@ for (const [file, re] of pieces) {
     ok = false;
   }
 }
+// The data layer (schema, scoring, ingest, BIDS): every file, byte for byte
+// apart from its header and rewritten package imports.
+const { VENDORED, stripHeader, vendoredBody } = await import("./vendor-survey.mjs");
+for (const [pkg, names] of Object.entries(VENDORED)) {
+  for (const n of names) {
+    const theirs = vendoredBody(readFileSync(join(survey, `packages/${pkg}/src/${n}.ts`), "utf8"));
+    const ours = stripHeader(readFileSync(`packages/core/src/vendor/myself/${pkg}/${n}.ts`, "utf8"));
+    if (theirs !== ours) {
+      console.error(`DRIFT: packages/${pkg}/src/${n}.ts changed in the survey — run scripts/vendor-survey.mjs and review the BIDS export tests.`);
+      ok = false;
+    }
+  }
+}
 if (!ok) process.exit(1);
-console.log("vendored engine matches the survey");
+console.log("vendored engine and data layer match the survey");
