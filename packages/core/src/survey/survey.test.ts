@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { indexRelease } from "../manifest.js";
 import type { Sitting, SittingEvent } from "../types.js";
 import { demoReleases, generateDemoSittings } from "../node/synthetic.js";
-import { buildDashboardBids, deriveStudyDataset, parseSurveyManifest, participantsOverview, pseudonymiseDataset, subsetDataset, type BidsExportInput } from "./index.js";
+import { buildDashboardBids, deriveStudyDataset, parseSurveyManifest, participantsOverview, pseudonymiseDataset, scoreStudy, subsetDataset, type BidsExportInput } from "./index.js";
+import { DEFAULT_GROUP_SETTINGS, DEFAULT_SCHEMES } from "../scoring/index.js";
 
 // ── Fixtures: the synthetic study (never real data) and the real releases ───────
 
@@ -199,6 +200,7 @@ describe("the real survey (v7.1.0) through the same pipeline", () => {
     "ybm_identity.ps_house_digit": { kind: "text", value: "4" },
     "ybm_identity.ps_birth_month": { kind: "choice", code: 3 },
     "ybm_identity.ps_postcode_letters": { kind: "text", value: "CD" },
+    "ybm_identity.dob": { kind: "date", iso: "2013-05-04" },
   };
   for (const q of idx.questions) {
     let value: unknown = code[q.key];
@@ -227,6 +229,67 @@ describe("the real survey (v7.1.0) through the same pipeline", () => {
     const scores = rows(file(out.files, "phenotype/scores.tsv"));
     expect(scores).toHaveLength(1);
     expect(Object.keys(scores[0]!).some((k) => k.startsWith("swemwbs_"))).toBe(true);
+  });
+});
+
+describe("scoring the real survey with the dashboard's schemes", () => {
+  const raw = release("7.1.0") as { hash: string };
+  const idx = indexRelease(raw);
+  // The same synthetic sitting as above: first option everywhere, born 4 May 2013.
+  const parsed = parseSurveyManifest(raw);
+  const manifest = "manifest" in parsed ? parsed.manifest : null;
+  const sitting = (() => {
+    const events: SittingEvent[] = [];
+    let seq = 0;
+    const at = (i: number) => new Date(Date.parse("2026-09-10T09:00:00.000Z") + i * 5000).toISOString();
+    events.push({ seq: seq++, type: "session.started", tWall: at(0), tMono: 0 });
+    const fixed: Record<string, unknown> = {
+      "ybm_identity.ps_mother_initials": { kind: "text", value: "JA" },
+      "ybm_identity.ps_house_digit": { kind: "text", value: "4" },
+      "ybm_identity.ps_birth_month": { kind: "choice", code: 5 },
+      "ybm_identity.ps_postcode_letters": { kind: "text", value: "CD" },
+      "ybm_identity.dob": { kind: "date", iso: "2013-05-04" },
+    };
+    for (const q of idx.questions) {
+      let value: unknown = fixed[q.key];
+      if (value === undefined && !q.identifying) {
+        if (q.responseType === "single_choice" && q.options?.length) value = { kind: "choice", code: q.options[0]!.code };
+        else if (["numeric", "slider", "ladder"].includes(q.responseType)) value = { kind: "number", value: 1 };
+      }
+      if (value === undefined) continue;
+      events.push({ seq: seq++, type: "item.presented", itemKey: q.key, tWall: at(seq), tMono: seq * 5000 });
+      events.push({ seq: seq++, type: "response.recorded", itemKey: q.key, payload: { value }, tWall: at(seq), tMono: seq * 5000 });
+    }
+    events.push({ seq: seq++, type: "session.completed", payload: { totalMs: seq * 5000 }, tWall: at(seq), tMono: seq * 5000 });
+    return { sessionId: "01REALSCORINGTEST000000000", studyCode: "NDC0001", releaseKey: "r", releaseHash: raw.hash, startedAt: at(0), completedAt: at(seq), complete: true, events } as Sitting;
+  })();
+  const data = deriveStudyDataset({ study: "ybm", sittings: [sitting], manifests: new Map([[raw.hash, manifest!]]) });
+  const [scored] = scoreStudy(data, { schemes: DEFAULT_SCHEMES, releases: new Map([[raw.hash, idx]]), groups: DEFAULT_GROUP_SETTINGS });
+  const value = (scheme: string, output: string) => scored!.scores[scheme]!.outputs[output]!.value;
+
+  it("scores every instrument the release administers", () => {
+    expect(Object.keys(scored!.scores).sort()).toEqual(DEFAULT_SCHEMES.map((s) => s.key).sort());
+  });
+
+  it("gives the official scores for these answers, including the ones the survey's own scoring leaves blank", () => {
+    expect(value("swemwbs", "raw_total")).toBe(7);
+    expect(value("swemwbs", "metric")).toBe(7);
+    expect(value("stai5_s", "state_anxiety")).toBe(5);
+    // SDQ all 'Not true' (0): only the reversed items score, 2 each.
+    expect([value("sdq25_s", "emotional"), value("sdq25_s", "conduct"), value("sdq25_s", "hyperactivity"), value("sdq25_s", "peer"), value("sdq25_s", "total_difficulties")]).toEqual([0, 2, 4, 4, 10]);
+    expect(value("rcads25", "total")).toBe(0);
+    expect(value("ehi_sf", "lq")).toBe(100);
+    expect(value("kss", "sleepiness")).toBe(1);
+    expect(value("macarthur_ssy", "society")).toBe(1);
+    expect(value("ybm_social_media", "hours_week")).toBeCloseTo(1.75);
+    // The survey's own SWEMWBS and STAI-5 definitions name items q1…q7 that do not exist.
+    const own = data.dataset.scores.filter((r) => r.instrument === "swemwbs" || r.instrument === "stai5_s");
+    expect(own.every((r) => r.value === null)).toBe(true);
+  });
+
+  it("places the sitting in its school and, from the date of birth, its year group — without keeping the date", () => {
+    expect(scored).toMatchObject({ school: "NDC", yearGroup: 9, yearGroupSource: "dob" });
+    expect(JSON.stringify(data.dataset)).not.toContain("2013-05-04");
   });
 });
 

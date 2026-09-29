@@ -2,6 +2,7 @@ import { releaseManifest, type ReleaseManifest } from "../vendor/myself/schema/i
 import { ingest, type DeviceSession } from "../vendor/myself/store/ingest.js";
 import { emptyDataset, type Dataset, type ParticipantRow } from "../vendor/myself/store/dataset.js";
 import type { Sitting } from "../types.js";
+import { schoolYearOn } from "../scoring/groups.js";
 
 /**
  * The study dataset, derived exactly as the survey's own export derives it
@@ -27,6 +28,11 @@ export interface StudyDataset {
   excluded: Excluded[];
   collisions: { participantId: string; sessionIds: string[] }[];
   warnings: string[];
+  /**
+   * School year at each sitting, from the date of birth given in it. Only the
+   * year is kept: the date of birth, like every identifying answer, is dropped.
+   */
+  schoolYearFromDob: Record<string, number>;
 }
 
 /**
@@ -58,6 +64,8 @@ export function deriveStudyDataset(input: {
   manifests: ReadonlyMap<string, ReleaseManifest>;
   aliases?: Record<string, string>;
   assignments?: Record<string, string>;
+  /** First month of the school year, for year groups from dates of birth (9 = September). */
+  schoolYearStartMonth?: number;
 }): StudyDataset {
   const excluded: Excluded[] = [];
   const warnings: string[] = [];
@@ -86,6 +94,7 @@ export function deriveStudyDataset(input: {
 
   let dataset = emptyDataset();
   const collisions: StudyDataset["collisions"] = [];
+  const schoolYearFromDob: Record<string, number> = {};
   for (const [hash, group] of [...groups.entries()].sort((a, b) => earliest(a[1]).localeCompare(earliest(b[1])))) {
     const result = ingest(
       [...group].sort((a, b) => a.startedAt.localeCompare(b.startedAt)),
@@ -101,8 +110,13 @@ export function deriveStudyDataset(input: {
     excluded.push(...result.rejected);
     warnings.push(...result.warnings);
     for (const c of result.collisions) collisions.push({ participantId: c.participantId, sessionIds: [...c.sessions] });
+    for (const id of result.identity) {
+      if (id.variable !== "dob") continue;
+      const year = schoolYearOn(id.value, id.recordedAt, input.schoolYearStartMonth ?? 9);
+      if (year !== null) schoolYearFromDob[id.sessionId] = year;
+    }
   }
-  return { dataset, excluded, collisions, warnings };
+  return { dataset, excluded, collisions, warnings, schoolYearFromDob };
 }
 
 /**
