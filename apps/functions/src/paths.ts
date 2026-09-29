@@ -26,4 +26,8 @@ export const spaths = {
   sessions: (study = STUDY) => `studies/${study}/sessions`,
   session: (id: string, study = STUDY) => `studies/${study}/sessions/${id}`,
   chunks: (id: string, study = STUDY) => `studies/${study}/sessions/${id}/chunks`,
+  /** Code corrections (wrong code -> right code) and twin assignments (sitting -> code). */
+  corrections: (study = STUDY) => `studies/${study}/corrections`,
+  assignments: (study = STUDY) => `studies/${study}/assignments`,
+  narratives: (study = STUDY) => `studies/${study}/narratives`,
 } as const;

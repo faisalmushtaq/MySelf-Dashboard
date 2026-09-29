@@ -18,11 +18,22 @@ export const EXPORT_KIND_LABELS: Record<ExportKind, string> = {
   question_summary: "Question-level summary",
 };
 
-export const EXPORT_FORMATS = ["csv", "xlsx", "pdf", "json"] as const;
+export const EXPORT_FORMATS = ["bids", "csv", "xlsx", "pdf", "json"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
+export const EXPORT_FORMAT_LABELS: Record<ExportFormat, string> = {
+  bids: "BIDS dataset (.zip)",
+  csv: "CSV",
+  xlsx: "Excel (XLSX)",
+  pdf: "PDF",
+  json: "JSON",
+};
+
+/** The file extension each format is written with. */
+export const FORMAT_EXTENSION: Record<ExportFormat, string> = { bids: "zip", csv: "csv", xlsx: "xlsx", pdf: "pdf", json: "json" };
+
 export const FORMATS_BY_KIND: Record<ExportKind, readonly ExportFormat[]> = {
-  sessions: ["csv", "xlsx", "json"],
+  sessions: ["bids", "csv", "xlsx", "json"],
   session_report: ["pdf"],
   completeness_summary: ["csv", "xlsx", "pdf"],
   question_summary: ["csv", "xlsx"],
@@ -51,9 +62,14 @@ export const exportSpecSchema = z.object({
   includeAnswers: z.boolean().default(false),
   layout: z.enum(["wide", "long"]).default("wide"),
   includeFreeText: z.boolean().default(false),
-  includeStudyCode: z.boolean().default(false),
-  /** Drop study codes and device ids, and truncate timestamps to the day. */
-  deidentified: z.boolean().default(true),
+  /**
+   * Identifiers are included by default: participant codes, study codes,
+   * sitting and device ids and exact times, for linkage. `deidentified`
+   * replaces participant codes with export-specific labels, drops study codes
+   * and device ids, and truncates times to the day.
+   */
+  includeStudyCode: z.boolean().default(true),
+  deidentified: z.boolean().default(false),
   /** Release for a question-level summary. */
   versionHash: z.string().max(80).optional(),
   /** Search text is never accepted for exports: exports are reproducible from filters alone. */
@@ -101,10 +117,12 @@ export function parseExportSpec(raw: unknown): ExportSpec {
     sessionIds: [...new Set(d.sessionIds)],
     filters: sanitiseFilters(d.filters),
     sort: sanitiseSort(d.sort),
-    includeAnswers: d.kind === "sessions" ? d.includeAnswers : d.kind === "session_report",
+    // A BIDS dataset is the answers; it has no "session fields only" form.
+    includeAnswers: d.kind === "sessions" ? d.includeAnswers || d.format === "bids" : d.kind === "session_report",
     layout: d.layout,
-    includeFreeText: d.includeFreeText && (d.kind === "sessions" ? d.includeAnswers : d.kind === "session_report"),
-    includeStudyCode: d.includeStudyCode && !d.deidentified,
+    includeFreeText: d.includeFreeText && (d.kind === "sessions" ? d.includeAnswers || d.format === "bids" : d.kind === "session_report"),
+    // Identifiers only exist in session-level exports; a summary never carries them.
+    includeStudyCode: d.includeStudyCode && !d.deidentified && (d.kind === "sessions" || d.kind === "session_report"),
     deidentified: d.deidentified,
     ...(d.versionHash ? { versionHash: d.versionHash } : {}),
   };
@@ -159,5 +177,6 @@ export function exportFileName(
         ? `${range.fromDay ?? "start"}_to_${range.toDay ?? "now"}`
         : "all-time";
   const deid = spec.deidentified && spec.kind === "sessions" ? "_deidentified" : "";
-  return `myself_${kind}${scope}_${what}${deid}_created-${stamp(createdAt)}.${spec.format}`.replace(/[^a-z0-9._-]/g, "");
+  const bids = spec.format === "bids" ? "_bids" : "";
+  return `myself_${kind}${scope}_${what}${bids}${deid}_created-${stamp(createdAt)}.${FORMAT_EXTENSION[spec.format]}`.replace(/[^a-z0-9._-]/g, "");
 }

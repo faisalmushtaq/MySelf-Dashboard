@@ -2239,3 +2239,4 @@ table.data tbody tr:last-child td {
   margin: 0;
   padding-left: 1.1em;
 }
+.hint.block { display: block; margin-top: 2px; }

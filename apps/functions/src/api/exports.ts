@@ -7,6 +7,8 @@ import {
   computeQuestionStats,
   can,
   compareRows,
+  compareVersions,
+  RULES_VERSION,
   DATE_PRESET_LABELS,
   describeFilters,
   EXPORT_KIND_LABELS,
@@ -32,6 +34,7 @@ import {
   type SessionRow,
   type Table,
 } from "@myself-dashboard/core";
+import { buildDashboardBids } from "@myself-dashboard/core/survey";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
@@ -40,7 +43,9 @@ import { actorFields, audit } from "../audit.js";
 import { accountFacts, decideAccess, requireActor, tokenFacts, type Actor } from "../authz.js";
 import { ALLOWED_ORIGINS, auth, bucket, dash, EXPORT_PREFIX } from "../env.js";
 import { dpaths } from "../paths.js";
-import { allReleaseIndexes, releaseIndex } from "../releases.js";
+import { allReleaseIndexes, releaseIndex, releaseList } from "../releases.js";
+import { loadStudyDataset, participantsFor, readNarratives, sha256, surveyManifests } from "../studyData.js";
+import { STUDY } from "../env.js";
 import { accessPolicy, studyPolicy } from "../settings.js";
 import { readSittings } from "../sittings.js";
 import { currentRows } from "../store.js";
@@ -98,7 +103,14 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
 
   const warnings: string[] = [];
   if (spec.includeFreeText) warnings.push("Includes free-text answers, which may contain names or other identifying details a participant typed. Store the file only where the study's data management plan allows.");
-  if (spec.includeStudyCode) warnings.push("Includes study codes, which are pseudonymous identifiers. Anyone holding the code list can re-identify participants.");
+  if (isSensitive(spec) && !spec.deidentified) {
+    warnings.push(
+      "Includes identifiers for linkage: participant codes (built from each child's secret-code answers — pseudonymous, and readable by anyone who knows the scheme), study codes, sitting and device IDs and exact times. Names, dates of birth, UPNs and NHS numbers are never included.",
+    );
+  }
+  if (spec.kind === "sessions" && spec.format === "bids") {
+    warnings.push("Sittings that cannot be linked to a participant (an incomplete secret code, a quarantined or unreadable sitting) are left out and listed in the README — never silently.");
+  }
   if (isSensitive(spec)) warnings.push(`Session-level research data. The file is kept for ${actor.policy.exportRetentionHours} hours on the server, then deleted.`);
   if (chosen.length === 0) warnings.push("No sessions match — the export would be empty.");
   if (versions.some((v) => v.version === "unknown")) warnings.push("Some sessions use a survey version that is not in the registry; their answers cannot be exported against questions.");
@@ -110,7 +122,19 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
   }
 
   const fields =
-    spec.kind === "sessions"
+    spec.kind === "sessions" && spec.format === "bids"
+      ? [
+          "README.md and dataset_description.json",
+          "participants.tsv — one row per participant",
+          "sub-<participant>/sessions.tsv — one row per wave",
+          "phenotype/<questionnaire>.tsv — answers as stored codes, with a _status column for every missing value",
+          "phenotype/<questionnaire>.json — each question's wording and what every code means",
+          "phenotype/scores.tsv — derived scores, where the survey defines scoring",
+          ...(spec.deidentified ? [] : ["linkage.tsv — participant codes, study codes, sitting and device IDs, exact times"]),
+          ...(spec.includeFreeText ? ["free-text answers and narrative logs"] : []),
+          "export_manifest.json — provenance and a checksum for every file",
+        ]
+      : spec.kind === "sessions"
       ? sessionsTable([], spec, actor.policy.timeZone).headers.concat(spec.includeAnswers ? ["answers by question (stored codes) + __status per question"] : [])
       : spec.kind === "completeness_summary"
         ? ["metrics", "sections", "versions", "most missed", "drop-off", "daily series"]
@@ -157,6 +181,7 @@ export const previewExport = onCall({ ...callableOptions, memory: "1GiB" }, asyn
 });
 
 const MIME: Record<ExportSpec["format"], string> = {
+  bids: "application/zip",
   csv: "text/csv; charset=utf-8",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   pdf: "application/pdf",
@@ -203,13 +228,73 @@ async function withAnswers(rows: SessionRow[], spec: ExportSpec, onProgress: (do
   return out;
 }
 
-async function generate(spec: ExportSpec, actor: Actor, rows: SessionRow[], releases: ReleaseIndex[], now: Date, progress: (p: number) => Promise<void>): Promise<{ body: Buffer; rowCount: number }> {
+/**
+ * The BIDS dataset: the survey's layout, built by the survey's own code over
+ * the whole study (so participant codes and waves are the survey's), then
+ * restricted to the chosen sittings.
+ */
+async function bidsFile(spec: ExportSpec, actor: Actor, rows: SessionRow[], exportId: string, filters: string[], now: Date, progress: (p: number) => Promise<void>) {
+  const { study, sittings } = await loadStudyDataset({ fresh: true, onProgress: (f) => progress(0.05 + 0.6 * f) });
+  const [manifests, indexes, metas] = await Promise.all([surveyManifests(), allReleaseIndexes(), releaseList()]);
+  const version = (h: string) => metas.find((m) => m.hash === h)?.version ?? "0";
+  const included = [...new Set(rows.map((r) => r.summary.releaseHash).filter((h): h is string => !!h && manifests.has(h)))];
+  const sidecar = (included.length ? included : [...manifests.keys()]).sort((a, b) => compareVersions(version(b), version(a)))[0];
+  if (!sidecar) throw new HttpsError("failed-precondition", "No registered survey version can be read, so there is nothing to build a BIDS dataset from.");
+  const narratives = spec.includeFreeText ? await readNarratives() : [];
+  await progress(0.8);
+  const result = buildDashboardBids({
+    study: STUDY,
+    studyData: study,
+    selected: new Set(rows.map((r) => r.summary.sessionId)),
+    sittings,
+    manifest: manifests.get(sidecar)!,
+    releaseVersions: new Map(metas.map((m) => [m.hash, m.version])),
+    identifiers: !spec.deidentified,
+    includeFreeText: spec.includeFreeText,
+    freeTextVariables: new Set(indexes.flatMap((r) => r.questions.filter((q) => q.freeText && !q.identifying).map((q) => q.variable))),
+    narratives,
+    provenance: {
+      exportId,
+      createdAt: now.toISOString(),
+      createdBy: actor.email,
+      role: actor.role,
+      scope: EXPORT_SCOPE_LABELS[spec.scope],
+      dateRange: dateRangeLabel(spec, actor, now).label,
+      filters,
+      rulesVersion: RULES_VERSION,
+    },
+    hash: sha256,
+  });
+  return {
+    body: Buffer.from(result.zip),
+    rowCount: result.sessions,
+    notes: { participants: result.participants, notIncluded: result.excluded.length, codeCollisions: result.collisions.length },
+  };
+}
+
+async function generate(
+  spec: ExportSpec,
+  actor: Actor,
+  rows: SessionRow[],
+  releases: ReleaseIndex[],
+  now: Date,
+  progress: (p: number) => Promise<void>,
+  context: { exportId: string; filters: string[] },
+): Promise<{ body: Buffer; rowCount: number; notes?: Record<string, number> }> {
   const tz = actor.policy.timeZone;
   switch (spec.kind) {
     case "sessions": {
-      const records: SessionRecord[] = spec.includeAnswers
-        ? await withAnswers(rows, spec, (done) => progress(0.05 + (0.8 * done) / Math.max(1, rows.length)))
-        : rows.map((row) => ({ row }));
+      if (spec.format === "bids") return bidsFile(spec, actor, rows, context.exportId, context.filters, now, progress);
+      // Participant codes and waves, as the survey derives them, for every format.
+      const { study } = await loadStudyDataset({ fresh: true, onProgress: (f) => progress(0.02 + 0.2 * f) });
+      const linkage = participantsFor(study, rows.map((r) => r.summary.sessionId), spec.deidentified);
+      const link = (rec: SessionRecord): SessionRecord => {
+        const l = linkage.get(rec.row.summary.sessionId);
+        return { ...rec, participant: l?.participant ?? null, wave: l?.wave ?? null };
+      };
+      const records: SessionRecord[] = (
+        spec.includeAnswers ? await withAnswers(rows, spec, (done) => progress(0.25 + (0.6 * done) / Math.max(1, rows.length))) : rows.map((row) => ({ row }))
+      ).map(link);
       const table = sessionsTable(records, spec, tz);
       const included = [...new Map(records.filter((r) => r.release).map((r) => [r.release!.hash, r.release!])).values()];
       if (spec.format === "csv") return { body: csvOf(table), rowCount: table.rows.length };
@@ -225,6 +310,8 @@ async function generate(spec: ExportSpec, actor: Actor, rows: SessionRow[], rele
         spec: { ...spec, sessionIds: spec.scope === "selected" ? spec.sessionIds : [] },
         sessions: records.map((r) => ({
           ...toListItem(r.row, { studyCodes: spec.includeStudyCode }),
+          ...(spec.deidentified ? { participantLabel: r.participant ?? null } : { participantCode: r.participant ?? null }),
+          wave: r.wave ?? null,
           ...(spec.includeAnswers && r.assessment && r.release ? { answers: presentAnswers(r.assessment, r.release, { freeText: spec.includeFreeText }) } : {}),
         })),
       };
@@ -283,7 +370,7 @@ export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeout
   const spec = parseSpec(request.data);
   const now = new Date();
   const { preview, rows, releases } = await buildPreview(spec, actor, now);
-  const describe = { kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, deidentified: spec.deidentified, includesAnswers: spec.includeAnswers };
+  const describe = { kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, identifiers: !spec.deidentified && isSensitive(spec), deidentified: spec.deidentified, includesAnswers: spec.includeAnswers };
   if (!preview.allowed) {
     await audit({ action: "export.created", ...actorFields(actor), detail: { ...describe, refusal: preview.refusal }, outcome: "denied" });
     throw new HttpsError("permission-denied", preview.refusal ?? "not permitted");
@@ -318,15 +405,15 @@ export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeout
   };
 
   try {
-    const { body, rowCount } = await generate(spec, actor, rows, releases, now, progress);
+    const { body, rowCount, notes } = await generate(spec, actor, rows, releases, now, progress, { exportId: jobRef.id, filters: preview.filters });
     const storagePath = `${EXPORT_PREFIX}/${jobRef.id}/${preview.fileName}`;
     await bucket().file(storagePath).save(body, {
       resumable: false,
       contentType: MIME[spec.format],
       metadata: { cacheControl: "private, no-store", metadata: { jobId: jobRef.id, requestedBy: actor.uid } },
     });
-    await jobRef.update({ status: "ready", progress: 1, rowCount, bytes: body.length, storagePath, readyAt: FieldValue.serverTimestamp() });
-    await audit({ action: "export.created", ...actorFields(actor), target: { type: "export", id: jobRef.id }, detail: { ...describe, fileName: preview.fileName, bytes: body.length, rowCount } });
+    await jobRef.update({ status: "ready", progress: 1, rowCount, bytes: body.length, storagePath, readyAt: FieldValue.serverTimestamp(), ...(notes ? { notes } : {}) });
+    await audit({ action: "export.created", ...actorFields(actor), target: { type: "export", id: jobRef.id }, detail: { ...describe, fileName: preview.fileName, bytes: body.length, rowCount, ...(notes ?? {}) } });
   } catch (error) {
     const message = error instanceof HttpsError ? error.message : "The export could not be generated. Nothing was saved; try again, or narrow the filters.";
     logger.error("export failed", { jobId: jobRef.id, error: String(error) });

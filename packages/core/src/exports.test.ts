@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { authoriseExport, exportFileName, parseExportSpec, ExportSpecError } from "./exportSpec.js";
+import { authoriseExport, exportFileName, FORMATS_BY_KIND, parseExportSpec, ExportSpecError } from "./exportSpec.js";
 import { codebookTable, sessionsTable } from "./exportData.js";
 import { buildRows } from "./query.js";
 import { buildSummary } from "./summary.js";
@@ -19,9 +19,18 @@ const rows = buildRows(built.map((b) => b.summary), new Map(), DEFAULT_POLICY, n
 const records = rows.map((row, i) => ({ row, assessment: built[i]!.assessment, ...(built[i]!.release ? { release: built[i]!.release! } : {}) }));
 
 describe("export requests", () => {
-  it("fills safe defaults: de-identified, no free text, no study codes", () => {
+  it("includes identifiers by default (for linkage), but not free text", () => {
     const spec = parseExportSpec({ kind: "sessions", format: "csv", scope: "filtered" });
-    expect(spec).toMatchObject({ deidentified: true, includeFreeText: false, includeStudyCode: false, includeAnswers: false });
+    expect(spec).toMatchObject({ deidentified: false, includeFreeText: false, includeStudyCode: true, includeAnswers: false });
+  });
+
+  it("makes BIDS the default session export, always with answers", () => {
+    expect(FORMATS_BY_KIND.sessions[0]).toBe("bids");
+    expect(parseExportSpec({ kind: "sessions", format: "bids", scope: "all" }).includeAnswers).toBe(true);
+  });
+
+  it("never marks a summary as carrying identifiers", () => {
+    expect(parseExportSpec({ kind: "completeness_summary", format: "csv", scope: "all" }).includeStudyCode).toBe(false);
   });
 
   it("refuses impossible combinations", () => {
@@ -31,9 +40,10 @@ describe("export requests", () => {
     expect(() => parseExportSpec({ kind: "sessions", format: "exe", scope: "all" })).toThrow();
   });
 
-  it("study codes need de-identification switched off", () => {
-    expect(parseExportSpec({ kind: "sessions", format: "csv", scope: "all", includeStudyCode: true }).includeStudyCode).toBe(false);
-    expect(parseExportSpec({ kind: "sessions", format: "csv", scope: "all", includeStudyCode: true, deidentified: false }).includeStudyCode).toBe(true);
+  it("drops identifiers when de-identified", () => {
+    expect(parseExportSpec({ kind: "sessions", format: "csv", scope: "all", deidentified: true }).includeStudyCode).toBe(false);
+    expect(parseExportSpec({ kind: "sessions", format: "csv", scope: "all", includeStudyCode: true, deidentified: true }).includeStudyCode).toBe(false);
+    expect(parseExportSpec({ kind: "sessions", format: "csv", scope: "all" }).includeStudyCode).toBe(true);
   });
 
   it("applies the role matrix on the server", () => {
@@ -52,8 +62,10 @@ describe("export requests", () => {
   it("names files descriptively and safely", () => {
     const spec = parseExportSpec({ kind: "sessions", format: "csv", scope: "filtered" });
     expect(exportFileName(spec, { fromDay: "2026-09-01", toDay: "2026-09-28" }, now)).toBe(
-      "myself_sessions-filtered_2026-09-01_to_2026-09-28_deidentified_created-20260928-1200.csv",
+      "myself_sessions-filtered_2026-09-01_to_2026-09-28_created-20260928-1200.csv",
     );
+    const bids = parseExportSpec({ kind: "sessions", format: "bids", scope: "all", deidentified: true });
+    expect(exportFileName(bids, { fromDay: null, toDay: null }, now)).toBe("myself_sessions-all_all-time_bids_deidentified_created-20260928-1200.zip");
     const single = parseExportSpec({ kind: "session_report", format: "pdf", scope: "single", sessionIds: ["01J../../etc/passwd"] });
     expect(exportFileName(single, { fromDay: null, toDay: null }, now)).toMatch(/^myself_session-report_session-01jetcpasswd_created-20260928-1200\.pdf$/);
   });
@@ -86,10 +98,22 @@ describe("export contents", () => {
     expect(csv).not.toMatch(/(^|,)=HYPERLINK/m);
   });
 
+  it("includes identifiers by default: participant code, wave, study code, device and exact times", () => {
+    const linked = records.map((r, i) => ({ ...r, participant: `AB${100 + i}CD`, wave: 1 }));
+    const t = sessionsTable(linked, parseExportSpec({ kind: "sessions", format: "csv", scope: "all" }), "Europe/London");
+    for (const h of ["participant_code", "wave", "study_code", "device_id"]) expect(t.headers).toContain(h);
+    expect(t.headers).not.toContain("participant_label");
+    const started = t.headers.indexOf("started_at");
+    expect(t.rows.some((r) => /T\d{2}:\d{2}/.test(String(r[started])))).toBe(true);
+    expect(t.rows[0]![t.headers.indexOf("participant_code")]).toBe("AB100CD");
+  });
+
   it("de-identified exports drop codes and device ids and keep dates to the day", () => {
-    const t = sessionsTable(records, parseExportSpec({ kind: "sessions", format: "csv", scope: "all" }), "Europe/London");
+    const t = sessionsTable(records, parseExportSpec({ kind: "sessions", format: "csv", scope: "all", deidentified: true }), "Europe/London");
     expect(t.headers).not.toContain("study_code");
     expect(t.headers).not.toContain("device_id");
+    expect(t.headers).not.toContain("participant_code");
+    expect(t.headers).toContain("participant_label");
     const started = t.headers.indexOf("started_at");
     expect(t.rows.every((r) => r[started] === null || /^\d{4}-\d{2}-\d{2}$/.test(String(r[started])))).toBe(true);
   });

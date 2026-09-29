@@ -25,6 +25,13 @@ export interface Table {
 
 export interface SessionRecord {
   row: SessionRow;
+  /**
+   * Who the sitting belongs to, from the study dataset: the participant code
+   * (or, de-identified, an export-specific label) and the wave. Null where the
+   * sitting could not be linked (an incomplete secret code, say).
+   */
+  participant?: string | null;
+  wave?: number | null;
   /** Present when answers are exported. */
   assessment?: Assessment;
   release?: ReleaseIndex;
@@ -43,6 +50,9 @@ function when(iso: string | null, spec: ExportSpec, tz: string): string | null {
 
 const SESSION_HEADERS = [
   "session_id",
+  "participant_code",
+  "participant_label",
+  "wave",
   "study_code",
   "device_id",
   "site",
@@ -74,10 +84,14 @@ const SESSION_HEADERS = [
   "signals",
 ] as const;
 
-function sessionCells(r: SessionRow, spec: ExportSpec, tz: string): Record<(typeof SESSION_HEADERS)[number], CsvValue> {
+function sessionCells(rec: SessionRecord, spec: ExportSpec, tz: string): Record<(typeof SESSION_HEADERS)[number], CsvValue> {
+  const r = rec.row;
   const s = r.summary;
   return {
     session_id: s.sessionId,
+    participant_code: spec.deidentified ? null : (rec.participant ?? null),
+    participant_label: spec.deidentified ? (rec.participant ?? null) : null,
+    wave: rec.wave ?? null,
     study_code: spec.includeStudyCode ? s.studyCode : null,
     device_id: spec.deidentified ? null : s.deviceId,
     site: s.site,
@@ -111,7 +125,9 @@ function sessionCells(r: SessionRow, spec: ExportSpec, tz: string): Record<(type
 }
 
 function includedSessionHeaders(spec: ExportSpec): string[] {
-  return SESSION_HEADERS.filter((h) => (h === "study_code" ? spec.includeStudyCode : h === "device_id" ? !spec.deidentified : true));
+  return SESSION_HEADERS.filter((h) =>
+    h === "study_code" ? spec.includeStudyCode : h === "device_id" || h === "participant_code" ? !spec.deidentified : h === "participant_label" ? spec.deidentified : true,
+  );
 }
 
 /** The value written for an answer: stored codes, never display labels. */
@@ -157,7 +173,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
       name: "sessions",
       headers,
       rows: records.map((rec) => {
-        const cells = sessionCells(rec.row, spec, tz);
+        const cells = sessionCells(rec, spec, tz);
         return headers.map((h) => cells[h as keyof typeof cells]);
       }),
     };
@@ -165,7 +181,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
 
   const releases = [...new Map(records.filter((r) => r.release).map((r) => [r.release!.hash, r.release!])).values()];
   if (spec.layout === "long") {
-    const longHeaders = ["session_id", ...(spec.includeStudyCode ? ["study_code"] : []), "release_version", "question_key", "variable", "section", "required", "outcome", "value", "label", "responded_at", "changed", "too_fast"];
+    const longHeaders = ["session_id", spec.deidentified ? "participant_label" : "participant_code", "wave", ...(spec.includeStudyCode ? ["study_code"] : []), "release_version", "question_key", "variable", "section", "required", "outcome", "value", "label", "responded_at", "changed", "too_fast"];
     const rows: CsvValue[][] = [];
     for (const rec of records) {
       if (!rec.assessment || !rec.release) continue;
@@ -176,6 +192,8 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
         const code = typeof value === "number" ? value : null;
         rows.push([
           rec.row.summary.sessionId,
+          rec.participant ?? null,
+          rec.wave ?? null,
           ...(spec.includeStudyCode ? [rec.row.summary.studyCode] : []),
           rec.release.version,
           o.key,
@@ -205,7 +223,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
   const qCols = questions.map((q) => ({ q, value: columnName(q), status: `${q.variable}__status` }));
   const allHeaders = [...headers, ...qCols.flatMap((c) => [c.value, c.status])];
   const rows = records.map((rec) => {
-    const cells = sessionCells(rec.row, spec, tz);
+    const cells = sessionCells(rec, spec, tz);
     const base = headers.map((h) => cells[h as keyof typeof cells]);
     const byKey = new Map(rec.assessment?.outcomes.map((o) => [o.key, o]) ?? []);
     const answers = qCols.flatMap(({ q }) => {

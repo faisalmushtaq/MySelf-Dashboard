@@ -191,7 +191,7 @@ describe("exports", () => {
     const ok = await run<{ allowed: boolean; sessionCount: number; fileName: string }>(previewExport, researcher, spec);
     expect(ok.allowed).toBe(true);
     expect(ok.sessionCount).toBeGreaterThan(0);
-    expect(ok.fileName).toMatch(/^myself_sessions-filtered_all-time_deidentified_created-\d{8}-\d{4}\.csv$/);
+    expect(ok.fileName).toMatch(/^myself_sessions-filtered_all-time_created-\d{8}-\d{4}\.csv$/);
   });
 
   it("refuses a reviewer's session-level export on the server, and audits the refusal", async () => {
@@ -233,6 +233,46 @@ describe("exports", () => {
     const [exists] = await getStorage().bucket().file(jobDoc["storagePath"]).exists();
     expect(exists).toBe(false);
     expect((await download(job.id, researcher)).status).toBe(409);
+  });
+
+  it("exports a BIDS dataset with identifiers by default, built the survey's way", async () => {
+    const job = await run<{ id: string; status: string; fileName: string; rowCount: number }>(createExport, researcher, { kind: "sessions", format: "bids", scope: "all" });
+    expect(job.status).toBe("ready");
+    expect(job.fileName).toMatch(/_bids_created-\d{8}-\d{4}\.zip$/);
+    const jobDoc = (await dash().doc(`studies/demo/exportJobs/${job.id}`).get()).data()!;
+    const [bytes] = await getStorage().bucket().file(jobDoc["storagePath"]).download();
+    const zip = bytes.toString("latin1");
+    for (const f of ["dataset_description.json", "participants.tsv", "linkage.tsv", "README.md", "export_manifest.json"]) expect(zip).toContain(f);
+    expect(zip).toMatch(/sub-[A-Z]{2}[0-9]{3}[A-Z]{2}\/sessions\.tsv/);
+    expect(zip).not.toContain("ps_mother_initials");
+    expect(zip).not.toMatch(/\t(Alex|Sam|Jordan|Riley|Casey|Morgan|Taylor|Jamie|Robin|Charlie)\t/);
+    // What could not be linked is reported, not dropped.
+    expect(jobDoc["notes"]["notIncluded"]).toBeGreaterThan(0);
+    expect(zip).toContain("Sittings not included");
+    const created = (await auditRows("export.created")).find((r) => (r["target"] as { id: string } | null)?.id === job.id)!;
+    expect(created["detail"]).toMatchObject({ format: "bids", identifiers: true });
+  });
+
+  it("de-identifies a BIDS dataset on request: no participant codes, study codes or sitting ids", async () => {
+    const job = await run<{ id: string; status: string }>(createExport, researcher, { kind: "sessions", format: "bids", scope: "all", deidentified: true });
+    const jobDoc = (await dash().doc(`studies/demo/exportJobs/${job.id}`).get()).data()!;
+    const [bytes] = await getStorage().bucket().file(jobDoc["storagePath"]).download();
+    const zip = bytes.toString("latin1");
+    expect(zip).toContain("sub-P0001");
+    expect(zip).not.toContain("linkage.tsv");
+    for (const s of sittings) {
+      expect(zip).not.toContain(s.doc.sessionId);
+      if (s.doc.studyCode) expect(zip).not.toContain(s.doc.studyCode);
+    }
+  });
+
+  it("puts participant codes and waves in CSV exports", async () => {
+    const job = await run<{ id: string }>(createExport, researcher, { kind: "sessions", format: "csv", scope: "all" });
+    const jobDoc = (await dash().doc(`studies/demo/exportJobs/${job.id}`).get()).data()!;
+    const [bytes] = await getStorage().bucket().file(jobDoc["storagePath"]).download();
+    const [header, ...lines] = bytes.toString("utf8").replace(/^\uFEFF/, "").trim().split(/\r?\n/);
+    expect(header!.startsWith("session_id,participant_code,wave,study_code,")).toBe(true);
+    expect(lines.some((l) => /^[^,]+,[A-Z]{2}[0-9]{3}[A-Z]{2},2,/.test(l))).toBe(true);
   });
 
   it("a reviewer may export aggregate summaries in every format", async () => {

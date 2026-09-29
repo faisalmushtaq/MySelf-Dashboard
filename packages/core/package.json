@@ -15,8 +15,8 @@
       "default": "./dist/node/index.js"
     },
     "./survey": {
-      "types": "./dist/vendor/myself/index.d.ts",
-      "default": "./dist/vendor/myself/index.js"
+      "types": "./dist/survey/index.d.ts",
+      "default": "./dist/survey/index.js"
     }
   },
   "scripts": {

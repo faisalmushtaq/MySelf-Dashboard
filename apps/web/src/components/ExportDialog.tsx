@@ -3,6 +3,7 @@ import { collection, limit, onSnapshot, orderBy, query, where } from "firebase/f
 import {
   EXPORT_KIND_LABELS,
   EXPORT_SCOPE_LABELS,
+  EXPORT_FORMAT_LABELS,
   FORMATS_BY_KIND,
   type ExportFormat,
   type ExportJobView,
@@ -48,12 +49,12 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
   const rowLevel = can("export.sessions");
   const [kind, setKind] = useState<ExportKind>(initial.kind ?? (rowLevel ? "sessions" : "completeness_summary"));
   const [scope, setScope] = useState<ExportScope>(initial.scope ?? "filtered");
-  const [format, setFormat] = useState<ExportFormat>(initial.format ?? "csv");
+  const [format, setFormat] = useState<ExportFormat>(initial.format ?? "bids");
   const [includeAnswers, setIncludeAnswers] = useState(false);
   const [layout, setLayout] = useState<"wide" | "long">("wide");
   const [includeFreeText, setFreeText] = useState(false);
-  const [deidentified, setDeid] = useState(true);
-  const [includeStudyCode, setStudyCode] = useState(false);
+  // Identifiers are included by default (for linkage); de-identifying is a choice.
+  const [identifiers, setIdentifiers] = useState(true);
   const [versionHash, setVersion] = useState(initial.versionHash ?? activeRelease?.hash ?? "");
   const [preview, setPreview] = useState<ExportPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -71,7 +72,8 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     setConfirmed(false);
     setKind(initial.kind ?? (rowLevel ? "sessions" : "completeness_summary"));
     setScope(initial.scope ?? "filtered");
-    setFormat(initial.format ?? (initial.kind === "session_report" ? "pdf" : "csv"));
+    setFormat(initial.format ?? (initial.kind === "session_report" ? "pdf" : FORMATS_BY_KIND[initial.kind ?? (rowLevel ? "sessions" : "completeness_summary")][0]!));
+    setIdentifiers(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -86,11 +88,11 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     sessionIds: scope === "selected" || scope === "single" || kind === "session_report" ? initial.sessionIds ?? [] : [],
     filters: initial.filters,
     sort: initial.sort,
-    includeAnswers: kind === "sessions" ? includeAnswers : kind === "session_report",
+    includeAnswers: kind === "sessions" ? includeAnswers || format === "bids" : kind === "session_report",
     layout,
     includeFreeText,
-    includeStudyCode: includeStudyCode && !deidentified,
-    deidentified,
+    includeStudyCode: identifiers && can("export.studyCode"),
+    deidentified: !identifiers,
     ...(kind === "question_summary" ? { versionHash } : {}),
   };
   const specKey = useDebounced(JSON.stringify(spec), 250);
@@ -222,7 +224,8 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
               {FORMATS_BY_KIND[kind].map((f) => (
                 <label key={f}>
                   <input type="radio" name="format" value={f} checked={format === f} onChange={() => setFormat(f)} disabled={f === "json" && !can("export.json")} />
-                  {f === "xlsx" ? "Excel (XLSX)" : f.toUpperCase()}
+                  {EXPORT_FORMAT_LABELS[f]}
+                  {f === "bids" ? " — recommended" : ""}
                   {f === "json" && !can("export.json") ? " (administrators)" : ""}
                 </label>
               ))}
@@ -239,7 +242,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                 </select>
               </label>
             ) : null}
-            {kind === "sessions" ? (
+            {kind === "sessions" && format !== "bids" ? (
               <>
                 <label className="check">
                   <input type="checkbox" checked={includeAnswers} onChange={(e) => setIncludeAnswers(e.target.checked)} />
@@ -258,27 +261,26 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                 ) : null}
               </>
             ) : null}
-            {(kind === "sessions" && includeAnswers) || kind === "session_report" ? (
+            {(kind === "sessions" && (includeAnswers || format === "bids")) || kind === "session_report" ? (
               <label className="check">
                 <input type="checkbox" checked={includeFreeText} disabled={!can("export.freeText")} onChange={(e) => setFreeText(e.target.checked)} />
-                Include free-text answers {!can("export.freeText") ? "(not permitted for your role)" : ""}
+                Include free-text answers{format === "bids" ? " and narrative logs" : ""} {!can("export.freeText") ? "(not permitted for your role)" : ""}
               </label>
             ) : null}
             {kind === "sessions" || kind === "session_report" ? (
-              <>
-                <label className="check">
-                  <input type="checkbox" checked={deidentified} onChange={(e) => setDeid(e.target.checked)} />
-                  De-identified: no study codes or device ids; dates only, no times
-                </label>
-                {!deidentified ? (
-                  <label className="check">
-                    <input type="checkbox" checked={includeStudyCode} disabled={!can("export.studyCode")} onChange={(e) => setStudyCode(e.target.checked)} />
-                    Include study codes (pseudonymous identifiers)
-                  </label>
-                ) : null}
-              </>
+              <label className="check">
+                <input type="checkbox" checked={identifiers} disabled={!can("export.studyCode")} onChange={(e) => setIdentifiers(e.target.checked)} />
+                <span>
+                  Include identifiers for linkage
+                  <span className="hint block">
+                    {identifiers
+                      ? "Participant codes, study codes, sitting and device IDs, and exact times."
+                      : "De-identified: participant codes replaced by labels (P0001…) that mean nothing outside this file; no study codes or device IDs; dates only."}
+                  </span>
+                </span>
+              </label>
             ) : null}
-            <p className="hint">Names, dates of birth and study-code components are never exported from this dashboard.</p>
+            <p className="hint">Names, dates of birth, UPNs, NHS numbers and secret-code answers are never exported from this dashboard.</p>
           </form>
 
           <section className="export-preview" aria-live="polite" aria-busy={previewing}>
@@ -295,8 +297,8 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                   <div><dt>Survey versions</dt><dd>{preview.versions.length ? preview.versions.map((v) => `${v.version === "unknown" ? "unknown" : `v${v.version}`} (${v.sessions})`).join(", ") : "—"}</dd></div>
                   <div><dt>Fields</dt><dd className="fields">{preview.fields.join(", ")}</dd></div>
                   <div><dt>Free-text answers</dt><dd>{preview.includesFreeText ? "Included" : "Not included"}</dd></div>
-                  <div><dt>Identifying fields</dt><dd>{preview.includesStudyCode ? "Study codes included" : preview.deidentified ? "None (de-identified)" : "No study codes; device ids and exact times included"}</dd></div>
-                  <div><dt>Format</dt><dd>{preview.format.toUpperCase()}</dd></div>
+                  <div><dt>Identifiers</dt><dd>{!preview.sensitive ? "None (summary)" : preview.deidentified ? "None (de-identified)" : "Participant codes, study codes, sitting and device IDs, exact times"}</dd></div>
+                  <div><dt>Format</dt><dd>{EXPORT_FORMAT_LABELS[preview.format]}</dd></div>
                   <div><dt>File name</dt><dd><code>{preview.fileName}</code></dd></div>
                 </dl>
                 {preview.warnings.map((w) => (

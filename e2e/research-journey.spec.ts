@@ -90,15 +90,39 @@ test("a researcher reviews incomplete sessions and exports them; a stranger is d
   await expect(page.locator(`tr[data-row="${secondId}"]`)).toBeFocused();
   await expect(page.locator(`tr[data-row="${secondId}"]`)).toContainText("1");
 
-  // 9. Export the filtered dataset.
+  // 9. Export the filtered dataset. BIDS, with identifiers for linkage, is the default.
   await page.getByRole("button", { name: "Export filtered" }).click();
   const dialog = page.getByRole("dialog", { name: "Export data" });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel(/Include answers/).check();
+  await expect(dialog.getByLabel(/BIDS dataset/)).toBeChecked();
+  await expect(dialog.getByLabel(/Include identifiers for linkage/)).toBeChecked();
   const preview = dialog.locator(".export-preview");
   await expect(preview).toContainText(`${incompleteCount} — current filtered sessions`);
   await expect(preview).toContainText("Status: incomplete");
-  await expect(preview).toContainText("Free-text answers");
+  await expect(preview).toContainText("Participant codes, study codes, sitting and device IDs, exact times");
+  await expect(preview).toContainText(/myself_sessions-filtered_all-time_bids_created-\d{8}-\d{4}\.zip/);
+  await dialog.getByLabel(/I will store and share this file only/).check();
+  await dialog.getByRole("button", { name: "Generate export" }).click();
+  await expect(dialog.getByText(/is ready/)).toBeVisible({ timeout: 60_000 });
+  const [bids] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Download" }).click()]);
+  expect(bids.suggestedFilename()).toMatch(/^myself_sessions-filtered_.*_bids_.*\.zip$/);
+  // Stored (uncompressed) zip entries: file names and contents are readable in the bytes.
+  const zip = readFileSync((await bids.path())!).toString("latin1");
+  expect(zip.startsWith("PK")).toBe(true);
+  for (const f of ["dataset_description.json", "participants.tsv", "README.md", "linkage.tsv", "export_manifest.json", "phenotype/demo_sleep.tsv"]) expect(zip).toContain(f);
+  expect(zip).toContain("participant_code\tstudy_code");
+  expect(zip).toMatch(/sub-[A-Z]{2}[0-9]{3}[A-Z]{2}/);
+  // Names and secret-code answers never leave: the identity items are not in the data.
+  expect(zip).not.toContain("ps_mother_initials");
+  expect(zip).not.toContain("first_name\t");
+  await page.keyboard.press("Escape");
+
+  // …and a de-identified CSV is one click away, with no identifier in it.
+  await page.getByRole("button", { name: "Export filtered" }).click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("CSV", { exact: true }).check();
+  await dialog.getByLabel(/Include identifiers for linkage/).uncheck();
+  await dialog.getByLabel(/Include answers/).check();
   await expect(preview).toContainText("None (de-identified)");
   await expect(preview).toContainText(/myself_sessions-filtered_all-time_deidentified_created-\d{8}-\d{4}\.csv/);
   await dialog.getByLabel(/I will store and share this file only/).check();
@@ -108,11 +132,12 @@ test("a researcher reviews incomplete sessions and exports them; a stranger is d
   expect(download.suggestedFilename()).toMatch(/^myself_sessions-filtered_.*\.csv$/);
   const csv = readFileSync((await download.path())!, "utf8");
   // A BOM so Excel reads UTF-8 (String.trim would strip it, so check first).
-  expect(csv.startsWith("\uFEFFsession_id,")).toBe(true);
+  expect(csv.startsWith("\uFEFFsession_id,participant_label,wave,")).toBe(true);
   const lines = csv.trim().split(/\r?\n/);
   expect(lines).toHaveLength(incompleteCount + 1);
   expect(csv).not.toContain("first_name");
   expect(csv).not.toContain("study_code");
+  expect(csv).not.toContain("participant_code");
   await page.keyboard.press("Escape");
 
   // 10. The export (and its download) are in the researcher's audit trail.
