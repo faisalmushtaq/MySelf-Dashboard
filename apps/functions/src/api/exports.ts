@@ -8,6 +8,8 @@ import {
   can,
   compareRows,
   compareVersions,
+  composeFigure,
+  DEFAULT_FIGURE,
   RULES_VERSION,
   DATE_PRESET_LABELS,
   describeFilters,
@@ -320,18 +322,47 @@ async function generate(
     case "session_report": {
       const row = rows[0];
       if (!row) throw new HttpsError("not-found", "That session is not available.");
-      const [record] = await withAnswers([row], spec, async () => undefined);
-      const review: ReviewDoc = row.review ?? ({ status: "unreviewed", flags: [] } as unknown as ReviewDoc);
+      const sessionId = row.summary.sessionId;
+      const [[record], notesSnap] = await Promise.all([
+        withAnswers([row], spec, async () => undefined),
+        dash().collection(dpaths.notes(sessionId)).orderBy("createdAt", "asc").limit(500).get(),
+      ]);
+      const review: ReviewDoc = row.review ?? ({ status: "unreviewed", flags: [], qualityConcerns: [], markedTest: false, markedInvalid: false, lastReviewedAt: null } as unknown as ReviewDoc);
+      // The participant code, wave and their other sittings — only when the report carries identifiers.
+      let participant: Parameters<typeof sessionReportPdf>[0]["participant"] = null;
+      if (!spec.deidentified) {
+        const { study } = await loadStudyDataset();
+        const self = study.dataset.sessions.find((s) => s.sessionId === sessionId);
+        if (self) {
+          participant = {
+            code: self.participantId,
+            wave: self.wave,
+            sittings: study.dataset.sessions
+              .filter((s) => s.participantId === self.participantId)
+              .sort((a, b) => a.wave - b.wave)
+              .map((s) => ({ sessionId: s.sessionId, wave: s.wave, startedAt: s.startedAt, complete: s.complete })),
+          };
+        }
+      }
       const body = await sessionReportPdf({
         item: toListItem(row, { studyCodes: spec.includeStudyCode }),
-        releaseLabel: record?.release ? `${record.release.version} (${record.release.key})` : "unknown version",
+        releaseLabel: record?.release ? `v${record.release.version} (${record.release.key})` : "Unknown version",
         sections: record?.assessment && record.release ? presentAnswers(record.assessment, record.release, { freeText: spec.includeFreeText }) : null,
         review,
+        notes: notesSnap.docs.map((n) => {
+          const v = n.data();
+          const at = v["createdAt"] as Timestamp | undefined;
+          return { text: String(v["text"] ?? ""), authorEmail: (v["authorEmail"] as string | undefined) ?? null, createdAt: at?.toDate ? at.toDate().toISOString() : null };
+        }),
         warnings: row.status.signals,
         estimateReasons: row.summary.estimateReasons,
+        participant,
         generatedBy: actor.email,
         generatedAt: now,
+        timeZone: tz,
         includeStudyCode: spec.includeStudyCode,
+        includeFreeText: spec.includeFreeText,
+        retentionHours: actor.policy.exportRetentionHours,
       });
       return { body, rowCount: 1 };
     }
@@ -339,11 +370,44 @@ async function generate(
       const ctx = { now, timeZone: tz };
       const analytics = computeAnalytics(rows, { ...ctx, range: rangeFor(spec.filters, ctx), releases });
       if (spec.format === "pdf") {
-        const body = await completenessPdf(analytics, {
-          filters: describeFilters(spec.filters).map((c) => c.label),
+        const versionLabel = (hash: string) => {
+          const r = releases.find((x) => x.hash === hash);
+          return r ? `v${r.version}` : "an unregistered version";
+        };
+        const filters = describeFilters(spec.filters, { version: versionLabel })
+          .filter((f) => f.key !== "date")
+          .map((c) => c.label);
+        const dateRange = dateRangeLabel(spec, actor, now).label;
+        // Figure 1 is the Figures page's default figure, drawn by the same renderer.
+        const figure =
+          analytics.metrics.started > 0
+            ? composeFigure(
+                { ...DEFAULT_FIGURE, title: "Participation and data completeness" },
+                {
+                  analytics,
+                  questions: {},
+                  period: dateRange,
+                  filters,
+                  timeZone: tz,
+                  rulesVersion: RULES_VERSION,
+                  requiredLevels: actor.policy.requiredLevels,
+                  abandonAfterHours: actor.policy.abandonAfterHours,
+                  versionLabel,
+                },
+                { createdAt: now.toISOString() },
+              )
+            : null;
+        const body = await completenessPdf({
+          analytics,
+          figure,
+          filters,
+          dateRange,
           generatedBy: actor.email,
           generatedAt: now,
-          dateRange: dateRangeLabel(spec, actor, now).label,
+          timeZone: tz,
+          rulesVersion: RULES_VERSION,
+          abandonAfterHours: actor.policy.abandonAfterHours,
+          requiredLevels: actor.policy.requiredLevels,
         });
         return { body, rowCount: analytics.metrics.started };
       }

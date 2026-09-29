@@ -4,6 +4,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { DEFAULT_FILTERS, type QuerySessionsResponse, type SessionDetailResponse } from "@myself-dashboard/core";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
+import { pdfText } from "./pdfText.js";
 
 import { dash } from "../src/env.js";
 import { registerRelease } from "../src/releases.js";
@@ -291,10 +292,27 @@ describe("exports", () => {
     await expect(run(logFigureExport, stranger, { format: "svg", panels: ["status"], width: "single" })).rejects.toMatchObject({ code: "permission-denied" });
   });
 
-  it("a formatted single-session report", async () => {
-    const job = await run<{ status: string; fileName: string }>(createExport, researcher, { kind: "session_report", format: "pdf", scope: "single", sessionIds: [sittings[3]!.doc.sessionId] });
+  it("a formatted single-session report, with the participant's code and the review notes", async () => {
+    // A finished sitting, so the participant gave their secret code.
+    const sessionId = sittings.find((s) => s.scenario === "complete" && s.doc.releaseHash === sittings[0]!.doc.releaseHash)?.doc.sessionId ?? sittings.find((s) => s.scenario === "complete")!.doc.sessionId;
+    await run(addNote, researcher, { sessionId, text: "Checked with the site: code confirmed." });
+    const job = await run<{ id: string; status: string; fileName: string }>(createExport, researcher, { kind: "session_report", format: "pdf", scope: "single", sessionIds: [sessionId] });
     expect(job.status).toBe("ready");
     expect(job.fileName).toMatch(/\.pdf$/);
+    const read = async (id: string) => {
+      const jobDoc = (await dash().doc(`studies/demo/exportJobs/${id}`).get()).data()!;
+      const [bytes] = await getStorage().bucket().file(jobDoc["storagePath"]).download();
+      return pdfText(bytes);
+    };
+    const text = await read(job.id);
+    expect(text).toMatch(/Participant [A-Z]{2}[0-9]{3}[A-Z]{2}/);
+    expect(text).toContain("Checked with the site: code confirmed.");
+    expect(text).toContain("Researcher review");
+
+    const plain = await run<{ id: string }>(createExport, researcher, { kind: "session_report", format: "pdf", scope: "single", sessionIds: [sessionId], deidentified: true, includeStudyCode: false });
+    const plainText = await read(plain.id);
+    expect(plainText).not.toMatch(/Participant [A-Z]{2}[0-9]{3}[A-Z]{2}/);
+    expect(plainText).not.toContain("Study code".toUpperCase());
   });
 });
 

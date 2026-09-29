@@ -182,10 +182,21 @@ headroom; the code is tested at that size.
 5. `cleanupExports` (hourly) deletes files past `exportRetentionHours` (default 24) and
    marks jobs `expired`.
 
-Formats: CSV (always, with formula-injection neutralisation), XLSX, PDF (session
-report, completeness summary), JSON (administrators only). Identifying items are
-**never** exported by this dashboard — they belong to the identity project. Study codes
-are included only when the role allows and the user did not choose "de-identified".
+Formats: BIDS (the default for session data: a zip laid out as the survey's own
+export, with `linkage.tsv` when identifiers are included), CSV (with formula-injection
+neutralisation), XLSX, PDF (session report, completeness report), JSON (administrators
+only). Identifying items (names, dates of birth, UPN, NHS number, the secret-code
+answers) are **never** exported by this dashboard — they belong to the identity project.
+Participant codes and waves are included unless the user chooses "de-identified"; study
+codes only when the role also allows them.
+
+PDF reports are laid out on the server (`exporters/report.ts`, a small kit on pdfkit:
+running head and "Page N of M" footer, key-figure tiles, ruled tables that repeat their
+header across pages, bars with Wilson intervals, callouts). The completeness report
+embeds Figure 1 from the publication renderer as vectors (`svg-to-pdfkit`), floated to
+the next page rather than leaving a gap. The session report groups answers by section
+in the participant's own version's wording, highlights missing required answers, and
+sets the researcher review (flags, notes) apart from the answers.
 
 ## 2.6 Survey versions and the future Survey Studio
 
@@ -205,7 +216,7 @@ Kept identical to the survey where it matters, so one team can maintain both:
 TypeScript (strict), pnpm workspaces, React 18, Vite 5, Firebase JS SDK 11,
 firebase-admin 13, firebase-functions 6 (v2 API), zod 3, Vitest 2, Playwright. Added
 only where there was no equivalent: `react-router-dom` (URL state), `exceljs` (XLSX,
-server-side), `pdfkit` (PDF, server-side). Charts are small hand-written SVG components
+server-side), `pdfkit` + `svg-to-pdfkit` (PDF, server-side). Charts are small hand-written SVG components
 so every chart has a proper accessible name, a data table twin and no third-party
 analytics or CDN. Visual language follows the survey's binding style guide
 (`docs/11-style-guide.md`, D-17): Newsreader, near-white canvas, black text, one

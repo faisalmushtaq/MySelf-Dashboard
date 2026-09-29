@@ -358,8 +358,9 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 - A removed role stops backend access within a minute; direct Firestore reads by an
   already-issued token continue until it expires (≤ 1 h) **unless** the email is
   also removed from the access list (effective immediately). Hence "do both" (§6).
-- PDF reports use the built-in Helvetica (Latin-1): characters outside it are
-  replaced with "?". CSV/XLSX exports carry full Unicode.
+- PDF reports use the built-in Helvetica (Windows Latin-1): characters outside it
+  (for example emoji or non-Latin scripts in free text) are drawn as "?", and the
+  report then says so. CSV/XLSX/BIDS exports carry full Unicode.
 - Completion time uses the device's monotonic duration and excludes resumed
   sittings; `firstReceivedAt` for sittings that pre-date the dashboard is the
   backfill time (flagged `backfilled`). Device wall clocks can be wrong (flagged

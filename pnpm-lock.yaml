@@ -44,6 +44,9 @@ importers:
       pdfkit:
         specifier: ^0.15.2
         version: 0.15.2
+      svg-to-pdfkit:
+        specifier: ^0.1.8
+        version: 0.1.8
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -4264,6 +4267,9 @@ packages:
   svg-pathdata@6.0.3:
     resolution: {integrity: sha512-qsjeeq5YjBZ5eMdFuUa4ZosMLxgr5RZ+F+Y1OrDhuOCEInRMA3x74XdBtggJcj9kOeInz0WE+LgCPDkZFlBYJw==}
     engines: {node: '>=12.0.0'}
+
+  svg-to-pdfkit@0.1.8:
+    resolution: {integrity: sha512-QItiGZBy5TstGy+q8mjQTMGRlDDOARXLxH+sgVm1n/LYeo0zFcQlcCh8m4zi8QxctrxB9Kue/lStc/RD5iLadQ==}
 
   svg2pdf.js@2.8.1:
     resolution: {integrity: sha512-AzXfPHjHnFt9dpdRPhWWBOKipnMSWQZRKiV3FTTPdY6wwRgT3labbA4s0HIQaskNhwAhrcI2u2rDhD8j8udfNQ==}
@@ -9441,6 +9447,10 @@ snapshots:
 
   svg-pathdata@6.0.3:
     optional: true
+
+  svg-to-pdfkit@0.1.8:
+    dependencies:
+      pdfkit: 0.15.2
 
   svg2pdf.js@2.8.1(jspdf@4.2.1):
     dependencies:
