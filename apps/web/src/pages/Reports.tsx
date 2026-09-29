@@ -84,6 +84,12 @@ export default function Reports() {
     { kind: "sessions", title: "Session data", text: "One row per session (or per answer), for the current filters, a selection, or everything. CSV, Excel, or JSON for administrators.", needs: "export.sessions" },
     { kind: "completeness_summary", title: "Completeness summary", text: "Headline figures, completion by section and version, most-missed questions, drop-off and the daily series. CSV, Excel or a formatted PDF.", needs: "export.aggregate" },
     { kind: "question_summary", title: "Question-level summary", text: "Every question in one survey version: eligible, shown, answered, skipped, invalid, rates and distributions.", needs: "export.aggregate" },
+    {
+      kind: "school_report",
+      title: "School report",
+      text: "One school, or one of its year groups, against the other schools combined and published benchmarks. Written to be shared with the school: averages only, small groups withheld.",
+      needs: "export.aggregate",
+    },
   ];
 
   return (

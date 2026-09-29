@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from "react";
+import { Link } from "react-router-dom";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Policy, type SettingsResponse } from "@myself-dashboard/core";
 import { api, explain } from "../lib/api";
 import { dateTime, relative } from "../lib/format";
@@ -20,6 +21,13 @@ export default function Settings() {
     <div className="page">
       <PageHeader title="Settings" />
       <Preferences />
+      <section className="card">
+        <h2>Scoring, schools and year groups</h2>
+        <p className="hint">How each instrument is scored, its threshold bands and benchmarks, school names and where year groups come from.</p>
+        <Link className="btn" to="/settings/scoring">
+          Open scoring settings <Icon name="chevronRight" size={14} />
+        </Link>
+      </section>
       {can("settings.access") ? <Admin /> : <p className="hint">Access, study settings and survey versions are managed by dashboard administrators.</p>}
     </div>
   );

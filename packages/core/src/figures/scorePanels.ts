@@ -198,7 +198,7 @@ const distribution: PanelBuilder<"score_distribution"> = {
 
 function groupRows(r: Resolved) {
   const rows = (r.result?.groups ?? []).filter((g) => g.summary);
-  return [{ key: "__all", label: "All", n: r.result?.overall?.n ?? 0, small: false, summary: r.result?.overall ?? null }, ...rows];
+  return [{ key: "__all", label: r.view.overallLabel ?? "All", n: r.result?.overall?.n ?? 0, small: false, summary: r.result?.overall ?? null }, ...rows];
 }
 
 const groups: PanelBuilder<"score_groups"> = {
@@ -213,9 +213,9 @@ const groups: PanelBuilder<"score_groups"> = {
     const name = title(r);
     const box = { ...full, height: Math.min(full.height, groups.preferredHeight(spec, ctx, full.width, theme) * 1.2) };
     const rows = groupRows(r).filter((g) => g.summary);
-    if (rows.length <= 1 && !r.result?.overall) return none(box, theme, "No scores under these filters", name);
+    if (rows.length === 0) return none(box, theme, "No scores under these filters", name);
     const o = r.output;
-    const overall = r.result!.overall!;
+    const overall = r.result?.overall ?? null;
     const focusKey = r.view.focus ? [r.view.focus.school, r.view.focus.yearGroup].filter((x) => x !== null && x !== undefined).join("|") : null;
     const isFocus = (key: string) => focusKey !== null && (key === focusKey || key === r.view.focus?.school || key === String(r.view.focus?.yearGroup));
     const values = rows.flatMap((g) => [g.summary!.ci?.[0] ?? g.summary!.mean, g.summary!.ci?.[1] ?? g.summary!.mean]);
@@ -244,7 +244,7 @@ const groups: PanelBuilder<"score_groups"> = {
     const ticks = xt.values.map((v) => ({ value: v, label: formatNumber(v, decimalsFor(xt.step)).replace("-", "−") }));
     body.push(...bottomAxis({ box, left: x0, right: x1, y: bottom, scale: xs, ticks: thinTicks(ticks, xs, theme), title: o.label, theme }));
     body.push(line(x0, top, x0, bottom, theme.palette.ink, theme.stroke.axis));
-    body.push(line(xs(overall.mean), top, xs(overall.mean), bottom, theme.palette.context, theme.stroke.reference));
+    if (overall) body.push(line(xs(overall.mean), top, xs(overall.mean), bottom, theme.palette.context, theme.stroke.reference));
     if (r.bench && r.bench.mean >= xt.min && r.bench.mean <= xt.max) body.push(line(xs(r.bench.mean), top, xs(r.bench.mean), bottom, theme.palette.ink, theme.stroke.reference, "2 1.5"));
     rows.forEach((g, i) => {
       const s = g.summary!;
@@ -269,8 +269,9 @@ const groups: PanelBuilder<"score_groups"> = {
     return {
       body,
       legend:
-        `Mean ${o.label.toLowerCase()} by ${r.view.groupBy === "schoolYear" ? "school and year group" : r.view.groupBy === "yearGroup" ? "year group" : r.view.groupBy}, with 95% confidence intervals (t distribution); the grey line marks all sittings (mean ${fmt(o, overall.mean)})` +
-        (r.bench ? ` and the dashed line ${r.bench.label} (mean ${fmt(o, r.bench.mean)}).` : ".") +
+        `Mean ${o.label.toLowerCase()} ${r.view.groupsDescription ?? `by ${r.view.groupBy === "schoolYear" ? "school and year group" : r.view.groupBy === "yearGroup" ? "year group" : r.view.groupBy}`}, with 95% confidence intervals (t distribution)` +
+        (overall ? `; the grey line marks ${(r.view.overallLabel ?? "all sittings").toLowerCase()} (mean ${fmt(o, overall.mean)})` : "") +
+        (r.bench ? `${overall ? " and" : ";"} the dashed line ${r.bench.label} (mean ${fmt(o, r.bench.mean)}).` : ".") +
         (small.length ? ` Open circles and * mark groups of fewer than ${r.view.minCell}.` : ""),
       notes: [methodNote(r), `${o.higherIs === "better" ? "Higher scores are better." : o.higherIs === "worse" ? "Higher scores indicate more difficulty." : "Scores are descriptive: neither direction is better."}`],
       source: {
@@ -343,7 +344,7 @@ const bands: PanelBuilder<"score_bands"> = {
     return {
       body,
       legend:
-        `Percentage of sittings in each band of the ${set.label.toLowerCase()} for ${r.output.label.toLowerCase()} (${r.scheme.abbreviation ?? r.scheme.name}), by group` +
+        `Percentage of sittings in each band of the ${set.label.toLowerCase()} for ${r.output.label.toLowerCase()} (${r.scheme.abbreviation ?? r.scheme.name}), ${r.view.groupsDescription ?? "by group"}` +
         (set.expected ? `; 'Expected' shows the shares the bands were set to give in the reference population (${set.expected.map((e) => `${Math.round(e * 100)}%`).join("/")}).` : ".") +
         (small.length ? ` * fewer than ${r.view.minCell} scores.` : ""),
       notes: [methodNote(r), `Bands: ${set.source}${set.verified ? "" : " (not yet verified)"}.`],

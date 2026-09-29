@@ -62,6 +62,10 @@ export interface ScoreResult {
 }
 
 export interface ScoresView {
+  /** What the whole-selection row is called in charts ("All" unless a report says otherwise). */
+  overallLabel?: string;
+  /** How the groups are described in figure legends, where "by school" would mislead. */
+  groupsDescription?: string;
   computedAt: string;
   observation: Observation;
   groupBy: ScoreGroupBy;

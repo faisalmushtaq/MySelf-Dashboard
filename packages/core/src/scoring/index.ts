@@ -5,3 +5,4 @@ export * from "./schemes.js";
 export * from "./groups.js";
 export * from "./aggregate.js";
 export * from "./benchmark.js";
+export * from "./report.js";

@@ -389,6 +389,21 @@ describe("scores", () => {
     expect(view.schemes.find((s) => s.key === "kss")!.version).toBe("1.1.0");
   });
 
+  it("writes a school report any member may export, naming no other school", async () => {
+    const job = await run<{ id: string; status: string; fileName: string }>(createExport, reviewer, { kind: "school_report", format: "pdf", scope: "filtered", filters: DEFAULT_FILTERS, school: "NDC", observation: "latest" });
+    expect(job.status).toBe("ready");
+    expect(job.fileName).toMatch(/^myself_school-report-ndc_/);
+    const jobDoc = (await dash().doc(`studies/demo/exportJobs/${job.id}`).get()).data()!;
+    const [bytes] = await getStorage().bucket().file(jobDoc["storagePath"]).download();
+    const text = pdfText(bytes);
+    expect(text).toContain("School report");
+    expect(text).toContain("How to read this report");
+    expect(text).not.toMatch(/\bBRD\b|\bLDS\b/);
+    await expect(run(createExport, reviewer, { kind: "school_report", format: "pdf", scope: "filtered", filters: DEFAULT_FILTERS })).rejects.toMatchObject({ code: "invalid-argument" });
+    const rows = await auditRows("export.created");
+    expect(rows.some((r) => r["detail"]?.kind === "school_report" && r["detail"]?.school === "NDC")).toBe(true);
+  });
+
   it("lets administrators name schools and set year-group rules", async () => {
     await expect(run(saveGroupSettings, researcher, { settings: {}, reason: "names" })).rejects.toMatchObject({ code: "permission-denied" });
     await expect(run(saveGroupSettings, admin, { settings: { yearGroup: { rules: [{ pattern: "([", yearGroup: 8 }] } }, reason: "bad" })).rejects.toMatchObject({ code: "invalid-argument" });

@@ -12,7 +12,12 @@ import {
   type ExportScope,
   type FilterState,
   type SortState,
+  type Observation,
+  type ScoringSettingsView,
+  OBSERVATION_LABELS,
+  OBSERVATIONS,
 } from "@myself-dashboard/core";
+import { useLoad } from "../lib/hooks";
 import { api, explain } from "../lib/api";
 import { downloadExport } from "../lib/download";
 import { firebase, STUDY } from "../lib/firebase";
@@ -40,6 +45,10 @@ export interface ExportInitial {
   filters: FilterState;
   sort?: SortState;
   versionHash?: string;
+  /** A school report: the school, a year group, and which sittings stand for each pupil. */
+  school?: string | null;
+  yearGroup?: number | null;
+  observation?: Observation;
 }
 
 export function ExportDialog({ open, onClose, initial }: { open: boolean; onClose: () => void; initial: ExportInitial }) {
@@ -56,6 +65,11 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
   // Identifiers are included by default (for linkage); de-identifying is a choice.
   const [identifiers, setIdentifiers] = useState(true);
   const [versionHash, setVersion] = useState(initial.versionHash ?? activeRelease?.hash ?? "");
+  const [school, setSchool] = useState<string>(initial.school ?? "");
+  const [yearGroup, setYearGroup] = useState<number | null>(initial.yearGroup ?? null);
+  const [observation, setObservation] = useState<Observation>(initial.observation ?? "latest");
+  const groups = useLoad<ScoringSettingsView>(() => api.getScoringSettings({}), [], { enabled: open && kind === "school_report" });
+  const schools = groups.data?.groupStats.schools ?? [];
   const [preview, setPreview] = useState<ExportPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -74,8 +88,14 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     setScope(initial.scope ?? "filtered");
     setFormat(initial.format ?? (initial.kind === "session_report" ? "pdf" : FORMATS_BY_KIND[initial.kind ?? (rowLevel ? "sessions" : "completeness_summary")][0]!));
     setIdentifiers(true);
+    setSchool(initial.school ?? "");
+    setYearGroup(initial.yearGroup ?? null);
+    setObservation(initial.observation ?? "latest");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+  useEffect(() => {
+    if (kind === "school_report" && !school && schools[0]) setSchool(schools[0].key);
+  }, [kind, school, schools]);
 
   useEffect(() => {
     if (!FORMATS_BY_KIND[kind].includes(format)) setFormat(FORMATS_BY_KIND[kind][0]!);
@@ -94,6 +114,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     includeStudyCode: identifiers && can("export.studyCode"),
     deidentified: !identifiers,
     ...(kind === "question_summary" ? { versionHash } : {}),
+    ...(kind === "school_report" ? { school: school || undefined, yearGroup, observation } : {}),
   };
   const specKey = useDebounced(JSON.stringify(spec), 250);
 
@@ -165,8 +186,8 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     }
   };
 
-  const kinds: ExportKind[] = ["sessions", "session_report", "completeness_summary", "question_summary"];
-  const scopes: ExportScope[] = ["all", "filtered", ...(initial.sessionIds?.length ? (["selected"] as ExportScope[]) : [])];
+  const kinds: ExportKind[] = ["sessions", "session_report", "completeness_summary", "question_summary", "school_report"];
+  const scopes: ExportScope[] = ["all", "filtered", ...(initial.sessionIds?.length && kind !== "school_report" ? (["selected"] as ExportScope[]) : [])];
 
   return (
     <Dialog open={open} onClose={onClose} title="Export data" wide>
@@ -241,6 +262,42 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                   ))}
                 </select>
               </label>
+            ) : null}
+            {kind === "school_report" ? (
+              <>
+                <label>
+                  School
+                  <select value={school} onChange={(e) => setSchool(e.target.value)}>
+                    {!schools.length ? <option value="">Loading schools…</option> : null}
+                    {schools.map((s) => (
+                      <option key={s.key} value={s.key}>
+                        {groups.data?.groups.schools[s.key] ?? s.key}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Year group
+                  <select value={yearGroup ?? ""} onChange={(e) => setYearGroup(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">All year groups</option>
+                    {Array.from({ length: 13 }, (_, i) => i + 1).map((y) => (
+                      <option key={y} value={y}>
+                        Year {y}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Pupils counted by
+                  <select value={observation} onChange={(e) => setObservation(e.target.value as Observation)}>
+                    {OBSERVATIONS.map((o) => (
+                      <option key={o} value={o}>
+                        {OBSERVATION_LABELS[o]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
             ) : null}
             {kind === "sessions" && format !== "bids" ? (
               <>

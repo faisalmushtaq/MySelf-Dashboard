@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   bandRange,
   composeFigure,
@@ -32,6 +32,8 @@ import { PageHeader } from "../components/Metric";
 import { EmptyState, ErrorState, Notice, Skeleton } from "../components/States";
 import { Icon } from "../components/Icon";
 import { saveBlob } from "../lib/figureFiles";
+import { ExportDialog } from "../components/ExportDialog";
+import { useAuth } from "../app/auth";
 import { useFigureBasics, useScoresPrefs } from "../lib/figureContext";
 
 /**
@@ -68,6 +70,8 @@ export default function Scores() {
   const view = scores.data;
   const scheme = view?.schemes.find((s) => s.key === prefs.scheme) ?? view?.schemes[0] ?? null;
   const set = (patch: Partial<typeof prefs>) => setPrefs({ ...prefs, ...patch });
+  const { can } = useAuth();
+  const [reportOpen, setReportOpen] = useState(false);
 
   return (
     <div className="page">
@@ -139,6 +143,13 @@ export default function Scores() {
       {!view && !scores.error ? <Skeleton lines={12} /> : null}
       {view && scheme ? (
         <div className={scores.loading ? "dimmed" : undefined} aria-busy={scores.loading}>
+          {view.focus?.school && can("export.aggregate") ? (
+            <div className="export-row">
+              <button type="button" className="btn btn-primary" onClick={() => setReportOpen(true)}>
+                <Icon name="reports" size={16} /> School report for {view.focus.label} (PDF)
+              </button>
+            </div>
+          ) : null}
           <p className="muted small scores-basis">
             {formatNumber(view.counts.sittings)} sittings from {formatNumber(view.counts.participants)} participants ({OBSERVATION_LABELS[view.observation].toLowerCase()}), {view.counts.schools} school
             {view.counts.schools === 1 ? "" : "s"}, {basics.period}
@@ -177,6 +188,11 @@ export default function Scores() {
             })}
         </div>
       ) : null}
+      <ExportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        initial={{ kind: "school_report", scope: "filtered", filters, school: prefs.focus.school, yearGroup: prefs.focus.yearGroup, observation: prefs.observation }}
+      />
       {view && !scheme ? <EmptyState icon="figure" title="No scoring schemes">An administrator can add them in Settings → Scoring.</EmptyState> : null}
     </div>
   );
@@ -213,6 +229,9 @@ function SchemeCard({ scheme, view }: { scheme: ScoringScheme; view: ScoresView 
       </div>
       <p className="scheme-method">{scheme.method}</p>
       {scheme.notes ? <p className="muted small">{scheme.notes}</p> : null}
+      <p className="small">
+        <Link to="/settings/scoring">How this is scored, its bands and benchmarks, and their versions</Link>
+      </p>
       {scheme.status !== "official" ? <p className="muted small">{SCHEME_STATUS_HELP[scheme.status]}</p> : null}
       {issues.length ? (
         <Notice tone="warn">

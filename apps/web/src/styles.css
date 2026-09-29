@@ -2414,3 +2414,71 @@ details.card[open] > summary {
   font-weight: 600;
   font-size: 1rem;
 }
+
+/* ── Scoring settings ──────────────────────────────────────────────────── */
+
+tr.row-selected > th,
+tr.row-selected > td {
+  background: var(--accent-wash);
+}
+.scheme-editor h2 {
+  margin: 0 0 4px;
+}
+.output-editor {
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 10px 14px 12px;
+  margin: 12px 0;
+}
+.output-editor legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.threshold-editor {
+  border-top: 1px dashed var(--hairline);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+.threshold-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.86rem;
+}
+.threshold-editor .check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.bands-table input,
+.bands-table select {
+  width: 100%;
+  min-width: 70px;
+}
+.json-editor {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  margin: 6px 0;
+}
+.advanced {
+  margin: 10px 0;
+}
+.advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.history li {
+  margin: 4px 0;
+}
+.save-block {
+  border-top: 1px solid var(--hairline);
+  margin-top: 12px;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.warn-text {
+  color: var(--warn);
+}

@@ -7,6 +7,7 @@ import {
   computeQuestionStats,
   can,
   compareRows,
+  buildSchoolReportView,
   compareVersions,
   composeFigure,
   DEFAULT_FIGURE,
@@ -47,7 +48,7 @@ import { ALLOWED_ORIGINS, auth, bucket, dash, EXPORT_PREFIX } from "../env.js";
 import { dpaths } from "../paths.js";
 import { allReleaseIndexes, releaseIndex, releaseList } from "../releases.js";
 import { loadStudyDataset, participantsFor, readNarratives, sha256, surveyManifests } from "../studyData.js";
-import { scoredSessions } from "../scoring.js";
+import { scoredSessions, studyGroupSettings } from "../scoring.js";
 import { STUDY } from "../env.js";
 import { accessPolicy, studyPolicy } from "../settings.js";
 import { readSittings } from "../sittings.js";
@@ -55,6 +56,7 @@ import { currentRows } from "../store.js";
 import { callableOptions } from "./common.js";
 import { csvOf, stackedCsvOf, xlsxOf } from "../exporters/encode.js";
 import { completenessPdf, sessionReportPdf } from "../exporters/pdf.js";
+import { schoolReportPdf } from "../exporters/schoolReport.js";
 
 /**
  * Exports: previewed, confirmed, generated on the server, stored privately,
@@ -116,6 +118,11 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
   }
   if (isSensitive(spec)) warnings.push(`Session-level research data. The file is kept for ${actor.policy.exportRetentionHours} hours on the server, then deleted.`);
   if (chosen.length === 0) warnings.push("No sessions match — the export would be empty.");
+  if (spec.kind === "school_report") {
+    const minCell = (await studyGroupSettings()).minCell;
+    warnings.push(`Written to be shared with the school: group averages only, other schools never named, and any group of fewer than ${minCell} pupils withheld.`);
+    if (!chosen.some((r) => r.summary.site === spec.school)) warnings.push(`No sittings from ${spec.school} match these filters.`);
+  }
   if (versions.some((v) => v.version === "unknown")) warnings.push("Some sessions use a survey version that is not in the registry; their answers cannot be exported against questions.");
   if (spec.kind === "sessions" && spec.includeAnswers && included.length > 1) {
     const incompatible = unionQuestions(included).filter((q) => poolingCompatibility(q.key, included) === "incompatible");
@@ -143,7 +150,9 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
         ? ["metrics", "sections", "versions", "most missed", "drop-off", "daily series"]
         : spec.kind === "question_summary"
           ? ["per question: eligible, shown, answered, skipped, invalid, rates, distribution"]
-          : ["session details", "answers in that version's wording", "review status and flags"];
+          : spec.kind === "school_report"
+            ? ["each measure's school average with a 95% CI, against the other schools combined and the benchmarks", "shares in each threshold band", "the school's year groups"]
+            : ["session details", "answers in that version's wording", "review status and flags"];
 
   const describe = describeFilters(spec.filters, {
     version: (h) => relByHash.get(h)?.version ?? h.slice(7, 15),
@@ -421,6 +430,27 @@ async function generate(
         rowCount: analytics.metrics.started,
       };
     }
+    case "school_report": {
+      const { sessions, schemes, settings } = await scoredSessions();
+      const allowed = new Set(rows.map((r) => r.summary.sessionId));
+      const view = buildSchoolReportView(
+        sessions.filter((x) => allowed.has(x.sessionId)),
+        { schemes, settings, observation: spec.observation, school: spec.school!, yearGroup: spec.yearGroup ?? null, now },
+      );
+      if (view.counts.pupils === 0) throw new HttpsError("failed-precondition", "No scored sittings from that school match these filters.");
+      const filters = describeFilters(spec.filters).filter((f) => f.key !== "date").map((c) => c.label);
+      const period = dateRangeLabel(spec, actor, now).label;
+      const body = await schoolReportPdf({
+        view,
+        figureBase: { period, filters, timeZone: tz, rulesVersion: RULES_VERSION, requiredLevels: actor.policy.requiredLevels, abandonAfterHours: actor.policy.abandonAfterHours, versionLabel: (h) => h },
+        generatedBy: actor.email,
+        generatedAt: now,
+        timeZone: tz,
+        period,
+        filters,
+      });
+      return { body, rowCount: view.counts.pupils };
+    }
     case "question_summary": {
       const release = releases.find((r) => r.hash === spec.versionHash);
       if (!release) throw new HttpsError("not-found", "That survey version is not in the registry.");
@@ -438,7 +468,7 @@ export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeout
   const spec = parseSpec(request.data);
   const now = new Date();
   const { preview, rows, releases } = await buildPreview(spec, actor, now);
-  const describe = { kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, identifiers: !spec.deidentified && isSensitive(spec), deidentified: spec.deidentified, includesAnswers: spec.includeAnswers };
+  const describe = { kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, identifiers: !spec.deidentified && isSensitive(spec), deidentified: spec.deidentified, includesAnswers: spec.includeAnswers, ...(spec.kind === "school_report" ? { school: spec.school, yearGroup: spec.yearGroup ?? null } : {}) };
   if (!preview.allowed) {
     await audit({ action: "export.created", ...actorFields(actor), detail: { ...describe, refusal: preview.refusal }, outcome: "denied" });
     throw new HttpsError("permission-denied", preview.refusal ?? "not permitted");

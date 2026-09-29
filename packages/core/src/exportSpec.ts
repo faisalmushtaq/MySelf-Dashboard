@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { can, type Role } from "./roles.js";
 import { sanitiseFilters, sanitiseSort, type FilterState, type SortState } from "./filters.js";
+import { OBSERVATIONS, type Observation } from "./scoring/aggregate.js";
 
 /**
  * What an export may contain, who may ask for it, and what it is called.
@@ -8,7 +9,7 @@ import { sanitiseFilters, sanitiseSort, type FilterState, type SortState } from 
  * in the browser shows the same decisions but does not make them.
  */
 
-export const EXPORT_KINDS = ["sessions", "session_report", "completeness_summary", "question_summary"] as const;
+export const EXPORT_KINDS = ["sessions", "session_report", "completeness_summary", "question_summary", "school_report"] as const;
 export type ExportKind = (typeof EXPORT_KINDS)[number];
 
 export const EXPORT_KIND_LABELS: Record<ExportKind, string> = {
@@ -16,6 +17,7 @@ export const EXPORT_KIND_LABELS: Record<ExportKind, string> = {
   session_report: "Formatted session report",
   completeness_summary: "Completeness summary",
   question_summary: "Question-level summary",
+  school_report: "School report",
 };
 
 export const EXPORT_FORMATS = ["bids", "csv", "xlsx", "pdf", "json"] as const;
@@ -37,6 +39,7 @@ export const FORMATS_BY_KIND: Record<ExportKind, readonly ExportFormat[]> = {
   session_report: ["pdf"],
   completeness_summary: ["csv", "xlsx", "pdf"],
   question_summary: ["csv", "xlsx"],
+  school_report: ["pdf"],
 };
 
 export const EXPORT_SCOPES = ["all", "filtered", "selected", "single"] as const;
@@ -72,6 +75,10 @@ export const exportSpecSchema = z.object({
   deidentified: z.boolean().default(false),
   /** Release for a question-level summary. */
   versionHash: z.string().max(80).optional(),
+  /** A school report: the school (site code), optionally one year group, and which sittings stand for each pupil. */
+  school: z.string().regex(/^[A-Z]{2,12}$/).optional(),
+  yearGroup: z.number().int().min(1).max(13).nullable().optional(),
+  observation: z.enum(OBSERVATIONS).default("latest"),
   /** Search text is never accepted for exports: exports are reproducible from filters alone. */
 });
 
@@ -90,6 +97,9 @@ export interface ExportSpec {
   includeStudyCode: boolean;
   deidentified: boolean;
   versionHash?: string;
+  school?: string;
+  yearGroup?: number | null;
+  observation: Observation;
 }
 
 export class ExportSpecError extends Error {}
@@ -110,6 +120,8 @@ export function parseExportSpec(raw: unknown): ExportSpec {
   if (d.scope === "single" && d.sessionIds.length !== 1) throw new ExportSpecError("a single-session export names exactly one session");
   if (d.kind === "session_report" && d.scope !== "single") throw new ExportSpecError("a formatted report covers one session");
   if (d.kind === "question_summary" && !d.versionHash) throw new ExportSpecError("choose the survey version for a question-level summary");
+  if (d.kind === "school_report" && !d.school) throw new ExportSpecError("choose the school the report is for");
+  if (d.kind === "school_report" && (d.scope === "selected" || d.scope === "single")) throw new ExportSpecError("a school report covers the filtered sittings, not chosen ones");
   const spec: ExportSpec = {
     kind: d.kind,
     format: d.format,
@@ -125,6 +137,8 @@ export function parseExportSpec(raw: unknown): ExportSpec {
     includeStudyCode: d.includeStudyCode && !d.deidentified && (d.kind === "sessions" || d.kind === "session_report"),
     deidentified: d.deidentified,
     ...(d.versionHash ? { versionHash: d.versionHash } : {}),
+    ...(d.kind === "school_report" && d.school ? { school: d.school, yearGroup: d.yearGroup ?? null } : {}),
+    observation: d.observation,
   };
   if (spec.scope === "all") spec.filters = { ...spec.filters, datePreset: "all", statuses: [], versions: [], sites: [], sources: [], flagged: "any", reviewStatuses: [], questionOutcomes: [] };
   return spec;
@@ -164,11 +178,11 @@ const stamp = (d: Date) => {
  * Only [a-z0-9._-]: safe on every file system and in a Content-Disposition header.
  */
 export function exportFileName(
-  spec: Pick<ExportSpec, "kind" | "scope" | "format" | "sessionIds" | "deidentified">,
+  spec: Pick<ExportSpec, "kind" | "scope" | "format" | "sessionIds" | "deidentified"> & Partial<Pick<ExportSpec, "school" | "yearGroup">>,
   range: { fromDay: string | null; toDay: string | null },
   createdAt: Date,
 ): string {
-  const kind = spec.kind.replaceAll("_", "-");
+  const kind = spec.kind.replaceAll("_", "-") + (spec.kind === "school_report" && spec.school ? `-${spec.school.toLowerCase()}${spec.yearGroup ? `-y${spec.yearGroup}` : ""}` : "");
   const scope = spec.kind === "sessions" ? `-${spec.scope}` : "";
   const what =
     spec.scope === "single"

@@ -292,7 +292,7 @@ export const kss: Input = {
       higherIs: "worse",
       primary: true,
       thresholds: [
-        bands("sleepy_7", "Sleepy (7 or more)", "convention", "Ratings of 7 or more ('sleepy') are widely used to mark sleepiness, e.g. Åkerstedt, Anund, Axelsson & Kecklund (2014), J Sleep Res, 23(3), 240–252.", [["Not sleepy (1–6)", 6, 0], ["Sleepy (7–9)", null, 2]]),
+        bands("sleepy_7", "Sleepy (7 or more)", "convention", "Ratings of 7 or more ('sleepy') are widely used to mark sleepiness, e.g. Åkerstedt, Anund, Axelsson & Kecklund (2014), J Sleep Res, 23(3), 240–252.", [["Not sleepy", 6, 0, "1–6"], ["Sleepy", null, 2, "7–9"]]),
       ],
     },
   ],

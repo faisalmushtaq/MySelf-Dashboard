@@ -17,6 +17,7 @@ const Reports = lazy(() => import("./pages/Reports"));
 const Figures = lazy(() => import("./pages/Figures"));
 const Participants = lazy(() => import("./pages/Participants"));
 const Scores = lazy(() => import("./pages/Scores"));
+const ScoringSettings = lazy(() => import("./pages/ScoringSettings"));
 const SavedViews = lazy(() => import("./pages/SavedViews"));
 const Audit = lazy(() => import("./pages/Audit"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -166,6 +167,7 @@ function Gate() {
                   <Route path="/views" element={<SavedViews />} />
                   <Route path="/audit" element={<Audit />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/settings/scoring" element={<ScoringSettings />} />
                   <Route path="/help" element={<HelpPage />} />
                   <Route
                     path="*"
