@@ -20,6 +20,8 @@ describe("role matrix", () => {
     expect(can("analyst", "export.sessions")).toBe(false);
     expect(can("analyst", "export.aggregate")).toBe(true);
     expect(can("analyst", "view.studyCode")).toBe(false);
+    expect(can("analyst", "view.participantCode")).toBe(false);
+    expect(can("researcher", "view.participantCode")).toBe(true);
     expect(can("analyst", "views.share")).toBe(false);
   });
 

@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { DEFAULT_FILTERS, type QuerySessionsResponse, type SessionDetailResponse } from "@myself-dashboard/core";
+import { DEFAULT_FILTERS, type ParticipantsResponse, type QuerySessionsResponse, type SessionDetailResponse } from "@myself-dashboard/core";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
 import { pdfText } from "./pdfText.js";
 
@@ -18,6 +18,7 @@ import { getAnalytics, getQuestionAnalytics, getQuestionHistory } from "../src/a
 import { addNote, updateReview } from "../src/api/review.js";
 import { logFigureExport, setDashboardRole, updateAccessPolicy, getSettings } from "../src/api/admin.js";
 import { createExport, downloadExport, expireExports, previewExport } from "../src/api/exports.js";
+import { getParticipants } from "../src/api/participants.js";
 
 /**
  * The backend, end to end against the emulators: real ID tokens from the Auth
@@ -313,6 +314,28 @@ describe("exports", () => {
     const plainText = await read(plain.id);
     expect(plainText).not.toMatch(/Participant [A-Z]{2}[0-9]{3}[A-Z]{2}/);
     expect(plainText).not.toContain("Study code".toUpperCase());
+  });
+});
+
+describe("participants", () => {
+  it("links sittings into participants, with codes only for roles that may see them, and audits the view", async () => {
+    const shown = await run<ParticipantsResponse>(getParticipants, researcher, { fresh: true });
+    expect(shown.codesShown).toBe(true);
+    expect(shown.totals.participants).toBeGreaterThan(30);
+    expect(shown.totals.linkedSittings + shown.totals.heldBack).toBe(sittings.length);
+    expect(shown.participants.every((p) => /^[A-Z]{2}[0-9]{3}[A-Z]{2}/.test(p.code))).toBe(true);
+    expect(shown.sharedCodes).toHaveLength(1);
+    expect(JSON.stringify(shown)).not.toMatch(/ps_mother_initials|first_name/);
+
+    const labelled = await run<ParticipantsResponse>(getParticipants, reviewer, {});
+    expect(labelled.codesShown).toBe(false);
+    const text = JSON.stringify(labelled);
+    for (const p of shown.participants) expect(text).not.toContain(p.code);
+    expect(labelled.participants[0]!.code).toBe("P0001");
+
+    const rows = await auditRows("participants.viewed");
+    expect(rows.some((r) => r["actorEmail"] === "reviewer@brainpop.example" && r["detail"]?.codesShown === false)).toBe(true);
+    await expect(run(getParticipants, stranger, {})).rejects.toMatchObject({ code: "permission-denied" });
   });
 });
 

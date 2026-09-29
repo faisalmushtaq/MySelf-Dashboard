@@ -5,3 +5,4 @@
 export * from "../vendor/myself/index.js";
 export * from "./dataset.js";
 export * from "./bids.js";
+export * from "./participants.js";

@@ -30,6 +30,7 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
 export const CAPABILITIES = [
   "view.dashboard",
   "view.studyCode",
+  "view.participantCode",
   "view.freeText",
   "review.write",
   "views.private",
@@ -52,6 +53,7 @@ const MATRIX: Record<Role, ReadonlySet<Capability>> = {
   researcher: new Set<Capability>([
     "view.dashboard",
     "view.studyCode",
+    "view.participantCode",
     "view.freeText",
     "review.write",
     "views.private",

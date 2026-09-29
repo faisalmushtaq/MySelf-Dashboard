@@ -18,6 +18,12 @@ the survey's rules, functions or data — and needs no change to the survey to r
 - **Privacy:** raw logs never reach a browser; names, dates of birth and code
   components are never shown or exported; exports are generated server-side,
   downloaded through an authenticated endpoint, audited and deleted after 24 hours.
+- **Participants and linkage:** sittings joined into participants and waves by the
+  survey's secret code, exactly as the survey's own export does, with held-back
+  sittings, shared (twin) codes and same-day repeats called out.
+- **Exports:** BIDS by default (built with the survey's data layer), with identifiers
+  for linkage unless a de-identified copy is chosen; CSV, Excel and clearly laid-out
+  PDF reports.
 - **Publication figures:** multi-panel figures at journal column widths (89/120/183
   mm), Arial/Helvetica at 6–8 pt, colour-blind-safe or greyscale, exported as vector
   PDF/SVG or 300–1200 dpi PNG/TIFF with a draft legend and source data

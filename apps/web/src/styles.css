@@ -2240,3 +2240,85 @@ table.data tbody tr:last-child td {
   padding-left: 1.1em;
 }
 .hint.block { display: block; margin-top: 2px; }
+
+/* ── Participants ──────────────────────────────────────────────────────── */
+
+table.data.participants tbody th {
+  font-weight: 400;
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+}
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 2px 4px 2px 0;
+  min-height: 28px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.disclosure code {
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+.wave-strip {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.wave-dot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 11px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  border: 1px solid var(--hairline-strong);
+  background: var(--paper);
+}
+.wave-dot.done {
+  border-color: color-mix(in srgb, var(--st-complete) 55%, transparent);
+  background: color-mix(in srgb, var(--st-complete) 12%, var(--paper));
+}
+.tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+tr.row-warn > th,
+tr.row-warn > td {
+  background: #fff8f2;
+}
+tr.subrow > td {
+  background: var(--off-white);
+  padding: 4px 12px 12px 34px;
+}
+table.data.compact th,
+table.data.compact td {
+  padding: 6px 10px;
+  font-size: 0.88rem;
+}
+table.data.compact thead th {
+  position: static;
+  background: transparent;
+}
+ul.tight {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+details.card > summary {
+  cursor: pointer;
+}
+details.card[open] > summary {
+  margin-bottom: 10px;
+}
+.filter-row input[type="search"] {
+  min-width: 17rem;
+}

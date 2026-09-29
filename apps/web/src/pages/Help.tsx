@@ -71,6 +71,18 @@ export function HelpContent() {
           or greyscale colours, 95% confidence intervals where proportions are compared, a draft figure legend and the source data behind each panel. Figures
           use aggregates only; every downloaded file is recorded in the audit log first.
         </p>
+        <h3>Participants and exports</h3>
+        <p>
+          The Participants page joins sittings into participants by the survey&apos;s secret code, exactly as the survey&apos;s own export does, and numbers
+          each participant&apos;s sittings as waves. It lists what the linkage could not settle: sittings held back (for example an incomplete secret code),
+          codes two children share (almost always twins) and sittings less than a day apart. Codes are corrected and twins separated in the survey&apos;s
+          researcher tool (Linkage tab); the dashboard never changes a link. Read-only reviewers see labels (P0001…) instead of codes.
+        </p>
+        <p>
+          Session exports default to a BIDS dataset with identifiers (participant code, wave, study code, session id) so the data can be linked to other
+          records; <code>linkage.tsv</code> holds the identifiers and is kept out of what a BIDS validator reads. Untick &ldquo;Include identifiers&rdquo; for a
+          de-identified copy. Names, dates of birth, UPNs, NHS numbers and the secret-code answers are never exported by the dashboard.
+        </p>
         <h3>Keyboard</h3>
         <dl className="defs keys">
           <div><dt><kbd>/</kbd></dt><dd>Focus the session search</dd></div>

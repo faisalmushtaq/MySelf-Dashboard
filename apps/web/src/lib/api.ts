@@ -6,6 +6,7 @@ import type {
   ExportJobView,
   ExportPreview,
   ExportRequest,
+  ParticipantsResponse,
   QuerySessionsRequest,
   QuerySessionsResponse,
   QuestionAnalyticsRequest,
@@ -53,6 +54,7 @@ export const api = {
   rebuildSummaries: call<{ onlyUnknownRelease?: boolean }, { scanned: number; written: number; unreadable: number }>("rebuildSummaries", 560_000),
   registerReleaseManifest: call<{ manifest: unknown }, ReleaseMetaView>("registerReleaseManifest"),
   logChartDownload: call<{ chart: string }, { ok: boolean }>("logChartDownload"),
+  getParticipants: call<{ fresh?: boolean }, ParticipantsResponse>("getParticipants", 130_000),
   logFigureExport: call<{ format: string; panels: string[]; width: string; colour: string; dpi: number | null }, { ok: boolean }>("logFigureExport"),
 };
 

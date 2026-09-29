@@ -18,6 +18,7 @@ const ACTIONS: Record<string, string> = {
   "export.download_denied": "Download refused",
   "chart_data.downloaded": "Downloaded chart data",
   "figure.exported": "Exported a figure",
+  "participants.viewed": "Viewed participants",
   "role.changed": "Changed a role",
   "access_policy.changed": "Changed the access list",
   "policy.changed": "Changed study settings",

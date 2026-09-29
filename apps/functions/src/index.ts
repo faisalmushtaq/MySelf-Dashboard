@@ -20,3 +20,4 @@ export {
   logFigureExport,
 } from "./api/admin.js";
 export { previewExport, createExport, downloadExport, cleanupExports } from "./api/exports.js";
+export { getParticipants } from "./api/participants.js";

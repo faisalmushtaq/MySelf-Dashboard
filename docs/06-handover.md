@@ -312,10 +312,17 @@ end in a catch-all deny. If those rules are ever loosened, add an explicit
    ownership (or administrator), status and expiry, streams the file with
    `no-store`, and audits every download and refusal.
 5. `cleanupExports` deletes files after `exportRetentionHours` (default 24 h).
-6. Never exported, for any role: names, dates of birth, study-code components.
-   Study codes only with de-identification off and a role that allows it; free
-   text only when asked and allowed; JSON only for administrators. CSV cells are
-   formula-neutralised; XLSX cells are typed values, never formulas.
+6. Never exported, for any role: names, dates of birth, UPNs, NHS numbers and the
+   secret-code answers. Session exports carry identifiers **by default** (participant
+   code, wave, session id; study code where the role allows), because the study
+   links these data to other records; ticking off "Include identifiers" gives a
+   de-identified copy (labels P0001…, times cut to the day, no session ids or study
+   codes). Free text only when asked and allowed; JSON only for administrators. CSV
+   cells are formula-neutralised; XLSX cells are typed values, never formulas.
+7. The default session format is a BIDS dataset (zip) built with the survey's own
+   data layer, so participant codes, waves and scores match the survey's export.
+   With identifiers, `linkage.tsv` maps each BIDS subject/session to the codes and
+   is listed in `.bidsignore`; `export_manifest.json` holds a SHA-256 per file.
 
 ## 11. Testing
 
@@ -347,7 +354,15 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
   embed fonts in Acrobat or Illustrator if a journal's checker requires it
   ([07-figures.md](07-figures.md) §7.6).
 
-- **Not deployed**; production deployment, first admin and backfill are §5.
+- Deployed to `myself-research` (§5.0). Later changes reach production only when
+  the "Firebase setup" workflow is run again (§5.0); nothing deploys on push.
+- Twins who share a secret code are detected by the survey's own ingest, which
+  compares sittings collected under the same survey version. Twins who sat
+  different versions are not detected automatically; the Participants page's
+  "two sittings within a day" check catches the common case (twins sitting
+  together), and the survey's Linkage tab is where they are separated.
+- The Participants page and exports read every sitting to link them (cached for
+  five minutes); "Re-link now" forces a fresh read.
 - Browser tests run Chromium only here; WebKit/Firefox should be added to CI.
 - The Hosting security headers (CSP, HSTS, frame-ancestors) in `firebase.json` are
   not applied by the emulators, so they have not been exercised against a live

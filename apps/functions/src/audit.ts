@@ -24,6 +24,7 @@ export type AuditAction =
   | "export.download_denied"
   | "chart_data.downloaded"
   | "figure.exported"
+  | "participants.viewed"
   | "role.changed"
   | "access_policy.changed"
   | "policy.changed"

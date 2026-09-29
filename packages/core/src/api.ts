@@ -298,3 +298,67 @@ export interface SettingsResponse {
   people: PersonView[];
   releases: ReleaseMetaView[];
 }
+
+// ── participants (linkage) ────────────────────────────────────────────────
+
+/** Why a participant row may need a researcher's attention. */
+export type ParticipantAttention = "shared_code" | "same_day" | "never_finished";
+
+export const PARTICIPANT_ATTENTION_LABELS: Record<ParticipantAttention, string> = {
+  shared_code: "Code shared by more than one child",
+  same_day: "Two sittings within a day",
+  never_finished: "No finished sitting",
+};
+
+export interface ParticipantSittingView {
+  sessionId: string;
+  wave: number;
+  startedAt: string;
+  /** The survey's own flag: the participant reached the end. */
+  finished: boolean;
+  /** The dashboard's status, when the sitting has been summarised. */
+  status: DisplayStatus | null;
+  releaseVersion: string | null;
+  site: string | null;
+  /** "parent" or "teacher" when someone else answered about the participant. */
+  informant: string | null;
+  daysSincePrevious: number | null;
+}
+
+export interface ParticipantView {
+  /** The participant code — or, for roles that may not see codes, a label (P0001…) that means nothing outside this page. */
+  code: string;
+  sittings: ParticipantSittingView[];
+  waves: number;
+  firstSeen: string;
+  lastSeen: string;
+  sites: string[];
+  attention: ParticipantAttention[];
+}
+
+export interface HeldBackSittingView {
+  sessionId: string;
+  reason: string;
+  startedAt: string | null;
+  status: DisplayStatus | null;
+  site: string | null;
+}
+
+export interface ParticipantsResponse {
+  computedAt: string;
+  /** False for roles that see labels instead of codes. */
+  codesShown: boolean;
+  totals: {
+    participants: number;
+    linkedSittings: number;
+    heldBack: number;
+    multiWave: number;
+    byWave: { waves: number; participants: number }[];
+    sharedCodes: number;
+    sameDay: number;
+  };
+  participants: ParticipantView[];
+  heldBack: HeldBackSittingView[];
+  /** Codes two children appear to share (almost always twins). Names never leave the server. */
+  sharedCodes: { code: string; sessionIds: string[] }[];
+}

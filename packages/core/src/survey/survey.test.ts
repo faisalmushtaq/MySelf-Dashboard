@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { indexRelease } from "../manifest.js";
 import type { Sitting, SittingEvent } from "../types.js";
 import { demoReleases, generateDemoSittings } from "../node/synthetic.js";
-import { buildDashboardBids, deriveStudyDataset, parseSurveyManifest, pseudonymiseDataset, subsetDataset, type BidsExportInput } from "./index.js";
+import { buildDashboardBids, deriveStudyDataset, parseSurveyManifest, participantsOverview, pseudonymiseDataset, subsetDataset, type BidsExportInput } from "./index.js";
 
 // ── Fixtures: the synthetic study (never real data) and the real releases ───────
 
@@ -227,5 +227,43 @@ describe("the real survey (v7.1.0) through the same pipeline", () => {
     const scores = rows(file(out.files, "phenotype/scores.tsv"));
     expect(scores).toHaveLength(1);
     expect(Object.keys(scores[0]!).some((k) => k.startsWith("swemwbs_"))).toBe(true);
+  });
+});
+
+describe("the Participants page", () => {
+  const facts = (id: string) => {
+    const s = sittings.find((x) => x.sessionId === id);
+    return s ? { status: "complete" as const, releaseVersion: "1.0.0", site: s.studyCode?.slice(0, 3) ?? null, startedAt: s.startedAt ?? null } : undefined;
+  };
+  const now = new Date("2026-09-29T10:00:00.000Z");
+  const shown = participantsOverview(study, facts, { codesShown: true, now });
+
+  it("lists every linked sitting under its participant, in wave order", () => {
+    expect(shown.totals.participants).toBe(study.dataset.participants.length);
+    expect(shown.participants.reduce((n, p) => n + p.sittings.length, 0)).toBe(study.dataset.sessions.length);
+    for (const p of shown.participants) expect(p.sittings.map((s) => s.wave)).toEqual([...p.sittings.map((s) => s.wave)].sort((a, b) => a - b));
+    const multi = shown.participants.find((p) => p.waves > 1)!;
+    expect(multi.sittings[1]!.daysSincePrevious).toBeGreaterThan(0);
+    expect(shown.totals.multiWave).toBe(shown.participants.filter((p) => p.waves > 1).length);
+  });
+
+  it("accounts for every sitting: linked or held back with a reason", () => {
+    expect(shown.totals.linkedSittings + shown.totals.heldBack).toBe(sittings.length);
+    expect(shown.heldBack.every((h) => h.reason.length > 0)).toBe(true);
+  });
+
+  it("flags the code two children share, and their sittings a day apart", () => {
+    expect(shown.sharedCodes).toHaveLength(1);
+    const twin = shown.participants.find((p) => p.code === shown.sharedCodes[0]!.code)!;
+    expect(twin.attention).toEqual(expect.arrayContaining(["shared_code", "same_day"]));
+    expect(shown.totals.sameDay).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows labels, never codes, to roles that may not see them", () => {
+    const masked = participantsOverview(study, facts, { codesShown: false, now });
+    const text = JSON.stringify(masked);
+    for (const p of study.dataset.participants) expect(text).not.toContain(p.participantId);
+    expect(masked.participants[0]!.code).toBe("P0001");
+    expect(masked.sharedCodes[0]!.code).toMatch(/^P\d{4}$/);
   });
 });
