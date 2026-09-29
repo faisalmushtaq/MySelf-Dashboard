@@ -363,8 +363,10 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 - Scores: RCADS T-score norms are not included; the SWEMWBS bands are adult-
   derived and the SDQ British norms date from 1999; every cut-point and norm is
   shipped unverified until an administrator checks it (docs/08 §8.6). The
-  survey's own SWEMWBS and STAI-5 scoring is broken in every release (S6,
-  docs/04); the dashboard scores from its own schemes.
+  survey's own SWEMWBS and STAI-5 scoring is blank before r7.2.0 (S6, fixed in
+  the survey from r7.2.0) and its SDQ and RCADS totals are blank in every
+  release (S7, not yet fixed); the dashboard is the scoring source for all data
+  and exports only its own scores (docs/08 §8.5).
 - Twins who share a secret code are detected by the survey's own ingest, which
   compares sittings collected under the same survey version. Twins who sat
   different versions are not detected automatically; the Participants page's

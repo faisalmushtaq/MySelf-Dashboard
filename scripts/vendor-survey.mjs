@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 
 export const VENDORED = {
   schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "index"],
-  scoring: ["executor", "definitions", "index"],
+  scoring: ["executor", "definitions", "references", "index"],
   store: ["dataset", "identity", "ingest", "bids", "narratives", "zip"],
 };
 const REWRITES = { "@myself/schema": "../schema/index.js", "@myself/scoring": "../scoring/index.js" };

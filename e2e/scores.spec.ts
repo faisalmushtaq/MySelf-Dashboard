@@ -54,7 +54,9 @@ test("an administrator changes a threshold as a new, audited version; a reviewer
   await expect(page.getByRole("status").getByText(/^Saved kss v1.1.0./)).toBeVisible();
   await expect(page.locator("tr", { hasText: "KSS" })).toContainText("v1.1.0");
   await page.getByRole("link", { name: "Audit activity" }).click();
-  await expect(page.locator("table.data")).toContainText("Changed a scoring scheme");
+  // Wait for the audit page itself: until it replaces Settings, that page's own tables match `table.data` too.
+  await expect(page.getByRole("heading", { name: "Audit activity", level: 1 })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Audit log" })).toContainText("Changed a scoring scheme");
 
   await signOut(page);
   await signIn(page, REVIEWER);

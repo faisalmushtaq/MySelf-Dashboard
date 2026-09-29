@@ -14,7 +14,7 @@ const sdqItems = Array.from({ length: 25 }, (_, i) => `q${i + 1}`);
 describe("default schemes against the survey's real releases", () => {
   it("parse, and cover every scored instrument the survey administers", () => {
     expect(DEFAULT_SCHEMES).toHaveLength(13);
-    const latest = releases.find((r) => r.version === "7.1.0")!;
+    const latest = releases.find((r) => r.version === "7.2.0")!;
     for (const s of DEFAULT_SCHEMES) expect(checkScheme(s, latest).applies, s.key).toBe(true);
   });
 
@@ -27,7 +27,7 @@ describe("default schemes against the survey's real releases", () => {
     }
   });
 
-  it("catch a scheme naming items the release does not have (the survey's own SWEMWBS definition does)", () => {
+  it("catch a scheme naming items the release does not have (as the survey's own SWEMWBS definition did before r7.2.0)", () => {
     const wrong = scoringScheme.parse({ ...scheme("swemwbs"), outputs: [{ ...scheme("swemwbs").outputs[0]!, calc: { op: "sum", items: ["q1", "q2", "q3", "q4", "q5", "q6", "q7"], minValid: 7 } }] });
     const c = checkScheme(wrong, releases.at(-1)!);
     expect(c.issues.filter((i) => i.level === "error")).toHaveLength(7);

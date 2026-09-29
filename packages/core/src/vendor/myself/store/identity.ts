@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@ee554ac packages/store/src/identity.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@e28e383 packages/store/src/identity.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import { z } from "zod";

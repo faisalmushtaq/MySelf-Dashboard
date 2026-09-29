@@ -30,7 +30,7 @@ Scoring**, **Reports → School report**.
 
 ## 8.2 The default schemes
 
-Item keys are those of the survey's releases r1.0.0–r7.1.0; every scheme is
+Item keys are those of the survey's releases r1.0.0–r7.2.0; every scheme is
 checked against every registered release (§8.5).
 
 | Instrument | Status | Scores | Method | Bands | Benchmark |
@@ -82,16 +82,34 @@ with the number of items that were available.
 - Groups smaller than the study's minimum size (default 10) are marked small on
   the Scores page and withheld from school reports.
 
-## 8.5 Checks against the survey's versions
+## 8.5 Checks against the survey's versions, and why the dashboard scores everything
 
 Every scheme is checked against every registered release that administers its
 instrument: every item it names must exist and be scorable, reversal constants
 must match the codes (a 0–2 item reverses with 2), and recodings should cover
-every substantive code. Errors show on the Scores page and in Settings. This is
-exactly the check the survey's own SWEMWBS and STAI-5 definitions fail (they
-name items `q1`… that do not exist, so the survey's own totals are always
-blank — survey-side change **S6**, docs/04 §4.2). The dashboard's schemes key
-on the real items and are unaffected.
+every substantive code. Errors show on the Scores page and in Settings.
+
+**The dashboard is the scoring source for all data, old and new.** Each survey
+release also carries scoring definitions of its own, frozen with it, but the
+dashboard never uses or exports them:
+
+- the survey's SWEMWBS and STAI-5 definitions in r1.0.0–r7.1.0 name items
+  `q1`… that those instruments have never had, so their totals are always
+  blank. The survey fixed this in r7.2.0 and now refuses to publish such a
+  definition (survey-side change **S6**, docs/04 §4.2), but a release is never
+  edited, so every sitting collected before r7.2.0 keeps the broken definition;
+- the survey's own reading of the answers leaves SDQ total difficulties and the
+  RCADS total blank in every release (**S7**, not yet fixed).
+
+The dashboard's schemes key on the real items for every release, so a sitting
+from r1.0.0 and one from r7.2.0 are scored the same way, by the same versioned
+scheme. The BIDS export carries only the dashboard's scores. A test
+(`packages/core/src/survey/survey.test.ts`) scores made-up sittings under the
+real r7.2.0 with both and checks that, sitting by sitting, the survey's own
+SWEMWBS, STAI-5, SDQ and RCADS subscale and EHI scores equal the dashboard's —
+and that the SDQ and RCADS totals equal the sums of those subscales. BIS/BAS
+differ by design: the survey sums the raw codes, the dashboard reverses them
+so a higher score means more of the trait.
 
 ## 8.6 Changing a scheme
 

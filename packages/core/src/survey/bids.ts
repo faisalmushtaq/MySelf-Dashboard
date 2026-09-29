@@ -44,8 +44,11 @@ export interface BidsExportInput {
   /** SHA-256 hex of a file's content. */
   hash: (content: string) => string;
   /**
-   * Scores from the dashboard's scoring schemes, by sitting. When given they
-   * replace the survey's own derived scores in phenotype/scores.tsv.
+   * Scores from the dashboard's scoring schemes, by sitting: the only scores an
+   * export carries. The survey's own derived scores are never exported — they
+   * come from the definitions frozen into each release, and for SWEMWBS and
+   * STAI-5 those are blank in every release before r7.2.0 (docs/08 §8.5). Without
+   * this, the export has no scores files.
    */
   scoring?: { schemes: readonly ScoringScheme[]; bySession: ReadonlyMap<string, Record<string, SchemeScores>> };
 }
@@ -76,7 +79,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     .filter((c) => c.sessionIds.length > 0);
 
   let data = subsetDataset(studyData.dataset, chosen);
-  if (input.scoring) data = { ...data, scores: scoreRows(data.sessions, input.scoring) };
+  data = { ...data, scores: input.scoring ? scoreRows(data.sessions, input.scoring) : [] };
   const withheld = input.includeFreeText ? [] : [...new Set(data.responses.filter((r) => input.freeTextVariables.has(r.variable)).map((r) => r.variable))].sort();
   if (!input.includeFreeText) data = withoutVariables(data, input.freeTextVariables);
   const original = data;
@@ -184,7 +187,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     "- `phenotype/<instrument>.tsv` — one row per participant per wave, stored option codes, with a `<variable>_status` column saying why a value is missing; `phenotype/<instrument>.json` gives each question's wording and what every code means.",
     input.scoring
       ? "- `phenotype/scores.tsv` — scores from the dashboard's scoring schemes, with a column per threshold band; `phenotype/scores.json` gives each column's method, scheme version, range and whether the scheme has been verified. Regenerable, never edited."
-      : "- `phenotype/scores.tsv` — derived scores, where the survey defines scoring; regenerable, never edited.",
+      : "- No scores: they come only from the dashboard's scoring schemes, which were not applied to this export.",
     input.identifiers
       ? "- `linkage.tsv` — identifiers for linkage (participant codes, study codes, sitting and device identifiers, exact times)."
       : "- De-identified: participant codes are replaced by labels (P0001…) that mean nothing outside this export, study codes are removed and times are cut to the day.",

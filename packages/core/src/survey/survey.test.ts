@@ -52,7 +52,7 @@ const rows = (tsv: string) => {
 
 describe("survey release manifests", () => {
   it("reads every published version, adapting only the old finish-screen text", () => {
-    for (const v of ["1.0.0", "4.0.0", "5.0.0", "7.1.0"]) {
+    for (const v of ["1.0.0", "4.0.0", "5.0.0", "7.1.0", "7.2.0"]) {
       const r = parseSurveyManifest(release(v));
       expect("manifest" in r, v).toBe(true);
       if ("manifest" in r) expect(r.adapted).toBe(v === "1.0.0" || v === "4.0.0");
@@ -223,12 +223,13 @@ describe("the real survey (v7.1.0) through the same pipeline", () => {
     expect(real.dataset.sessions[0]!.participantId).toBe("JA403CD");
   });
 
-  it("scores the survey's measures and writes them to phenotype/scores.tsv", () => {
+  it("never exports the survey's own frozen scores: without the dashboard's schemes there are no score files", () => {
+    // The survey scored the sitting with the definitions frozen into r7.1.0 …
     expect(real.dataset.scores.length).toBeGreaterThan(0);
     const out = buildDashboardBids(input({ study: "ybm", studyData: real, selected: new Set([sitting.sessionId]), sittings: new Map([[sitting.sessionId, sitting]]), manifest: manifest!, releaseVersions: new Map([[raw.hash, "7.1.0"]]) }));
-    const scores = rows(file(out.files, "phenotype/scores.tsv"));
-    expect(scores).toHaveLength(1);
-    expect(Object.keys(scores[0]!).some((k) => k.startsWith("swemwbs_"))).toBe(true);
+    // … but scores leave only from the dashboard's schemes (docs/08 §8.5).
+    expect(out.files.some((f) => f.path.startsWith("phenotype/scores."))).toBe(false);
+    expect(file(out.files, "README.md")).toContain("No scores");
   });
 });
 
@@ -371,5 +372,108 @@ describe("the Participants page", () => {
     for (const p of study.dataset.participants) expect(text).not.toContain(p.participantId);
     expect(masked.participants[0]!.code).toBe("P0001");
     expect(masked.sharedCodes[0]!.code).toMatch(/^P\d{4}$/);
+  });
+});
+
+describe("the survey's own scores under r7.2.0 agree with the dashboard's", () => {
+  // Made-up sittings under the real r7.2.0 release: every question answered at
+  // random (a fixed seed), one in sixteen left unanswered, so the missing-data
+  // rules are compared too. Never real data.
+  const raw = release("7.2.0") as { hash: string };
+  const idx = indexRelease(raw);
+  const parsed = parseSurveyManifest(raw);
+  const manifest = "manifest" in parsed ? parsed.manifest : null;
+  let seed = 49;
+  const random = () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const sittings: Sitting[] = Array.from({ length: 40 }, (_, n) => {
+    const events: SittingEvent[] = [];
+    let seq = 0;
+    const at = (i: number) => new Date(Date.parse("2026-10-05T09:00:00.000Z") + n * 3_600_000 + i * 5000).toISOString();
+    events.push({ seq: seq++, type: "session.started", tWall: at(0), tMono: 0 });
+    const code: Record<string, unknown> = {
+      "ybm_identity.ps_mother_initials": { kind: "text", value: String.fromCharCode(65 + (n % 26)) + "Q" },
+      "ybm_identity.ps_house_digit": { kind: "text", value: String(n % 10) },
+      "ybm_identity.ps_birth_month": { kind: "choice", code: 1 + (n % 12) },
+      "ybm_identity.ps_postcode_letters": { kind: "text", value: "ZZ" },
+    };
+    for (const q of idx.questions) {
+      let value: unknown = code[q.key];
+      if (value === undefined && !q.identifying && random() >= 1 / 16) {
+        if (q.responseType === "single_choice" && q.options?.length) value = { kind: "choice", code: q.options[Math.floor(random() * q.options.length)]!.code };
+      }
+      if (value === undefined) continue;
+      events.push({ seq: seq++, type: "item.presented", itemKey: q.key, tWall: at(seq), tMono: seq * 5000 });
+      events.push({ seq: seq++, type: "response.recorded", itemKey: q.key, payload: { value }, tWall: at(seq), tMono: seq * 5000 });
+    }
+    events.push({ seq: seq++, type: "session.completed", payload: { totalMs: seq * 5000 }, tWall: at(seq), tMono: seq * 5000 });
+    return { sessionId: `01CROSSCHECK${String(n).padStart(14, "0")}`, studyCode: "ZZZ0001", releaseKey: "r", releaseHash: raw.hash, startedAt: at(0), completedAt: at(seq), complete: true, events };
+  });
+  const data = deriveStudyDataset({ study: "ybm", sittings, manifests: new Map([[raw.hash, manifest!]]) });
+  const dashboard = new Map(scoreStudy(data, { schemes: DEFAULT_SCHEMES, releases: new Map([[raw.hash, idx]]), groups: DEFAULT_GROUP_SETTINGS }).map((s) => [s.sessionId, s.scores]));
+  const survey = (key: string, output: string) => data.dataset.scores.filter((r) => r.scoringKey === key && r.output === output);
+  const ours = (sessionId: string, scheme: string, output: string) => dashboard.get(sessionId)?.[scheme]?.outputs[output]?.value ?? null;
+
+  const same: [string, string, string, string][] = [
+    ["score.swemwbs", "raw_total", "swemwbs", "raw_total"],
+    ["score.stai5", "state_anxiety", "stai5_s", "state_anxiety"],
+    ["score.sdq25_s", "emotional", "sdq25_s", "emotional"],
+    ["score.sdq25_s", "conduct", "sdq25_s", "conduct"],
+    ["score.sdq25_s", "hyperactivity", "sdq25_s", "hyperactivity"],
+    ["score.sdq25_s", "peer", "sdq25_s", "peer"],
+    ["score.sdq25_s", "prosocial", "sdq25_s", "prosocial"],
+    ["score.rcads25", "depression", "rcads25", "depression"],
+    ["score.rcads25", "anxiety", "rcads25", "anxiety"],
+    ["score.ehi_sf", "lq", "ehi_sf", "lq"],
+  ];
+
+  it.each(same)("%s %s equals the dashboard's %s %s, sitting by sitting", (key, output, scheme, ourOutput) => {
+    const rows = survey(key, output);
+    expect(rows).toHaveLength(sittings.length);
+    // Some scored and some blank, so both the arithmetic and the missing-data rule are compared.
+    expect(rows.some((r) => r.value !== null)).toBe(true);
+    for (const r of rows) expect(ours(r.sessionId, scheme, ourOutput), `${r.sessionId} ${key} ${output}`).toBe(r.value);
+  });
+
+  it("SDQ total difficulties and RCADS total: blank in the survey's own dataset (S7), the sum of its subscales in the dashboard's", () => {
+    // The survey's ingest hands the executor a null for every name a step reads,
+    // earlier outputs included, and the null hides the subscale it just computed
+    // (docs/04 S7). The definitions are right: the dashboard's totals are exactly
+    // the sums they describe.
+    const totals: [string, string, string[], string, string][] = [
+      ["score.sdq25_s", "total_difficulties", ["emotional", "conduct", "hyperactivity", "peer"], "sdq25_s", "total_difficulties"],
+      ["score.rcads25", "total", ["depression", "anxiety"], "rcads25", "total"],
+    ];
+    for (const [key, output, parts, scheme, ourOutput] of totals) {
+      const rows = survey(key, output);
+      expect(rows).toHaveLength(sittings.length);
+      expect(rows.every((r) => r.value === null), `${key} ${output}`).toBe(true);
+      let scored = 0;
+      for (const r of rows) {
+        const values = parts.map((p) => survey(key, p).find((x) => x.sessionId === r.sessionId)!.value as number | null);
+        const expected = values.some((v) => v === null) ? null : values.reduce<number>((a, v) => a + v!, 0);
+        if (expected !== null) scored += 1;
+        expect(ours(r.sessionId, scheme, ourOutput), `${r.sessionId} ${key} ${output}`).toBe(expected);
+      }
+      expect(scored, `${key} ${output}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("the survey's SWEMWBS and STAI-5 definitions are the fixed ones", () => {
+    expect(new Set([...survey("score.swemwbs", "raw_total"), ...survey("score.stai5", "state_anxiety")].map((r) => r.scoringVersion))).toEqual(new Set(["1.0.1"]));
+  });
+
+  it("BIS/BAS differ by design: the survey sums the raw codes, the dashboard reverses them so higher means more of the trait", () => {
+    const pairs: [string, string][] = [["bis_raw", "bis"], ["bas_reward_raw", "bas_reward"], ["bas_drive_raw", "bas_drive"]];
+    for (const [theirs, mine] of pairs) {
+      const rows = survey("score.bisbas12_ybm", theirs);
+      expect(rows.some((r) => r.value !== null)).toBe(true);
+      // Four items coded 1–4, each reversed as 5 − code: the dashboard's score is 20 − the survey's.
+      for (const r of rows) expect(ours(r.sessionId, "bisbas12_ybm", mine)).toBe(r.value === null ? null : 20 - (r.value as number));
+    }
   });
 });
