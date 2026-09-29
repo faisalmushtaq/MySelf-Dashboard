@@ -16,6 +16,7 @@ const Questions = lazy(() => import("./pages/Questions"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Figures = lazy(() => import("./pages/Figures"));
 const Participants = lazy(() => import("./pages/Participants"));
+const Scores = lazy(() => import("./pages/Scores"));
 const SavedViews = lazy(() => import("./pages/SavedViews"));
 const Audit = lazy(() => import("./pages/Audit"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -159,6 +160,7 @@ function Gate() {
                   <Route path="/completeness" element={<Completeness />} />
                   <Route path="/questions" element={<Questions />} />
                   <Route path="/figures" element={<Figures />} />
+                  <Route path="/scores" element={<Scores />} />
                   <Route path="/participants" element={<Participants />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/views" element={<SavedViews />} />

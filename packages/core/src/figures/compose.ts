@@ -1,4 +1,5 @@
 import { csvRow } from "../csv.js";
+import { OBSERVATION_LABELS } from "../scoring/aggregate.js";
 import { formatNumber } from "./scale.js";
 import { el, render, type El } from "./svg.js";
 import { panelLetter } from "./draw.js";
@@ -73,11 +74,12 @@ export function composeFigure(spec: FigureSpec, ctx: FigureContext, options: { c
   const heightMm = H / PT_PER_MM;
   const title = spec.title.trim().replace(/\.$/, "");
   const panelSentences = outputs.map((o) => (lettered ? `${o.letter}, ${o.out.legend}` : o.out.legend));
-  const sessions = ctx.analytics?.metrics.started ?? 0;
-  const dataSentence =
-    `Data: ${formatNumber(sessions)} session${sessions === 1 ? "" : "s"}, ${ctx.period}` +
-    (ctx.filters.length ? `; ${ctx.filters.join("; ")}` : "") +
-    ".";
+  const scoresOnly = spec.panels.every((p) => p.kind.startsWith("score_"));
+  const sessions = scoresOnly ? (ctx.scores?.counts.sittings ?? 0) : (ctx.analytics?.metrics.started ?? 0);
+  const who = scoresOnly && ctx.scores
+    ? `${formatNumber(ctx.scores.counts.sittings)} sitting${ctx.scores.counts.sittings === 1 ? "" : "s"} from ${formatNumber(ctx.scores.counts.participants)} participant${ctx.scores.counts.participants === 1 ? "" : "s"} (${OBSERVATION_LABELS[ctx.scores.observation].toLowerCase()})`
+    : `${formatNumber(sessions)} session${sessions === 1 ? "" : "s"}`;
+  const dataSentence = `Data: ${who}, ${ctx.period}` + (ctx.filters.length ? `; ${ctx.filters.join("; ")}` : "") + ".";
   const notes = [...new Set(outputs.flatMap((o) => o.out.notes))];
   if (outputs.some((o) => COMPLETENESS_PANELS.has(o.spec.kind))) {
     notes.push(`Completeness is judged against the survey version each participant received (dashboard rules ${ctx.rulesVersion}).`);

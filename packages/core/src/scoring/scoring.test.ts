@@ -114,7 +114,8 @@ describe("SWEMWBS (Warwick scoring)", () => {
     expect(band(2)).toBe("Probable depression");
     expect(band(4)).toBe("Average"); // raw 28 → 25.03
     expect(band(5)).toBe("High wellbeing");
-    expect(bandRange(set, 0, metric)).toBe("up to 17.5");
+    expect(bandRange(set, 0, metric)).toBe("7–17");
+    expect(bandRange({ ...set, bands: set.bands.map(({ display: _d, ...b }) => b) }, 0, metric)).toBe("up to 17.5");
   });
 });
 

@@ -98,6 +98,7 @@ export function bandIndex(set: ThresholdSet, value: number): number {
  */
 export function bandRange(set: ThresholdSet, index: number, output: Pick<ScoreOutput, "range" | "decimals">): string {
   const band = set.bands[index]!;
+  if (band.display) return band.display;
   const prev = index > 0 ? set.bands[index - 1]!.max : null;
   const [lo, hi] = output.range;
   const whole = output.decimals === 0 && set.bands.every((b) => b.max === null || Number.isInteger(b.max)) && Number.isInteger(lo) && Number.isInteger(hi);
@@ -109,5 +110,5 @@ export function bandRange(set: ThresholdSet, index: number, output: Pick<ScoreOu
   }
   if (prev === null) return `up to ${f(band.max!)}`;
   if (band.max === null) return `above ${f(prev)}`;
-  return `above ${f(prev)} to ${f(band.max)}`;
+  return `${f(prev)}–${f(band.max)}`;
 }

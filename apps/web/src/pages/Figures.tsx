@@ -20,7 +20,10 @@ import {
   type PanelKind,
   type PanelSpec,
   type QuestionData,
+  type ScoresView,
+  type ScoringScheme,
 } from "@myself-dashboard/core";
+import { useScoresPrefs } from "../lib/figureContext";
 import "@fontsource/arimo/400.css";
 import "@fontsource/arimo/700.css";
 import "@fontsource/arimo/400-italic.css";
@@ -75,6 +78,20 @@ export default function Figures() {
     () => ({ ...spec, panels: spec.panels.map((p) => (questionPanel(p) && !p.version ? { ...p, version: fallbackVersion } : p)) }),
     [spec, fallbackVersion],
   );
+  // Score panels read the Scores view, grouped and counted as on the Scores page.
+  const [scorePrefs] = useScoresPrefs();
+  const wantsScores = effective.panels.some((p) => p.kind.startsWith("score_"));
+  const scores = useLoad<ScoresView>(
+    () =>
+      api.getScores({
+        filters,
+        observation: scorePrefs.observation,
+        groupBy: scorePrefs.groupBy,
+        focus: scorePrefs.focus.school || scorePrefs.focus.yearGroup !== null ? scorePrefs.focus : null,
+      }),
+    [JSON.stringify(filters), JSON.stringify(scorePrefs), wantsScores],
+    { enabled: wantsScores },
+  );
   const neededVersions = [...new Set(effective.panels.filter(questionPanel).map((p) => p.version).filter(Boolean))].sort();
   const questionKey = JSON.stringify([neededVersions, filters]);
   const questions = useLoad<Record<string, QuestionData>>(
@@ -125,10 +142,11 @@ export default function Figures() {
       requiredLevels: policy?.requiredLevels ?? ["hard", "soft"],
       abandonAfterHours: policy?.abandonAfterHours ?? 24,
       versionLabel,
+      scores: scores.data ?? null,
     };
     return composeFigure(effective, ctx, { createdAt: new Date().toISOString() });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effective, analytics.data, questions.data, period, filterText, policy, timeZone, byNewest]);
+  }, [effective, analytics.data, questions.data, scores.data, period, filterText, policy, timeZone, byNewest]);
 
   const updatePanel = (i: number, p: PanelSpec) => setSpec({ ...spec, panels: spec.panels.map((x, j) => (j === i ? p : x)) });
   const move = (i: number, d: -1 | 1) => {
@@ -265,7 +283,7 @@ export default function Figures() {
                     </button>
                   </div>
                 </div>
-                <PanelOptions panel={p} effectiveVersion={questionPanel(p) ? p.version || fallbackVersion : ""} questions={questions.data ?? {}} onChange={(np) => updatePanel(i, np)} releases={byNewest} />
+                <PanelOptions panel={p} effectiveVersion={questionPanel(p) ? p.version || fallbackVersion : ""} questions={questions.data ?? {}} onChange={(np) => updatePanel(i, np)} releases={byNewest} schemes={scores.data?.schemes ?? []} />
               </li>
             ))}
           </ol>
@@ -425,13 +443,70 @@ function PanelOptions({
   questions,
   releases,
   onChange,
+  schemes,
 }: {
   panel: PanelSpec;
   effectiveVersion: string;
   questions: Record<string, QuestionData>;
   releases: { hash: string; version: string }[];
   onChange: (p: PanelSpec) => void;
+  schemes: ScoringScheme[];
 }) {
+  if (panel.kind === "score_distribution" || panel.kind === "score_groups" || panel.kind === "score_bands") {
+    const scheme = schemes.find((s) => s.key === panel.scheme) ?? schemes[0];
+    const output = scheme?.outputs.find((o) => o.key === panel.output) ?? scheme?.outputs.find((o) => o.primary) ?? scheme?.outputs[0];
+    return (
+      <div className="panel-options">
+        <label>
+          Instrument
+          <select value={scheme?.key ?? ""} onChange={(e) => onChange({ ...panel, scheme: e.target.value, output: "", ...("thresholds" in panel ? { thresholds: "" } : {}), ...("benchmark" in panel ? { benchmark: "" } : {}) })}>
+            {schemes.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.abbreviation ?? s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Score
+          <select value={output?.key ?? ""} onChange={(e) => onChange({ ...panel, output: e.target.value })}>
+            {(scheme?.outputs ?? []).map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {"thresholds" in panel && output?.thresholds.length ? (
+          <label>
+            Bands
+            <select value={panel.thresholds} onChange={(e) => onChange({ ...panel, thresholds: e.target.value })}>
+              {output.thresholds.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+              {panel.kind === "score_distribution" ? <option value="none">None</option> : null}
+            </select>
+          </label>
+        ) : null}
+        {"benchmark" in panel && output?.benchmarks.length ? (
+          <label>
+            Benchmark
+            <select value={panel.benchmark} onChange={(e) => onChange({ ...panel, benchmark: e.target.value })}>
+              {output.benchmarks.map((b) => (
+                <option key={b.key} value={b.key}>
+                  {b.label}
+                </option>
+              ))}
+              <option value="none">None</option>
+            </select>
+          </label>
+        ) : null}
+        <p className="hint">Grouped and counted as on the Scores page.</p>
+      </div>
+    );
+  }
   const versionSelect = (value: string, set: (v: string) => void) => (
     <label>
       Survey version

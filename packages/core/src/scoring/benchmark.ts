@@ -100,7 +100,7 @@ function groupName(key: string, by: ScoreGroupBy, settings: GroupSettings): stri
       return yearGroupLabel(Number(key));
     case "schoolYear": {
       const [school, year] = key.split("|");
-      return `${schoolLabel(school, settings)}, ${yearGroupLabel(Number(year))}`;
+      return `${schoolLabel(school, settings)}, Y${year}`;
     }
     case "wave":
       return `Wave ${key}`;

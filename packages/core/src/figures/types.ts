@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Analytics } from "../analytics.js";
+import type { ScoresView } from "../scoring/benchmark.js";
 import type { QuestionStat } from "../questions.js";
 import type { El } from "./svg.js";
 import type { Theme } from "./theme.js";
@@ -10,7 +11,7 @@ import type { Theme } from "./theme.js";
  * filters change.
  */
 
-export const PANEL_KINDS = ["participation", "status", "completion", "sections", "items", "responses", "duration"] as const;
+export const PANEL_KINDS = ["participation", "status", "completion", "sections", "items", "responses", "duration", "score_distribution", "score_groups", "score_bands"] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 
 const hash = z.string().max(80);
@@ -35,6 +36,10 @@ export const panelSpecSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("responses"), version: hash.default(""), question: z.string().max(160).default("") }),
   z.object({ kind: z.literal("duration") }),
+  /** Scores: "" picks the scheme's primary output, first threshold set or first benchmark; "none" leaves it out. */
+  z.object({ kind: z.literal("score_distribution"), scheme: z.string().max(80).default(""), output: z.string().max(80).default(""), thresholds: z.string().max(80).default(""), benchmark: z.string().max(80).default("") }),
+  z.object({ kind: z.literal("score_groups"), scheme: z.string().max(80).default(""), output: z.string().max(80).default(""), benchmark: z.string().max(80).default("") }),
+  z.object({ kind: z.literal("score_bands"), scheme: z.string().max(80).default(""), output: z.string().max(80).default(""), thresholds: z.string().max(80).default("") }),
 ]);
 export type PanelSpec = z.infer<typeof panelSpecSchema>;
 export type PanelOf<K extends PanelKind> = Extract<PanelSpec, { kind: K }>;
@@ -87,6 +92,8 @@ export interface FigureContext {
   requiredLevels: readonly string[];
   abandonAfterHours: number;
   versionLabel: (hash: string) => string;
+  /** Score summaries, for the score panels. */
+  scores?: ScoresView | null;
 }
 
 export type CsvCell = string | number | null;

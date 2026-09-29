@@ -34,6 +34,7 @@ import { wilson } from "./stats.js";
 import { textWidth } from "./text.js";
 import type { Theme } from "./theme.js";
 import type { Box, FigureContext, PanelBuilder, PanelKind, PanelOf, PanelOutput } from "./types.js";
+import { SCORE_PANELS } from "./scorePanels.js";
 
 /**
  * The panels a figure can hold. Each draws from aggregates only, returns its
@@ -633,7 +634,7 @@ const duration: PanelBuilder<"duration"> = {
   },
 };
 
-export const PANELS: { [K in PanelKind]: PanelBuilder<K> } = { participation, status, completion, sections, items, responses, duration };
+export const PANELS: { [K in PanelKind]: PanelBuilder<K> } = { participation, status, completion, sections, items, responses, duration, ...SCORE_PANELS };
 
 export const PANEL_NAMES: Record<PanelKind, string> = Object.fromEntries(
   Object.entries(PANELS).map(([k, b]) => [k, b.name]),

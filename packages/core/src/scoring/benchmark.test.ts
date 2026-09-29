@@ -116,7 +116,7 @@ describe("the grouped view", () => {
     expect(r.groups.map((g) => [g.label, g.n, g.small])).toEqual([
       ["BRD", 2, true],
       ["LDS", 1, true],
-      ["Northdale College (NDC)", 3, false],
+      ["Northdale College", 3, false],
     ]);
     expect(view.available.schools.map((s) => s.key)).toEqual(["BRD", "LDS", "NDC"]);
     expect(view.counts).toMatchObject({ sittings: 6, participants: 6, schools: 3 });
@@ -124,7 +124,7 @@ describe("the grouped view", () => {
 
   it("compares a school's year group with the same year group at other schools", () => {
     const view = buildScoresView(rows, { schemes: [swemwbs], settings, observation: "latest", groupBy: "schoolYear", focus: { school: "NDC", yearGroup: 8 }, now: new Date() });
-    expect(view.focus).toMatchObject({ label: "Northdale College (NDC), Year 8", peersLabel: "Year 8 at other schools" });
+    expect(view.focus).toMatchObject({ label: "Northdale College, Year 8", peersLabel: "Year 8 at other schools" });
     const r = view.results.find((x) => x.output === "metric")!;
     expect(r.focus!.summary!.n).toBe(2); // A (wave 2) and B; C is Year 9
     expect(r.focus!.peers!.n).toBe(3); // D, E, F

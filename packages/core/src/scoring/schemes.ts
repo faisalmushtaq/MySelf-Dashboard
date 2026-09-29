@@ -20,10 +20,10 @@ function bands(
   label: string,
   basis: ThresholdSet["basis"],
   source: string,
-  rows: [string, number | null, 0 | 1 | 2 | 3 | null][],
+  rows: [string, number | null, 0 | 1 | 2 | 3 | null, string?][],
   extra: { note?: string; expected?: number[] } = {},
 ): ThresholdSet {
-  return { key: keyName, label, basis, source, verified: false, bands: rows.map(([l, max, level]) => ({ label: l, max, level })), ...extra };
+  return { key: keyName, label, basis, source, verified: false, bands: rows.map(([l, max, level, display]) => ({ label: l, max, level, ...(display ? { display } : {}) })), ...extra };
 }
 
 // ── SDQ (self-report, 11–17) ───────────────────────────────────────────────
@@ -193,7 +193,7 @@ export const swemwbs: Input = {
           "Warwick wellbeing bands",
           "published",
           "Warwick Medical School, 'Collect, score, analyse and interpret WEMWBS': SWEMWBS 7–17 probable depression, 18–20 possible depression, 21–27 average, 28–35 high wellbeing; derived in adults (Shah et al., 2021, Health Qual Life Outcomes).",
-          [["Probable depression", 17.5, 3], ["Possible depression", 20.5, 2], ["Average", 27.5, 0], ["High wellbeing", null, 0]],
+          [["Probable depression", 17.5, 3, "7–17"], ["Possible depression", 20.5, 2, "18–20"], ["Average", 27.5, 0, "21–27"], ["High wellbeing", null, 0, "28–35"]],
           { note: "Bands are published as whole numbers; metric scores are rounded to the nearest whole number before banding (so the limits sit at .5). Validated in adults; interpret with care at 11–16." },
         ),
       ],
@@ -268,7 +268,7 @@ export const ehi: Input = {
       decimals: 1,
       higherIs: "neutral",
       primary: true,
-      thresholds: [bands("veale_2014", "Handedness (Veale, 2014)", "published", "Veale (2014): left-handed −100 to −61, mixed-handed −60 to 60, right-handed 61 to 100.", [["Left-handed", -61, null], ["Mixed-handed", 60, null], ["Right-handed", null, null]])],
+      thresholds: [bands("veale_2014", "Handedness (Veale, 2014)", "published", "Veale (2014): left-handed −100 to −61, mixed-handed −60 to 60, right-handed 61 to 100.", [["Left-handed", -61, null, "−100 to −61"], ["Mixed-handed", 60, null, "−60 to 60"], ["Right-handed", null, null, "61 to 100"]])],
     },
   ],
 };

@@ -384,9 +384,9 @@ function standardAnswer(q: QuestionDef, s: NonNullable<WalkOptions["standard"]>,
     const u = Math.max(1e-9, s.rnd());
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * s.rnd());
   };
-  const z = s.trait + (SCHOOL_EFFECT[s.site] ?? 0) - 0.12 * (yearGroup - 7);
+  const z = s.trait + (SCHOOL_EFFECT[s.site] ?? 0) - 0.08 * (yearGroup - 7);
   const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
-  if (q.instrument === "swemwbs") return clamp(3.3 + 0.75 * z + 0.6 * noise(), 1, 5);
+  if (q.instrument === "swemwbs") return clamp(3.75 + 0.75 * z + 0.6 * noise(), 1, 5);
   if (q.instrument === "kss") return clamp(4.2 - 0.6 * z + 1.4 * noise(), 1, 9);
   if (q.instrument === "ehi_sf") {
     if (s.hand < 0.1) return clamp(4.7 + 0.4 * noise(), 4, 5);
@@ -395,9 +395,9 @@ function standardAnswer(q: QuestionDef, s: NonNullable<WalkOptions["standard"]>,
   }
   // SDQ: problem items rise as wellbeing falls; positively worded ones (7, 11, 14, 21, 25) the other way.
   const n = Number(q.item.slice(1));
-  if ([1, 4, 9, 17, 20].includes(n)) return clamp(1.5 + 0.2 * z + 0.5 * noise(), 0, 2);
-  if ([7, 11, 14, 21, 25].includes(n)) return clamp(1.45 + 0.35 * z + 0.55 * noise(), 0, 2);
-  return clamp(0.55 - 0.45 * z + 0.55 * noise(), 0, 2);
+  if ([1, 4, 9, 17, 20].includes(n)) return clamp(1.6 + 0.2 * z + 0.5 * noise(), 0, 2);
+  if ([7, 11, 14, 21, 25].includes(n)) return clamp(1.75 + 0.35 * z + 0.55 * noise(), 0, 2);
+  return clamp(0.2 - 0.45 * z + 0.55 * noise(), 0, 2);
 }
 
 /**

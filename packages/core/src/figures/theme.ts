@@ -34,6 +34,13 @@ export interface Palette {
   declined: string;
   unanswered: string;
   notReached: string;
+  /** Threshold bands by concern level 0–3: fills for stacked bars (a single warm hue, light to dark; level 0 neutral). */
+  levels: [string, string, string, string];
+  /** The same levels as light tints, for shading score ranges behind a distribution. */
+  levelTints: [string, string, string, string];
+  /** Bands that describe rather than grade (handedness): alternating neutral fills, and their tints. */
+  descriptive: [string, string, string];
+  descriptiveTints: [string, string, string];
 }
 
 /**
@@ -51,6 +58,10 @@ const COLOUR: Palette = {
   declined: "#CC79A7",
   unanswered: "#D55E00",
   notReached: "#BDBDBD",
+  levels: ["#E2E2E2", "#EFA35C", "#CF5F1B", "#7E2C04"],
+  levelTints: ["#FFFFFF", "#FCEEDF", "#F9DDC8", "#F3C6A6"],
+  descriptive: ["#9ECAE9", "#D9D9D9", "#56B4E9"],
+  descriptiveTints: ["#EAF3FA", "#F3F3F3", "#DDEFFA"],
 };
 
 /** Greyscale for print: lightness steps, and a dash on the comparison line. */
@@ -63,6 +74,10 @@ const GREYSCALE: Palette = {
   declined: "#6E6E6E",
   unanswered: "#A6A6A6",
   notReached: "#D9D9D9",
+  levels: ["#E6E6E6", "#BDBDBD", "#8C8C8C", "#4D4D4D"],
+  levelTints: ["#FFFFFF", "#F4F4F4", "#E8E8E8", "#DBDBDB"],
+  descriptive: ["#CFCFCF", "#EDEDED", "#A6A6A6"],
+  descriptiveTints: ["#F2F2F2", "#FAFAFA", "#E6E6E6"],
 };
 
 export interface Theme {

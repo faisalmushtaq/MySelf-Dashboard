@@ -7,6 +7,11 @@ import type {
   ExportPreview,
   ExportRequest,
   ParticipantsResponse,
+  SaveSchemeRequest,
+  ScoresRequest,
+  ScoresView,
+  ScoringSettingsView,
+  GroupSettings,
   QuerySessionsRequest,
   QuerySessionsResponse,
   QuestionAnalyticsRequest,
@@ -55,6 +60,10 @@ export const api = {
   registerReleaseManifest: call<{ manifest: unknown }, ReleaseMetaView>("registerReleaseManifest"),
   logChartDownload: call<{ chart: string }, { ok: boolean }>("logChartDownload"),
   getParticipants: call<{ fresh?: boolean }, ParticipantsResponse>("getParticipants", 130_000),
+  getScores: call<ScoresRequest, ScoresView>("getScores", 300_000),
+  getScoringSettings: call<Record<string, never>, ScoringSettingsView>("getScoringSettings", 130_000),
+  saveScoringScheme: call<SaveSchemeRequest, { key: string; version: string }>("saveScoringScheme"),
+  saveGroupSettings: call<{ settings: GroupSettings; reason: string }, { ok: true }>("saveGroupSettings"),
   logFigureExport: call<{ format: string; panels: string[]; width: string; colour: string; dpi: number | null }, { ok: boolean }>("logFigureExport"),
 };
 

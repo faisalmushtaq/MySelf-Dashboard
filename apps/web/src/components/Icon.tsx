@@ -32,6 +32,7 @@ const PATHS: Record<string, string> = {
   chevronDown: "M5 9l7 7 7-7",
   download: "M12 4v11m0 0l-4-4m4 4l4-4M5 20h14",
   figure: "M4 4v16h16M8 16v-4M12 16V8M16 16v-6",
+  scores: "M4 18a8 8 0 1 1 16 0M12 18l4-6M7 13.5l1 .6M12 10v1.2M17 13.5l-1 .6",
   people: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14a6.5 6.5 0 0 1 3.5 6",
   up: "M12 19V5m0 0l-6 6m6-6l6 6",
   down: "M12 5v14m0 0l-6-6m6 6l6-6",

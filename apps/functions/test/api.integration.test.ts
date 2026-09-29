@@ -394,7 +394,7 @@ describe("scores", () => {
     await expect(run(saveGroupSettings, admin, { settings: { yearGroup: { rules: [{ pattern: "([", yearGroup: 8 }] } }, reason: "bad" })).rejects.toMatchObject({ code: "invalid-argument" });
     await run(saveGroupSettings, admin, { settings: { schools: { NDC: "Northdale College" }, minCell: 5 }, reason: "School names from the fieldwork plan" });
     const view = await run<ScoresView>(getScores, reviewer, { groupBy: "school" });
-    expect(view.available.schools.find((s) => s.key === "NDC")!.label).toBe("Northdale College (NDC)");
+    expect(view.available.schools.find((s) => s.key === "NDC")!.label).toBe("Northdale College");
     expect(view.minCell).toBe(5);
     expect((await auditRows("groups.changed")).length).toBe(1);
   });

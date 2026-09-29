@@ -2322,3 +2322,95 @@ details.card[open] > summary {
 .filter-row input[type="search"] {
   min-width: 17rem;
 }
+
+/* ── Scores ────────────────────────────────────────────────────────────── */
+
+.scores-controls .controls-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--hairline);
+  margin: 0 4px;
+}
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+.scores-basis {
+  margin: 0 0 10px;
+}
+.scheme-card h2 {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+}
+.scheme-card .tags {
+  margin-bottom: 4px;
+}
+.scheme-method {
+  margin: 6px 0;
+  max-width: 90ch;
+}
+.tag-good {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-wash);
+}
+.tag .icon {
+  vertical-align: -2px;
+}
+.output-card h3 {
+  margin: 0 0 2px;
+}
+.score-stats {
+  margin: 6px 0 4px;
+}
+.score-stats > div {
+  padding: 4px 0;
+}
+.score-stats dt {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.score-stats dd {
+  margin: 0;
+}
+.score-stats .wide {
+  grid-column: 1 / -1;
+}
+.band-share {
+  display: inline-block;
+  margin-right: 14px;
+}
+.comparisons li {
+  margin: 4px 0;
+}
+.small-group {
+  margin-left: 6px;
+}
+.figure-notes {
+  margin: 8px 0;
+}
+.figure-notes summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.check-inline input[type="checkbox"] {
+  width: auto;
+  display: inline-block;
+  margin: 0;
+}
+.output-collapsed {
+  padding: 8px 14px;
+}
+.output-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  text-align: left;
+}
+.output-title {
+  font-weight: 600;
+  font-size: 1rem;
+}

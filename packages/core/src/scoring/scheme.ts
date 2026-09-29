@@ -50,6 +50,8 @@ export const scoreBand = z.object({
   label: text(80).min(1),
   max: z.number().nullable(),
   level: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).nullable(),
+  /** The range as the source writes it ("−60 to 60"), where that reads better than one worked out from the limits. */
+  display: text(40).optional(),
 });
 export type ScoreBand = z.infer<typeof scoreBand>;
 

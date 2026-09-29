@@ -56,8 +56,8 @@ export type GroupSettings = z.infer<typeof groupSettings>;
 export const DEFAULT_GROUP_SETTINGS: GroupSettings = groupSettings.parse({});
 
 export const yearGroupLabel = (y: number | null | undefined) => (y === null || y === undefined ? "Year group unknown" : `Year ${y}`);
-export const schoolLabel = (site: string | null | undefined, settings: Pick<GroupSettings, "schools">) =>
-  site ? (settings.schools[site] ? `${settings.schools[site]} (${site})` : site) : "School unknown";
+/** The school's name where the study has set one, else its site code. */
+export const schoolLabel = (site: string | null | undefined, settings: Pick<GroupSettings, "schools">) => (site ? (settings.schools[site] ?? site) : "School unknown");
 
 /**
  * The school year a child born on `dobIso` is in on `atIso`: in England and
