@@ -13,6 +13,7 @@ const Sessions = lazy(() => import("./pages/Sessions"));
 const SessionPage = lazy(() => import("./pages/SessionPage"));
 const Completeness = lazy(() => import("./pages/Completeness"));
 const Questions = lazy(() => import("./pages/Questions"));
+const Codebook = lazy(() => import("./pages/Codebook"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Figures = lazy(() => import("./pages/Figures"));
 const Participants = lazy(() => import("./pages/Participants"));
@@ -160,6 +161,7 @@ function Gate() {
                   <Route path="/sessions/:sessionId" element={<SessionPage />} />
                   <Route path="/completeness" element={<Completeness />} />
                   <Route path="/questions" element={<Questions />} />
+                  <Route path="/codebook" element={<Codebook />} />
                   <Route path="/figures" element={<Figures />} />
                   <Route path="/scores" element={<Scores />} />
                   <Route path="/participants" element={<Participants />} />

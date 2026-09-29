@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { collection, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { ROLE_LABELS, type Capability } from "@myself-dashboard/core";
@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: "/sessions", label: "Sessions", icon: "sessions", filtered: true },
   { to: "/completeness", label: "Completeness", icon: "completeness", filtered: true },
   { to: "/questions", label: "Questions", icon: "questions", filtered: true },
+  { to: "/codebook", label: "Codebook", icon: "book" },
   { to: "/scores", label: "Scores", icon: "scores", filtered: true },
   { to: "/figures", label: "Figures", icon: "figure", filtered: true },
   { to: "/participants", label: "Participants", icon: "people" },
@@ -54,6 +55,15 @@ export function Shell() {
   const [readyExports, setReadyExports] = useState<{ id: string; fileName: string }[]>([]);
   const [, tick] = useState(0);
 
+  // The top bar wraps onto a second row on narrower screens; sticky panels sit below its real height.
+  const topbar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = topbar.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty("--topbar-h", `${Math.ceil(el.getBoundingClientRect().height)}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => setDraft(search), [search]);
   useEffect(() => setNavOpen(false), [location.pathname]);
   useEffect(() => {
@@ -124,7 +134,7 @@ export function Shell() {
         </div>
       </aside>
 
-      <header className="topbar">
+      <header className="topbar" ref={topbar}>
         <button type="button" className="icon-btn nav-toggle" aria-label="Menu" aria-expanded={navOpen} onClick={() => setNavOpen((o) => !o)}>
           <Icon name="menu" />
         </button>

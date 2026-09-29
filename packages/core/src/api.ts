@@ -16,6 +16,7 @@ import type { ScoreFocus, ScoreGroupBy } from "./scoring/benchmark.js";
 import type { SchemeIssue } from "./scoring/check.js";
 import type { GroupSettings, YearGroupSource } from "./scoring/groups.js";
 import type { ScoringScheme } from "./scoring/scheme.js";
+import type { CodebookRow, QualityReport } from "./quality/types.js";
 
 /**
  * The contract between the web app and the backend, defined once so both sides
@@ -413,4 +414,35 @@ export interface SaveSchemeRequest {
   /** Record the saving administrator as having checked the scheme against its source. */
   markVerified?: boolean;
   verifyNote?: string;
+}
+
+/** The codebook of one survey version, with the quality review of every version and the current schemes. */
+export interface CodebookResponse extends QualityReport {
+  releases: { hash: string; version: string; active: boolean }[];
+}
+
+/** A codebook as a table: one row per question, for a spreadsheet or a data-management plan. */
+export function codebookCsvRows(rows: readonly CodebookRow[]): { headers: string[]; rows: (string | number | null)[][] } {
+  return {
+    headers: ["name", "label", "question_key", "survey_variable", "qualtrics_variable", "section", "wording", "context", "answer_type", "unit", "required", "conditional", "identifying", "codes", "scored_as", "survey_versions", "review_findings"],
+    rows: rows.map((r) => [
+      r.name,
+      r.label,
+      r.key,
+      r.variable,
+      r.legacyVariable,
+      r.section,
+      r.text,
+      r.lede,
+      r.responseType,
+      r.unit,
+      r.required,
+      r.conditional ? "yes" : "no",
+      r.identifying ? "yes" : "no",
+      r.options.map((o) => `${o.code}=${o.label}${o.kind !== "substantive" ? ` [${o.kind}]` : ""}`).join(" | ") || null,
+      r.scoring.map((u) => `${u.schemeName} ${u.outputLabel}${u.values ? ` (${u.values.map((v) => v ?? "missing").join(", ")})` : " (as answered)"}${u.transform ? `, ${u.transform}` : ""}`).join("; ") || null,
+      r.versions.join(" "),
+      r.findings.join(" ") || null,
+    ]),
+  };
 }

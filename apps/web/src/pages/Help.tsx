@@ -79,6 +79,14 @@ export function HelpContent() {
           calculated, and every version of it, is in Settings → Scoring; cut-points and norms are marked unverified until an administrator has checked them against
           the licensed scoring documents.
         </p>
+        <h3>Codebook and quality review</h3>
+        <p>
+          Every question has a readable name (<code>sdq_13_unhappy</code>) and a short label, used on screen and as the column names of every export; the
+          survey&apos;s own variable and the original Qualtrics name are kept beside them. The Codebook page shows each question&apos;s wording and codes and what
+          each answer scores, and reviews every survey version automatically: answers that do not score as their labels say, scoring keys that differ from the
+          published ones, codes whose meaning changed between versions, and wording that differs from the published forms. Errors need fixing before analysis;
+          warnings need a decision or care.
+        </p>
         <h3>Participants and exports</h3>
         <p>
           The Participants page joins sittings into participants by the survey&apos;s secret code, exactly as the survey&apos;s own export does, and numbers

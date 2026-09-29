@@ -5,6 +5,8 @@ import { buildZip } from "../vendor/myself/store/zip.js";
 import type { Sitting } from "../types.js";
 import { pseudonymiseDataset, subsetDataset, withoutVariables, type StudyDataset } from "./dataset.js";
 import { bandRange, type SchemeScores } from "../scoring/engine.js";
+import { codebookEntry } from "../codebook/index.js";
+import { compareVersions, type ReleaseIndex } from "../manifest.js";
 import { SCHEME_STATUS_LABELS, type ScoringScheme } from "../scoring/scheme.js";
 
 /**
@@ -51,6 +53,12 @@ export interface BidsExportInput {
    * this, the export has no scores files.
    */
   scoring?: { schemes: readonly ScoringScheme[]; bySession: ReadonlyMap<string, Record<string, SchemeScores>> };
+  /**
+   * The survey versions the sittings came from. With them, a sidecar also records
+   * each version's codes wherever an item's labels changed between versions
+   * (LevelsByVersion) and the item's Qualtrics name.
+   */
+  releases?: readonly ReleaseIndex[];
 }
 
 export interface BidsExportResult {
@@ -119,6 +127,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
       })),
     },
   }).filter((f) => f.path !== ".bidsignore");
+  readablePhenotype(files, input.manifest, input.releases ?? [], data.responses);
 
   // ── linkage.tsv: the identifiers, in one file that can be kept apart ─────
   if (input.identifiers) {
@@ -184,7 +193,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     `- **${data.participants.length}** participants and **${data.sessions.length}** sittings (${p.scope}; ${p.dateRange}).`,
     ...(p.filters.length ? [`- Filters: ${p.filters.join("; ")}.`] : []),
     "- `participants.tsv` — one row per participant; `sub-*/sessions.tsv` — one row per sitting (wave).",
-    "- `phenotype/<instrument>.tsv` — one row per participant per wave, stored option codes, with a `<variable>_status` column saying why a value is missing; `phenotype/<instrument>.json` gives each question's wording and what every code means.",
+    "- `phenotype/<instrument>.tsv` — one row per participant per wave, stored option codes, with a `<name>_status` column saying why a value is missing. Columns carry the codebook's readable names (`sdq_13_unhappy`); `phenotype/<instrument>.json` gives each column's label, wording, what every code means, the survey's own variable (`SurveyVariable`) and the original Qualtrics name, and — where an item's options changed between survey versions — each version's codes (`LevelsByVersion`).",
     input.scoring
       ? "- `phenotype/scores.tsv` — scores from the dashboard's scoring schemes, with a column per threshold band; `phenotype/scores.json` gives each column's method, scheme version, range and whether the scheme has been verified. Regenerable, never edited."
       : "- No scores: they come only from the dashboard's scoring schemes, which were not applied to this export.",
@@ -328,4 +337,84 @@ function scoresSidecar(schemes: readonly ScoringScheme[], rows: readonly ScoreRo
     }
   }
   return out;
+}
+
+/**
+ * Phenotype columns under the codebook's readable names (docs/09). The survey's
+ * builder names them by its own variables (`sdq25_q13`); here each column and
+ * its `_status` partner is renamed (`sdq_13_unhappy`, `sdq_13_unhappy_status`)
+ * and its sidecar entry keeps the survey variable and the Qualtrics name beside
+ * the label, so nothing is lost and a join on either still works.
+ */
+function readablePhenotype(files: BidsFile[], manifest: ReleaseManifest, releases: readonly ReleaseIndex[], responses: StudyDataset["dataset"]["responses"]): void {
+  interface Column { key: string; name: string; label: string; legacy?: string; byVersion?: Record<string, Record<string, string>> }
+  const columns = new Map<string, Column>();
+  const add = (variable: string, key: string, text: string, legacy?: string) => {
+    if (columns.has(variable)) return;
+    const e = codebookEntry({ key, variable, text });
+    columns.set(variable, { key, name: e.name, label: e.label, ...(legacy ? { legacy } : {}) });
+  };
+  const ordered = [...releases].sort((a, b) => compareVersions(b.version, a.version));
+  for (const r of ordered) for (const q of r.questions) add(q.variable, q.key, q.text, q.legacyVariable);
+  for (const def of Object.values(manifest.instruments)) {
+    const inst = def as { instrument: string; forms: { items: { key: string; variable: string; stem?: { text?: string }; legacyVariable?: string }[] }[] };
+    for (const form of inst.forms) for (const it of form.items) add(it.variable, `${inst.instrument}.${it.key}`, it.stem?.text ?? it.key, it.legacyVariable?.trim() || undefined);
+  }
+  for (const r of responses) add(r.variable, `${r.instrument}.${r.item}`, r.variable);
+
+  // Where an item's codes read differently in different versions, record each version's.
+  if (ordered.length > 1) {
+    for (const col of columns.values()) {
+      const groups = new Map<string, { versions: string[]; levels: Record<string, string> }>();
+      for (const r of [...ordered].reverse()) {
+        const q = r.byKey.get(col.key);
+        if (!q?.options?.length) continue;
+        const levels = Object.fromEntries(q.options.map((o) => [String(o.code), o.label]));
+        const sig = JSON.stringify(levels);
+        const g = groups.get(sig) ?? { versions: [], levels };
+        g.versions.push(r.version);
+        groups.set(sig, g);
+      }
+      if (groups.size > 1) {
+        col.byVersion = Object.fromEntries([...groups.values()].map((g) => [g.versions.length > 1 ? `r${g.versions[0]}–r${g.versions[g.versions.length - 1]}` : `r${g.versions[0]}`, g.levels]));
+      }
+    }
+  }
+
+  const rename = (c: string) => {
+    const direct = columns.get(c);
+    if (direct) return direct.name;
+    if (c.endsWith("_status")) {
+      const base = columns.get(c.slice(0, -"_status".length));
+      if (base) return `${base.name}_status`;
+    }
+    return c;
+  };
+  for (const f of files) {
+    if (!/^phenotype\/[^/]+\.tsv$/.test(f.path) || f.path === "phenotype/scores.tsv") continue;
+    const nl = f.content.indexOf("\n");
+    const header = f.content.slice(0, nl < 0 ? undefined : nl);
+    f.content = `${header.split("\t").map(rename).join("\t")}${nl < 0 ? "" : f.content.slice(nl)}`;
+    const sidecar = files.find((x) => x.path === f.path.replace(/\.tsv$/, ".json"));
+    if (!sidecar) continue;
+    const before = JSON.parse(sidecar.content) as Record<string, Record<string, unknown>>;
+    const after: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(before)) {
+      const col = columns.get(key);
+      if (col) {
+        after[col.name] = {
+          LongName: col.label,
+          ...value,
+          SurveyVariable: key,
+          ...(col.legacy ? { QualtricsVariable: col.legacy } : {}),
+          ...(col.byVersion ? { LevelsByVersion: col.byVersion, Notes: [value["Notes"], "The labels of some codes changed between survey versions: LevelsByVersion gives each version's."].filter(Boolean).join(" ") } : {}),
+        };
+      } else if (key.endsWith("_status") && columns.has(key.slice(0, -"_status".length))) {
+        const base = key.slice(0, -"_status".length);
+        const name = columns.get(base)!.name;
+        after[`${name}_status`] = { ...value, Description: String(value["Description"] ?? "").replace(base, name) };
+      } else after[key] = value;
+    }
+    sidecar.content = json(after);
+  }
 }

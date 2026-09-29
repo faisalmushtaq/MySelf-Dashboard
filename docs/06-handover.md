@@ -332,10 +332,10 @@ end in a catch-all deny. If those rules are ever loosened, add an explicit
 
 | Suite | Command | What |
 |---|---|---|
-| Unit | `pnpm -r test` | 152 core (completeness, statuses, filters, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, 20k-session performance, real YBM manifests, figure layout/typography/escaping/Wilson intervals/PNG and TIFF encoding) + 16 functions (access decisions, release verification, encoders) + 8 web components |
-| Rules | `pnpm test:rules` | 28 emulator tests (Firestore emulator) |
-| Integration | `pnpm test:integration` | 25 backend tests against Auth/Firestore/Storage emulators with real Google-provider ID tokens |
-| End to end | `pnpm e2e:build && pnpm test:e2e` | 5 Playwright tests: the brief's 11-step research journey, a publication figure downloaded in every format (each file opened and checked), reviewer restrictions, administrator screens and empty states, axe WCAG 2.1 AA on the main screens including Figures |
+| Unit | `pnpm -r test` | 248 core (completeness, statuses, filters, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, 20k-session performance, real YBM manifests, figures, scoring schemes and engine, benchmarks, school reports, the codebook and the quality review against every real survey version) + 24 functions (access decisions, release verification, encoders, PDF reports) + 8 web components |
+| Rules | `pnpm test:rules` | 29 emulator tests (Firestore emulator) |
+| Integration | `pnpm test:integration` | 37 backend tests against Auth/Firestore/Storage emulators with real Google-provider ID tokens |
+| End to end | `pnpm e2e:build && pnpm test:e2e` | 10 Playwright tests: the brief's research journey, publication figures in every format, reviewer restrictions, participants, administrator screens and empty states, scores and school reports, scoring changes, the codebook and quality review, axe WCAG 2.1 AA on the main screens |
 | Privacy lint | `pnpm lint:privacy` | no console logging or analytics in the web app |
 | Drift | `pnpm check:vendored ../MySelf` | the vendored evaluator still matches the survey |
 
@@ -364,9 +364,15 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
   derived and the SDQ British norms date from 1999; every cut-point and norm is
   shipped unverified until an administrator checks it (docs/08 §8.6). The
   survey's own SWEMWBS and STAI-5 scoring is blank before r7.2.0 (S6, fixed in
-  the survey from r7.2.0) and its SDQ and RCADS totals are blank in every
-  release (S7, not yet fixed); the dashboard is the scoring source for all data
-  and exports only its own scores (docs/08 §8.5).
+  the survey from r7.2.0), its SDQ and RCADS totals are blank in every
+  release (S7) and its RCADS subscales swap items 18 and 24 (S8), neither yet
+  fixed; the dashboard is the scoring source for all data and exports only its
+  own scores (docs/08 §8.5).
+- Data quality (docs/09): the SDQ's wording mixes the 11–17 and adult forms and
+  per-app "time in one go" code 1 changed meaning in r5.0.0 — both need a
+  decision before analysis. Every new survey version must have its new
+  questions named in `packages/core/src/codebook/names.ts`; the Codebook page
+  reports any that are not.
 - Twins who share a secret code are detected by the survey's own ingest, which
   compares sittings collected under the same survey version. Twins who sat
   different versions are not detected automatically; the Participants page's

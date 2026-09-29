@@ -30,6 +30,11 @@ the survey's rules, functions or data — and needs no change to the survey to r
   published threshold bands and norms and compared across schools and year
   groups; schemes are versioned JSON an administrator can adjust, and school
   and year-group reports are ready to share ([guide](docs/08-scoring.md)).
+- **Codebook and quality review:** every question has a readable name
+  (`sdq_13_unhappy`) and label, used on screen and as export column names, with the
+  survey and Qualtrics variables kept beside them; every survey version is reviewed
+  automatically against its labels, the published scoring keys and cut-points, and
+  the earlier versions ([review](docs/09-data-quality.md)).
 - **Publication figures:** multi-panel figures at journal column widths (89/120/183
   mm), Arial/Helvetica at 6–8 pt, colour-blind-safe or greyscale, exported as vector
   PDF/SVG or 300–1200 dpi PNG/TIFF with a draft legend and source data
@@ -52,6 +57,7 @@ Screenshots (emulator seed, synthetic sittings only):
 6. [**Handover**: setup, configuration, deployment, roles, rollback, limitations](docs/06-handover.md)
 7. [Publication figures: panels, house style, files, privacy](docs/07-figures.md)
 8. [Scores, benchmarks and school reports](docs/08-scoring.md)
+9. [Codebook and data-quality review](docs/09-data-quality.md)
 
 ## Quick start (local, synthetic data)
 

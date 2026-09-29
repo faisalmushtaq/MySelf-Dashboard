@@ -35,8 +35,8 @@ checked against every registered release (§8.5).
 
 | Instrument | Status | Scores | Method | Bands | Benchmark |
 |---|---|---|---|---|---|
-| SDQ (self-report) | Official | emotional, conduct, hyperactivity, peer, prosocial (0–10); total difficulties (0–40); externalising, internalising (0–20) | Items 0–2; 7, 11, 14, 21, 25 reversed; subscales summed and prorated from ≥ 3 of 5 items (mean × 5, rounded); total needs all four difficulty subscales | youthinmind four-band (close to average / slightly raised / high / very high, expected 80/10/5/5%) and original three-band, self-report cut-points | British norms, 11–15 self-report (Meltzer et al., 2000; n = 4,228) |
-| RCADS-25 | Official | depression (0–30), anxiety (0–45), total (0–75) | Items 0–3 summed; all items required by default | None: RCADS cut-offs are T ≥ 65 / 70 on grade- and gender-specific norms, which are not included | None |
+| SDQ (self-report) | Official | emotional, conduct, hyperactivity, peer, prosocial (0–10); total difficulties (0–40); externalising, internalising (0–20) | Items 0–2; 7, 11, 14, 21, 25 reversed; subscales summed and prorated from ≥ 3 of 5 items (mean × 5, rounded); total needs all four difficulty subscales | youthinmind four-band (close to average / slightly raised / high / very high, expected 80/10/5/5%) and original three-band, self-completed cut-points (1.1.0 corrects the four-band conduct cut-points, docs/09 §9.3) | British norms, 11–15 self-report (Meltzer et al., 2000; n = 4,228) |
+| RCADS-25 | Official | depression (0–30), anxiety (0–45), total (0–75) | Items 0–3 summed; depression = items 1, 4, 8, 10, 13, 15, 16, 19, 21, 24, anxiety = the other 15 (1.1.0 corrects the swap of items 18 and 24, docs/09 §9.3); all items required by default | None: RCADS cut-offs are T ≥ 65 / 70 on grade- and gender-specific norms, which are not included | None |
 | SWEMWBS | Official | raw total (7–35); **metric score** (7–35, primary) | Items 1–5 summed, all seven required; raw → metric by the Rasch conversion table (Stewart-Brown et al., 2009) | Warwick bands: 7–17 probable depression, 18–20 possible depression, 21–27 average, 28–35 high (metric rounded to the nearest whole number; derived in adults) | None by default (add one in Settings) |
 | STAI-5 (state) | Official | state anxiety (5–20) | Five items 1–4 summed, none reversed (Zsido et al., 2020) | None published | None |
 | BIS/BAS (12-item subset) | Adapted | BIS (4 items), BAS reward (4), BAS drive (4); 4–16 each | Responses 1 (very true) … 4 reversed so higher = more of the trait (Carver & White, 1994); Drive is the complete subscale, BIS and Reward are shortened | None | None |
@@ -99,17 +99,24 @@ dashboard never uses or exports them:
   definition (survey-side change **S6**, docs/04 §4.2), but a release is never
   edited, so every sitting collected before r7.2.0 keeps the broken definition;
 - the survey's own reading of the answers leaves SDQ total difficulties and the
-  RCADS total blank in every release (**S7**, not yet fixed).
+  RCADS total blank in every release (**S7**, not yet fixed);
+- the survey's own RCADS definition swaps items 18 and 24 between depression and
+  anxiety (**S8**, not yet fixed).
 
 The dashboard's schemes key on the real items for every release, so a sitting
 from r1.0.0 and one from r7.2.0 are scored the same way, by the same versioned
 scheme. The BIDS export carries only the dashboard's scores. A test
 (`packages/core/src/survey/survey.test.ts`) scores made-up sittings under the
 real r7.2.0 with both and checks that, sitting by sitting, the survey's own
-SWEMWBS, STAI-5, SDQ and RCADS subscale and EHI scores equal the dashboard's —
-and that the SDQ and RCADS totals equal the sums of those subscales. BIS/BAS
-differ by design: the survey sums the raw codes, the dashboard reverses them
-so a higher score means more of the trait.
+SWEMWBS, STAI-5, SDQ subscale and EHI scores equal the dashboard's, that the
+dashboard's SDQ and RCADS totals equal the sums of the survey's subscales, and
+that its RCADS subscales differ from the survey's by exactly items 18 and 24.
+BIS/BAS differ by design: the survey sums the raw codes, the dashboard reverses
+them so a higher score means more of the trait.
+
+The Codebook page's quality review (docs/09) checks every scheme — defaults and
+any the study saves — against the published scoring keys and cut-points and
+against what each response label must score, in every survey version.
 
 ## 8.6 Changing a scheme
 

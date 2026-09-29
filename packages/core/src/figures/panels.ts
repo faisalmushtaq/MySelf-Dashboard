@@ -408,7 +408,7 @@ const items: PanelBuilder<"items"> = {
   name: "Item outcomes",
   preferredHeight: (spec, ctx, width, theme) => {
     const { shown } = itemRows(spec, ctx);
-    const labels = shown.map((q) => (spec.labels === "variable" ? q.variable : q.text));
+    const labels = shown.map((q) => (spec.labels === "variable" ? q.name : spec.labels === "label" ? q.label : q.text));
     return rowsHeight(shown.length, theme, width < 200 ? 2 : 1, rowPitch(labels, width * ITEM_CAP, theme, 9));
   },
   render(spec, ctx, full, theme) {
@@ -425,7 +425,7 @@ const items: PanelBuilder<"items"> = {
       { label: "Not answered", colour: p.unanswered, of: notAnswered },
       { label: "Not reached", colour: p.notReached, of: (q: QuestionStat) => q.notReached },
     ];
-    const labels = shown.map((q) => (spec.labels === "variable" ? q.variable : q.text));
+    const labels = shown.map((q) => (spec.labels === "variable" ? q.name : spec.labels === "label" ? q.label : q.text));
     const cap = box.width * ITEM_CAP;
     const x0 = box.x + categoryLabelWidth(labels, cap, theme);
     const x1 = box.x + box.width - endPad("100", theme);
@@ -471,8 +471,8 @@ const items: PanelBuilder<"items"> = {
       ],
       source: {
         title,
-        columns: ["Question ID", "Variable", "Question", "Section", "Sessions applicable", "Answered", "Declined", "Not answered", "Not reached", "Answered (%)"],
-        rows: shown.map((q) => [q.key, q.variable, q.text, q.sectionTitle, q.eligible, q.answered, q.declined, notAnswered(q), q.notReached, pct1(q.answered, q.eligible)]),
+        columns: ["Question ID", "Name", "Label", "Survey variable", "Question", "Section", "Sessions applicable", "Answered", "Declined", "Not answered", "Not reached", "Answered (%)"],
+        rows: shown.map((q) => [q.key, q.name, q.label, q.variable, q.text, q.sectionTitle, q.eligible, q.answered, q.declined, notAnswered(q), q.notReached, pct1(q.answered, q.eligible)]),
       },
       warnings: shown.some((q) => q.eligible < 10) ? [`${title}: some questions applied to fewer than 10 sessions.`] : [],
     };
@@ -495,7 +495,7 @@ const responses: PanelBuilder<"responses"> = {
   render(spec, ctx, box, theme) {
     const q = questionOf(spec, ctx);
     const version = ctx.versionLabel(spec.version);
-    const title = q ? `Answers to ${q.variable} (${version})` : "Answers to one question";
+    const title = q ? `Answers to ${q.name} (${version})` : "Answers to one question";
     if (!ctx.questions[spec.version]) return empty(box, theme, "Choose a survey version for this panel", title, "Answers: no survey version chosen.");
     if (!q) return empty(box, theme, "Choose a question for this panel", title, "Answers: no question chosen.");
     const d = q.distribution;
@@ -517,7 +517,7 @@ const responses: PanelBuilder<"responses"> = {
           labelCap: box.width * ITEM_CAP,
         }),
         legend:
-          `Answers to ${quoted} (${q.variable}; survey ${version}; n = ${formatNumber(d.total)} respondents)` +
+          `Answers to ${quoted} (${q.name}; survey ${version}; n = ${formatNumber(d.total)} respondents)` +
           (d.multi ? "; respondents could choose more than one option, so percentages can sum to more than 100%." : "."),
         notes: [],
         source: {
@@ -565,7 +565,7 @@ const responses: PanelBuilder<"responses"> = {
     }
     return {
       body,
-      legend: `Answers to ${quoted} (${q.variable}; survey ${version}; n = ${formatNumber(d.total)} respondents). The dashed line marks the median.`,
+      legend: `Answers to ${quoted} (${q.name}; survey ${version}; n = ${formatNumber(d.total)} respondents). The dashed line marks the median.`,
       notes: [],
       source: {
         title,

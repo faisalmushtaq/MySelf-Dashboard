@@ -279,6 +279,7 @@ async function bidsFile(spec: ExportSpec, actor: Actor, rows: SessionRow[], expo
     },
     hash: sha256,
     scoring: { schemes: scoring.schemes, bySession: new Map(scoring.sessions.map((x) => [x.sessionId, x.scores])) },
+    releases: indexes.filter((r) => included.includes(r.hash)),
   });
   return {
     body: Buffer.from(result.zip),

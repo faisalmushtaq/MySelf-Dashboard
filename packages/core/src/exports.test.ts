@@ -142,8 +142,9 @@ describe("export contents", () => {
 
   it("the codebook describes every exported question per version", () => {
     const t = codebookTable(rels);
-    expect(t.rows.some((r) => r[1] === "demo_about.first_name")).toBe(false);
-    expect(t.rows.filter((r) => r[1] === "demo_sleep.sleep_quality").map((r) => r[5])).toEqual([
+    const col = (h: string) => t.headers.indexOf(h);
+    expect(t.rows.some((r) => r[col("question_key")] === "demo_about.first_name")).toBe(false);
+    expect(t.rows.filter((r) => r[col("question_key")] === "demo_sleep.sleep_quality").map((r) => r[col("question_text")])).toEqual([
       "How well did you sleep last night?",
       "How well have you slept this week?",
       "How well have you slept this week?",

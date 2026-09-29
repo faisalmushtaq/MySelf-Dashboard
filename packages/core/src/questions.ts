@@ -23,6 +23,9 @@ export interface QuestionStat {
   instrument: string;
   item: string;
   variable: string;
+  /** Readable name and label from the codebook. */
+  name: string;
+  label: string;
   revision: number;
   text: string;
   sectionKey: string;
@@ -163,6 +166,8 @@ export function computeQuestionStats(
       instrument: q.instrument,
       item: q.item,
       variable: q.variable,
+      name: q.name,
+      label: q.label,
       revision: q.revision,
       text: q.text,
       sectionKey: q.sectionKey,

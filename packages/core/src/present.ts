@@ -91,6 +91,8 @@ export function renderAnswer(q: QuestionDef, value: unknown, options: { freeText
 export interface AnswerView {
   key: string;
   variable: string;
+  /** Readable name from the codebook. */
+  name: string;
   revision: number;
   text: string;
   responseType: string;
@@ -148,6 +150,7 @@ export function presentAnswers(assessment: Assessment, release: ReleaseIndex, op
         return {
           key,
           variable: q.variable,
+          name: q.name,
           revision: q.revision,
           text: q.text,
           responseType: q.responseType,

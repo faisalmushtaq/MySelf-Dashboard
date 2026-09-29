@@ -311,6 +311,27 @@ describe("scoring the real survey with the dashboard's schemes", () => {
     expect(sidecar["swemwbs_metric"]!.Verified).toBe(false);
   });
 
+  it("names phenotype columns by the codebook, keeping the survey and Qualtrics names and each version's codes in the sidecar", () => {
+    const r4 = indexRelease(release("4.0.0"));
+    const out = buildDashboardBids(
+      input({ study: "ybm", studyData: data, selected: new Set([sitting.sessionId]), sittings: new Map([[sitting.sessionId, sitting]]), manifest: manifest!, releaseVersions: new Map([[raw.hash, "7.1.0"]]), releases: [r4, idx] }),
+    );
+    const header = file(out.files, "phenotype/sdq25_s.tsv").split("\n")[0]!.split("\t");
+    expect(header).toContain("sdq_13_unhappy");
+    expect(header).toContain("sdq_13_unhappy_status");
+    expect(header.some((c) => c.startsWith("sdq25_q"))).toBe(false);
+    const sdq = JSON.parse(file(out.files, "phenotype/sdq25_s.json")) as Record<string, Record<string, unknown>>;
+    expect(sdq["sdq_13_unhappy"]).toMatchObject({ LongName: "SDQ 13: Often unhappy, down-hearted or tearful", SurveyVariable: "sdq25_q13", QualtricsVariable: "sdq_13", Levels: { "2": "Certainly True" } });
+    expect(sdq["sdq_13_unhappy_status"]!["Description"]).toContain("sdq_13_unhappy");
+    const sm = JSON.parse(file(out.files, "phenotype/ybm_social_media.json")) as Record<string, Record<string, unknown>>;
+    expect(sm["sm_bout_tiktok"]!["LevelsByVersion"]).toEqual({
+      "r4.0.0": expect.objectContaining({ "1": "0 minutes" }),
+      "r7.1.0": expect.objectContaining({ "1": "I have it but barely use it" }),
+    });
+    expect(sm["sm_time_school_day"]!["LevelsByVersion"]).toBeDefined();
+    expect(sm["sm_overuse"]!["LevelsByVersion"]).toBeUndefined();
+  });
+
   it("places the sitting in its school and, from the date of birth, its year group — without keeping the date", () => {
     expect(scored).toMatchObject({ school: "NDC", yearGroup: 9, yearGroupSource: "dob" });
     expect(JSON.stringify(data.dataset)).not.toContain("2013-05-04");
@@ -426,8 +447,6 @@ describe("the survey's own scores under r7.2.0 agree with the dashboard's", () =
     ["score.sdq25_s", "hyperactivity", "sdq25_s", "hyperactivity"],
     ["score.sdq25_s", "peer", "sdq25_s", "peer"],
     ["score.sdq25_s", "prosocial", "sdq25_s", "prosocial"],
-    ["score.rcads25", "depression", "rcads25", "depression"],
-    ["score.rcads25", "anxiety", "rcads25", "anxiety"],
     ["score.ehi_sf", "lq", "ehi_sf", "lq"],
   ];
 
@@ -461,6 +480,23 @@ describe("the survey's own scores under r7.2.0 agree with the dashboard's", () =
       }
       expect(scored, `${key} ${output}`).toBeGreaterThan(0);
     }
+  });
+
+  it("RCADS subscales differ by design: the survey counts item 18 as depression and 24 as anxiety, the published key the reverse (S8)", () => {
+    const code = (sessionId: string, item: string) => data.dataset.responses.find((r) => r.sessionId === sessionId && r.instrument === "rcads25" && r.item === item)?.value ?? null;
+    let compared = 0;
+    for (const r of survey("score.rcads25", "depression")) {
+      const theirAnxiety = survey("score.rcads25", "anxiety").find((x) => x.sessionId === r.sessionId)!.value as number | null;
+      const [q18, q24] = [code(r.sessionId, "q18"), code(r.sessionId, "q24")];
+      const ourDepression = ours(r.sessionId, "rcads25", "depression");
+      const ourAnxiety = ours(r.sessionId, "rcads25", "anxiety");
+      if (r.value === null || theirAnxiety === null || q18 === null || q24 === null) continue;
+      compared += 1;
+      expect(ourDepression).toBe((r.value as number) - q18 + q24);
+      expect(ourAnxiety).toBe(theirAnxiety + q18 - q24);
+      expect(ours(r.sessionId, "rcads25", "total")).toBe((r.value as number) + theirAnxiety);
+    }
+    expect(compared).toBeGreaterThan(0);
   });
 
   it("the survey's SWEMWBS and STAI-5 definitions are the fixed ones", () => {

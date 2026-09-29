@@ -196,7 +196,7 @@ export default function Questions() {
                       <Fragment key={s.key}>
                         <tr>
                           <td className="q-cell">
-                            <code>{s.key}</code>
+                            <code title={`Question ${s.key}; survey variable ${s.variable}`}>{s.name}</code>
                             <span className="q-text">{s.text}</span>
                             {s.identifying ? <span className="tag tag-quiet"><Icon name="lock" size={12} /> Identifying</span> : null}
                             {s.conditional ? <span className="tag tag-quiet">Conditional</span> : null}

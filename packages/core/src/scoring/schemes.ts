@@ -2,7 +2,7 @@ import { scoringScheme, type ScoringScheme, type ScoringSchemeInput, type Thresh
 
 /**
  * The dashboard's default scoring schemes for the instruments the MySelf
- * survey administers (item keys as in releases r1.0.0–r7.1.0).
+ * survey administers (item keys as in releases r1.0.0–r7.2.0).
  *
  * Every cut-point and reference value here is transcribed from the source it
  * names and ships with `verified: false`: the Scoring settings page shows that,
@@ -59,7 +59,7 @@ function sdqDifficulty(
 
 export const sdq: Input = {
   key: "sdq25_s",
-  version: "1.0.0",
+  version: "1.1.0",
   instrument: "sdq25_s",
   name: "Strengths and Difficulties Questionnaire (self-report)",
   abbreviation: "SDQ",
@@ -67,11 +67,11 @@ export const sdq: Input = {
   method:
     "youthinmind scoring: items coded 0–2 (Not true, Somewhat true, Certainly true); items 7, 11, 14, 21 and 25 reversed; each five-item subscale summed, and prorated (the mean of the items answered × 5, rounded) when 3 or 4 are answered; total difficulties is the sum of the four difficulty subscales and needs all four. Goodman, R. (1997). J Child Psychol Psychiatry, 38(5), 581–586.",
   notes:
-    "Externalising (conduct + hyperactivity) and internalising (emotional + peer) follow Goodman, Lamping & Ploubidis (2010), recommended for community samples. The impact supplement is not administered, so no impact score.",
+    "Externalising (conduct + hyperactivity) and internalising (emotional + peer) follow Goodman, Lamping & Ploubidis (2010), recommended for community samples. The impact supplement is not administered, so no impact score. Cut-points are the self-completed ones in youthinmind's 'Scoring the SDQ for age 4-17' (11 May 2015); version 1.1.0 corrects the four-band conduct cut-points of 1.0.0, which were the parent-completed ones (0–2 / 3 / 4 / 5–10 instead of 0–3 / 4 / 5 / 6–10).",
   transforms: [{ op: "reverse", items: ["q7", "q11", "q14", "q21", "q25"], maxPlusMin: 2 }],
   outputs: [
     sdqDifficulty("emotional", "Emotional symptoms", ["q3", "q8", "q13", "q16", "q24"], [4, 5, 6], [5, 6], [2.8, 2.1], "Worries, unhappiness, fears and somatic complaints."),
-    sdqDifficulty("conduct", "Conduct problems", ["q5", "q7", "q12", "q18", "q22"], [2, 3, 4], [3, 4], [2.2, 1.7], "Temper, disobedience, fighting, lying and stealing."),
+    sdqDifficulty("conduct", "Conduct problems", ["q5", "q7", "q12", "q18", "q22"], [3, 4, 5], [3, 4], [2.2, 1.7], "Temper, disobedience, fighting, lying and stealing."),
     sdqDifficulty("hyperactivity", "Hyperactivity/inattention", ["q2", "q10", "q15", "q21", "q25"], [5, 6, 7], [5, 6], [3.8, 2.2], "Restlessness, fidgeting, distractibility and impulsivity."),
     sdqDifficulty("peer", "Peer relationship problems", ["q6", "q11", "q14", "q19", "q23"], [2, 3, 4], [3, 5], [1.5, 1.4], "Being alone, lacking friends, being picked on, getting on better with adults."),
     {
@@ -124,27 +124,27 @@ export const sdq: Input = {
 
 export const rcads: Input = {
   key: "rcads25",
-  version: "1.0.0",
+  version: "1.1.0",
   instrument: "rcads25",
   name: "Revised Child Anxiety and Depression Scale – 25",
   abbreviation: "RCADS-25",
   status: "official",
   method:
-    "Raw scores as published: items coded 0–3 (Never … Always); depression is the sum of its 10 items, anxiety the sum of its 15, total the sum of both. Ebesutani, C., et al. (2012). Psychological Assessment, 24(4), 833–845.",
+    "Raw scores as published: items coded 0–3 (Never … Always); depression is the sum of items 1, 4, 8, 10, 13, 15, 16, 19, 21 and 24 (the full RCADS's ten major-depression items), anxiety the sum of the other 15, total the sum of both. Ebesutani, C., et al. (2012). Psychological Assessment, 24(4), 833–845.",
   notes:
-    "Clinical thresholds for the RCADS are defined on T-scores from grade- and gender-specific norm tables (T ≥ 65 borderline, T ≥ 70 clinical), not on raw scores. No norm table is included, so raw scores are compared within the study only. By default every item must be answered; the official scoring programs' missing-item rules can be matched by changing minValid and proration.",
+    "Clinical thresholds for the RCADS are defined on T-scores from grade- and gender-specific norm tables (T ≥ 65 borderline, T ≥ 70 clinical), not on raw scores. No norm table is included, so raw scores are compared within the study only. By default every item must be answered; the official scoring programs' missing-item rules can be matched by changing minValid and proration. Version 1.1.0 corrects 1.0.0, which (like the survey's own definition) counted item 18 ('I think about death', a generalised-anxiety item in the full RCADS) as depression and item 24 ('I feel restless', a major-depression item) as anxiety; totals are unaffected (docs/09).",
   outputs: [
     {
       key: "depression",
       label: "Depression",
-      calc: { op: "sum", items: ["q1", "q4", "q8", "q10", "q13", "q15", "q16", "q18", "q19", "q21"], minValid: 10 },
+      calc: { op: "sum", items: ["q1", "q4", "q8", "q10", "q13", "q15", "q16", "q19", "q21", "q24"], minValid: 10 },
       range: [0, 30],
       higherIs: "worse",
     },
     {
       key: "anxiety",
       label: "Anxiety",
-      calc: { op: "sum", items: ["q2", "q3", "q5", "q6", "q7", "q9", "q11", "q12", "q14", "q17", "q20", "q22", "q23", "q24", "q25"], minValid: 15 },
+      calc: { op: "sum", items: ["q2", "q3", "q5", "q6", "q7", "q9", "q11", "q12", "q14", "q17", "q18", "q20", "q22", "q23", "q25"], minValid: 15 },
       range: [0, 45],
       higherIs: "worse",
     },

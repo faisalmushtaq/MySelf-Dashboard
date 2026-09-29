@@ -32,7 +32,8 @@ export const panelSpecSchema = z.discriminatedUnion("kind", [
     requiredOnly: z.boolean().default(true),
     order: z.enum(["questionnaire", "lowest"]).default("lowest"),
     limit: z.number().int().min(3).max(40).default(12),
-    labels: z.enum(["text", "variable"]).default("text"),
+    /** Wording, the codebook's short label, or the variable name used in exports (the codebook's readable name). */
+    labels: z.enum(["text", "label", "variable"]).default("text"),
   }),
   z.object({ kind: z.literal("responses"), version: hash.default(""), question: z.string().max(160).default("") }),
   z.object({ kind: z.literal("duration") }),

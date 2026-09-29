@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { codebookEntry } from "./codebook/index.js";
 import type { LogicExpr } from "./vendor/engine.js";
 
 /**
@@ -105,6 +106,8 @@ export interface OptionDef {
   label: string;
   /** substantive | decline | dont_know | not_applicable | other_specify */
   kind: string;
+  /** The number the code stands for, where it is not the code itself (an age band's age). */
+  value?: number;
 }
 
 /** One question as a particular release defines it. */
@@ -114,13 +117,30 @@ export interface QuestionDef {
   instrument: string;
   item: string;
   revision: number;
+  /** The survey's own variable name, as stored. */
   variable: string;
+  /** Readable variable name from the codebook (docs/09); the survey variable when it has none. */
+  name: string;
+  /** Short label from the codebook; a shortened wording when it has none. */
+  label: string;
+  /** False when the codebook has no entry for this question yet. */
+  named: boolean;
+  /** The Qualtrics variable this question migrated from, where it did. */
+  legacyVariable?: string;
   sectionKey: string;
   sectionTitle: string;
   /** Position among the release's questions, 0-based. */
   order: number;
   /** Participant-facing wording in this release (pipes left as placeholders). */
   text: string;
+  /** Context shown above the question, where there is some. */
+  lede?: string;
+  /** The instrument's instructions, shown before its first question. */
+  instructions?: string;
+  /** Unit of a numeric answer ("days"). */
+  unit?: string;
+  /** The survey's own note to researchers about this question. */
+  researcherNote?: string;
   responseType: string;
   required: RequiredLevel;
   allowDecline: boolean;
@@ -236,7 +256,7 @@ export function indexRelease(raw: unknown, hashOverride?: string): ReleaseIndex 
     if (s.success) {
       scales.set(
         key,
-        s.data.options.map((o) => ({ code: o.code, label: o.label, kind: o.kind ?? "substantive" })),
+        s.data.options.map((o) => ({ code: o.code, label: o.label, kind: o.kind ?? "substantive", ...(o.value !== undefined && o.value !== o.code ? { value: o.value } : {}) })),
       );
     }
   }
@@ -291,16 +311,26 @@ export function indexRelease(raw: unknown, hashOverride?: string): ReleaseIndex 
         const constraints: Record<string, unknown> = {};
         const rawItem = it as Record<string, unknown>;
         for (const c of CONSTRAINT_KEYS) if (rawItem[c] !== undefined) constraints[c] = rawItem[c];
+        const named = codebookEntry({ key, variable: it.variable, text: it.stem.text });
+        const lede = (rawItem["lede"] as { text?: unknown } | undefined)?.text;
         const q: QuestionDef = {
           key,
           instrument: comp.ref.instrument,
           item: it.key,
           revision: it.revision,
           variable: it.variable,
+          name: named.name,
+          label: named.label,
+          named: named.fromCodebook,
+          ...(typeof rawItem["legacyVariable"] === "string" && rawItem["legacyVariable"] ? { legacyVariable: (rawItem["legacyVariable"] as string).trim() } : {}),
           sectionKey: sec.key,
           sectionTitle: sec.title,
           order: questions.length,
           text: it.stem.text,
+          ...(typeof lede === "string" && lede ? { lede } : {}),
+          ...(form.instructions ? { instructions: form.instructions } : {}),
+          ...(typeof rawItem["unitLabel"] === "string" ? { unit: rawItem["unitLabel"] as string } : {}),
+          ...(typeof rawItem["researcherNote"] === "string" ? { researcherNote: rawItem["researcherNote"] as string } : {}),
           responseType: it.responseType,
           required: it.required,
           allowDecline: it.allowDecline,

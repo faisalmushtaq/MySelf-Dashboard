@@ -181,7 +181,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
 
   const releases = [...new Map(records.filter((r) => r.release).map((r) => [r.release!.hash, r.release!])).values()];
   if (spec.layout === "long") {
-    const longHeaders = ["session_id", spec.deidentified ? "participant_label" : "participant_code", "wave", ...(spec.includeStudyCode ? ["study_code"] : []), "release_version", "question_key", "variable", "section", "required", "outcome", "value", "label", "responded_at", "changed", "too_fast"];
+    const longHeaders = ["session_id", spec.deidentified ? "participant_label" : "participant_code", "wave", ...(spec.includeStudyCode ? ["study_code"] : []), "release_version", "question_key", "name", "question_label", "variable", "section", "required", "outcome", "value", "label", "responded_at", "changed", "too_fast"];
     const rows: CsvValue[][] = [];
     for (const rec of records) {
       if (!rec.assessment || !rec.release) continue;
@@ -197,6 +197,8 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
           ...(spec.includeStudyCode ? [rec.row.summary.studyCode] : []),
           rec.release.version,
           o.key,
+          q.name,
+          q.label,
           q.variable,
           q.sectionKey,
           q.required,
@@ -214,13 +216,17 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
 
   const questions = unionQuestions(releases);
   const used = new Set<string>();
+  // Columns carry the codebook's readable names (docs/09); the codebook sheet maps them to the survey's variables.
   const columnName = (q: QuestionDef) => {
-    let name = q.variable;
-    for (let i = 2; used.has(name); i += 1) name = `${q.variable}_${i}`;
+    let name = q.name;
+    for (let i = 2; used.has(name); i += 1) name = `${q.name}_${i}`;
     used.add(name);
     return name;
   };
-  const qCols = questions.map((q) => ({ q, value: columnName(q), status: `${q.variable}__status` }));
+  const qCols = questions.map((q) => {
+    const value = columnName(q);
+    return { q, value, status: `${value}__status` };
+  });
   const allHeaders = [...headers, ...qCols.flatMap((c) => [c.value, c.status])];
   const rows = records.map((rec) => {
     const cells = sessionCells(rec, spec, tz);
@@ -250,20 +256,23 @@ export function codebookTable(releases: readonly ReleaseIndex[]): Table {
       rows.push([
         r.version,
         q.key,
+        q.name,
+        q.label,
         q.variable,
+        q.legacyVariable ?? null,
         q.revision,
         q.sectionTitle,
         q.text,
         q.responseType,
         q.required,
         q.displayIf ? "yes" : "no",
-        q.options?.map((o) => `${o.code}=${o.label}`).join(" | ") ?? null,
+        q.options?.map((o) => `${o.code}=${o.label}${o.kind !== "substantive" ? ` [${o.kind}]` : ""}`).join(" | ") ?? null,
       ]);
     }
   }
   return {
     name: "codebook",
-    headers: ["release_version", "question_key", "variable", "revision", "section", "question_text", "answer_type", "required", "conditional", "options"],
+    headers: ["release_version", "question_key", "name", "label", "variable", "qualtrics_variable", "revision", "section", "question_text", "answer_type", "required", "conditional", "options"],
     rows,
   };
 }
@@ -324,12 +333,12 @@ export function questionTable(stats: readonly QuestionStat[], release: ReleaseIn
   return {
     name: `questions_${release.version}`,
     headers: [
-      "question_key", "variable", "revision", "section", "question", "answer_type", "required", "conditional",
+      "question_key", "name", "label", "variable", "revision", "section", "question", "answer_type", "required", "conditional",
       "sessions", "eligible", "undetermined", "shown", "answered", "declined", "skipped", "no_response",
       "not_reached", "eligible_not_shown", "invalid", "hidden_by_branching", "response_rate_pct", "coverage_pct", "drop_offs", "distribution",
     ],
     rows: stats.map((s) => [
-      s.key, s.variable, s.revision, s.sectionTitle, s.text, s.responseType, s.required, s.conditional,
+      s.key, s.name, s.label, s.variable, s.revision, s.sectionTitle, s.text, s.responseType, s.required, s.conditional,
       s.sessions, s.eligible, s.undetermined, s.shown, s.answered, s.declined, s.skipped, s.noResponse,
       s.notReached, s.eligibleNotShown, s.invalid, s.hiddenBranching, pct(s.responseRate), pct(s.coverage), s.dropOffs,
       s.distribution.kind === "options"

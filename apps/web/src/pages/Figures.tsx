@@ -593,8 +593,9 @@ function PanelOptions({
           </label>
           <label>
             Label questions by
-            <select value={panel.labels} onChange={(e) => onChange({ ...panel, labels: e.target.value as "text" | "variable" })}>
+            <select value={panel.labels} onChange={(e) => onChange({ ...panel, labels: e.target.value as "text" | "label" | "variable" })}>
               <option value="text">Wording</option>
+              <option value="label">Short label</option>
               <option value="variable">Variable name</option>
             </select>
           </label>
@@ -616,7 +617,7 @@ function PanelOptions({
               <option value="">Choose a question…</option>
               {choosable.map((q) => (
                 <option key={q.key} value={q.key}>
-                  {q.variable} — {q.text.length > 70 ? `${q.text.slice(0, 69)}…` : q.text}
+                  {q.name} — {q.label}
                 </option>
               ))}
             </select>

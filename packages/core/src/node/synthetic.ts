@@ -105,7 +105,10 @@ export function demoManifest(version: DemoVersion): Json {
     // The survey's standard measures, with its real item keys and codes (item wording is placeholder).
     "scale.swemwbs_5pt": scale("scale.swemwbs_5pt", [[1, "None of the time"], [2, "Rarely"], [3, "Some of the time"], [4, "Often"], [5, "All of the time"]]),
     "scale.sdq_3pt": scale("scale.sdq_3pt", [[0, "Not True"], [1, "Somewhat True"], [2, "Certainly True"]]),
-    "scale.kss_9pt": scale("scale.kss_9pt", Array.from({ length: 9 }, (_, i) => [i + 1, `Level ${i + 1}`] as [number, string])),
+    "scale.kss_9pt": scale(
+      "scale.kss_9pt",
+      ["Extremely alert", "Very alert", "Alert", "Rather alert", "Neither alert nor sleepy", "Some signs of sleepiness", "Sleepy, but no effort to keep awake", "Sleepy, some effort to keep awake", "Very sleepy, great effort to keep awake, fighting sleep"].map((l, i) => [i + 1, l] as [number, string]),
+    ),
     "scale.ehi_sf_5pt": scale("scale.ehi_sf_5pt", [[1, "Always right"], [2, "Usually right"], [3, "Both equally"], [4, "Usually left"], [5, "Always left"]]),
     "scale.month": scale("scale.month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => [i + 1, m] as [number, string])),
   };

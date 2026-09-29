@@ -335,7 +335,7 @@ export function SessionDetail({
                           <div className="answer-q">
                             <div className="answer-ids">
                               <code>{a.key}</code>
-                              <span className="muted-id">{a.variable} · r{a.revision} · {a.responseType.replace("_", " ")}</span>
+                              <span className="muted-id" title={`Survey variable ${a.variable}`}>{a.name} · r{a.revision} · {a.responseType.replace("_", " ")}</span>
                             </div>
                             <p className="answer-text">{a.text}</p>
                             <div className="answer-tags">

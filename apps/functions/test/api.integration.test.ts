@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { DEFAULT_FILTERS, type ParticipantsResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse } from "@myself-dashboard/core";
+import { DEFAULT_FILTERS, type CodebookResponse, type ParticipantsResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse } from "@myself-dashboard/core";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
 import { pdfText } from "./pdfText.js";
 
@@ -18,6 +18,7 @@ import { getAnalytics, getQuestionAnalytics, getQuestionHistory } from "../src/a
 import { addNote, updateReview } from "../src/api/review.js";
 import { logFigureExport, setDashboardRole, updateAccessPolicy, getSettings } from "../src/api/admin.js";
 import { createExport, downloadExport, expireExports, previewExport } from "../src/api/exports.js";
+import { getCodebook } from "../src/api/codebook.js";
 import { getParticipants } from "../src/api/participants.js";
 import { getScores, getScoringSettings, saveGroupSettings, saveScoringScheme } from "../src/api/scores.js";
 import { invalidateScoring } from "../src/scoring.js";
@@ -412,6 +413,25 @@ describe("scores", () => {
     expect(view.available.schools.find((s) => s.key === "NDC")!.label).toBe("Northdale College");
     expect(view.minCell).toBe(5);
     expect((await auditRows("groups.changed")).length).toBe(1);
+  });
+});
+
+describe("codebook", () => {
+  it("gives any member every question's readable name, codes and scoring, with the quality review; nobody else", async () => {
+    const book = await run<CodebookResponse>(getCodebook, reviewer, {});
+    expect(book.releases.length).toBeGreaterThan(1);
+    expect(book.release.hash).toBe(book.releases.find((r) => r.active)!.hash);
+    const q = book.rows.find((r) => r.key === "sdq25_s.q7")!;
+    expect(q).toMatchObject({ name: "sdq_07_obeys", variable: "sdq25_q7" });
+    expect(q.scoring[0]).toMatchObject({ output: "conduct", values: [2, 1, 0], transform: "reversed" });
+    expect(book.rows.every((r) => r.named)).toBe(true);
+    expect(book.counts.error).toBe(0);
+    expect(book.findings.some((f) => f.id === "wording.sdq_form")).toBe(true);
+    // An older version on request.
+    const oldest = book.releases.at(-1)!;
+    expect((await run<CodebookResponse>(getCodebook, reviewer, { release: oldest.hash })).release.version).toBe(oldest.version);
+    await expect(run(getCodebook, noRole, {})).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run(getCodebook, null, {})).rejects.toMatchObject({ code: "unauthenticated" });
   });
 });
 
