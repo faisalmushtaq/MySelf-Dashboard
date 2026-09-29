@@ -25,7 +25,12 @@ test("a read-only reviewer sees data but cannot change reviews or export session
   await page.getByRole("link", { name: "Participants" }).click();
   await expect(page.getByText("Your role sees labels (P0001, P0002…) instead of participant codes.")).toBeVisible();
   await expect(page.locator("table.participants tbody th").first()).toContainText("P0001");
-  await expect(page.locator("table.participants")).not.toContainText(/[A-Z]{2}[0-9]{3}[A-Z]{2}/);
+  // Neither a secret code nor an ID derived from name and date of birth (D-52),
+  // in any cell. Cell by cell: the table's text runs its cells together, and a
+  // label, two counts and a site can spell something ID-shaped by accident.
+  const cells = await page.locator("table.participants th, table.participants td").allTextContents();
+  expect(cells.length).toBeGreaterThan(0);
+  expect(cells.filter((c) => /[A-Z]{2}[0-9]{3}[A-Z]{2}|\bP[0-9A-HJKMNP-TV-Z]{10}\b/.test(c))).toEqual([]);
 });
 
 test("a researcher follows participants across waves and sees what the linkage could not settle", async ({ page }) => {

@@ -182,6 +182,7 @@ export const DEFAULT_CODEBOOK: Readonly<Record<string, CodebookEntry>> = {
   "ybm_identity.ps_house_digit": e("code_house_digit", "Secret code: first digit of house number"),
   "ybm_identity.ps_birth_month": e("code_birth_month", "Secret code: month of birth"),
   "ybm_identity.ps_postcode_letters": e("code_postcode_letters", "Secret code: last two letters of postcode"),
+  "ybm_identity.home_address": e("home_address", "Home address: postcode, house, street (r8.0.0 on)"),
 
   // About them
   "ybm_demographics.ethnicity": e("ethnicity", "Ethnic origin"),

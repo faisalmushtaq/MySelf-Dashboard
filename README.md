@@ -15,11 +15,12 @@ the survey's rules, functions or data — and needs no change to the survey to r
 - **Completeness** is judged against the survey version each participant actually
   received, distinguishing unanswered, hidden-by-branching, not-reached, invalid,
   declined and never-collected questions ([definitions](docs/03-completeness.md)).
-- **Privacy:** raw logs never reach a browser; names, dates of birth and code
-  components are never shown or exported; exports are generated server-side,
+- **Privacy:** raw logs never reach a browser; names, dates of birth, home
+  addresses and code components are never shown or exported; exports are generated server-side,
   downloaded through an authenticated endpoint, audited and deleted after 24 hours.
 - **Participants and linkage:** sittings joined into participants and waves by the
-  survey's secret code, exactly as the survey's own export does, with held-back
+  survey's participant code (the secret code up to survey version 7.3.0, an ID
+  from name and date of birth from 8.0.0), exactly as the survey's own export does, with held-back
   sittings, shared (twin) codes and same-day repeats called out.
 - **Exports:** BIDS by default (built with the survey's data layer), with identifiers
   for linkage unless a de-identified copy is chosen; CSV, Excel and clearly laid-out

@@ -17,7 +17,8 @@ type AttentionFilter = "any" | "attention" | ParticipantAttention;
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-GB")} ${n === 1 ? one : many}`;
 
 /**
- * Participants: sittings joined into people by the survey's secret code, exactly
+ * Participants: sittings joined into people by the survey's participant code — the
+ * secret code up to r7.3.0, an ID from name and date of birth from r8.0.0 — exactly
  * as the survey's own export joins them — and what that linkage could not
  * settle. Read-only: codes are corrected and twins separated in the survey's
  * researcher tool, where the names are.
@@ -59,7 +60,7 @@ export default function Participants() {
     <div className="page">
       <PageHeader
         title="Participants"
-        description="Sittings joined into participants by the survey's secret code, exactly as the survey's own export joins them. Codes are corrected and twins separated in the survey's researcher tool (Linkage tab); the result shows here on refresh."
+        description="Sittings joined into participants by the survey's participant code (the secret code up to survey version 7.3.0; from 8.0.0 an ID made from name and date of birth), exactly as the survey's own export joins them. Codes are corrected and twins separated in the survey's researcher tool (Linkage tab); the result shows here on refresh."
         actions={
           <button type="button" className="btn" onClick={() => setFresh((n) => n + 1)} disabled={loading}>
             <Icon name="refresh" size={16} /> {loading && fresh ? "Re-linking…" : "Re-link now"}
@@ -85,7 +86,7 @@ export default function Participants() {
               value={t.heldBack.toLocaleString("en-GB")}
               tone={t.heldBack ? "warn" : undefined}
               sub="not linked to anyone"
-              definition="Sittings the survey could not link to a participant (an incomplete secret code, a quarantined log, an unreadable version). They are kept but not counted as anyone's — guessing would join one child's answers to another's."
+              definition="Sittings the survey could not link to a participant (an incomplete secret code, or from 8.0.0 a missing name or date of birth; a quarantined log; an unreadable version). They are kept but not counted as anyone's — guessing would join one child's answers to another's."
             />
           </section>
 
@@ -170,7 +171,7 @@ export default function Participants() {
 
           {shown.length === 0 ? (
             <EmptyState icon="people" title={t.participants ? "No participant matches" : "No linked sittings yet"}>
-              {t.participants ? "Clear the search or filters to see everyone." : "Participants appear here once a sitting's secret code has been answered."}
+              {t.participants ? "Clear the search or filters to see everyone." : "Participants appear here once a sitting can be linked: its secret code, or from 8.0.0 its name and date of birth, has been answered."}
             </EmptyState>
           ) : (
             <div className="table-scroll">

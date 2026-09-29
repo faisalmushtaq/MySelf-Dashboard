@@ -316,8 +316,8 @@ end in a catch-all deny. If those rules are ever loosened, add an explicit
    ownership (or administrator), status and expiry, streams the file with
    `no-store`, and audits every download and refusal.
 5. `cleanupExports` deletes files after `exportRetentionHours` (default 24 h).
-6. Never exported, for any role: names, dates of birth, UPNs, NHS numbers and the
-   secret-code answers. Session exports carry identifiers **by default** (participant
+6. Never exported, for any role: names, dates of birth, home addresses, UPNs, NHS
+   numbers and the secret-code answers. Session exports carry identifiers **by default** (participant
    code, wave, session id; study code where the role allows), because the study
    links these data to other records; ticking off "Include identifiers" gives a
    de-identified copy (labels P0001…, times cut to the day, no session ids or study
@@ -374,7 +374,13 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
   both need a decision before analysis. Every new survey version must have its new
   questions named in `packages/core/src/codebook/names.ts`; the Codebook page
   reports any that are not.
-- Twins who share a secret code are detected by the survey's own ingest, which
+- From survey version 8.0.0 (D-52) there is no secret code: participants give
+  their home address (identifying, never shown or exported here; codebook name
+  `home_address`), and the survey derives the participant ID from name and date
+  of birth (`P` + ten characters). A later sitting under another form of a name
+  arrives as a new participant until a correction joins the two in the survey's
+  Linkage tab. Twins now get separate IDs.
+- Twins who share a secret code (survey versions up to 7.3.0) are detected by the survey's own ingest, which
   compares sittings collected under the same survey version. Twins who sat
   different versions are not detected automatically; the Participants page's
   "two sittings within a day" check catches the common case (twins sitting

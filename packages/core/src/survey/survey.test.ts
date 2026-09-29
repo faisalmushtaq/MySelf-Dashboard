@@ -432,6 +432,11 @@ function crossCheck(version: string) {
       "ybm_identity.ps_postcode_letters": { kind: "text", value: "ZZ" },
       // Alternately 14 and 21 on the day, so from r8.0.0 both SDQ forms are given (D-51).
       "ybm_identity.dob": { kind: "date", iso: n % 2 === 0 ? "2012-03-10" : "2005-03-10" },
+      // From r8.0.0 the participant ID comes from name and date of birth (D-52).
+      "ybm_identity.first_name": { kind: "text", value: `Cross${String.fromCharCode(65 + (n % 26))}${n}` },
+      "ybm_identity.last_name": { kind: "text", value: "Check" },
+      // The home address, r8.0.0 on — with the trailing space a tablet keyboard leaves.
+      "ybm_identity.home_address": { kind: "fields", values: { postcode: "LS6 2AA ", house: String(n + 1), street: "Hyde Park Road" } },
     };
     // Asked as a device would: only what the survey's display conditions show.
     const store = new AnswerStore();
@@ -582,3 +587,45 @@ describe("the SDQ by age under r8.0.0 (D-51)", () => {
     expect(outcome(assess(1, null), "sdq25_s18.q1")).toBe("answered_hidden");
   });
 });
+
+describe("the home address and the name-derived ID under r8.0.0 (D-52)", () => {
+  const { data, sittings } = crossCheck("8.0.0");
+  const raw = release("8.0.0") as { hash: string };
+  const idx = indexRelease(raw);
+  const parsed = parseSurveyManifest(raw);
+  const manifest = "manifest" in parsed ? parsed.manifest : null;
+
+  it("links every sitting under an ID made from name and date of birth, with none held back", () => {
+    expect(data.excluded).toEqual([]);
+    expect(data.dataset.sessions).toHaveLength(sittings.length);
+    for (const s of data.dataset.sessions) expect(s.participantId).toMatch(/^P[0-9A-HJKMNP-TV-Z]{10}$/);
+    expect(new Set(data.dataset.sessions.map((s) => s.participantId)).size).toBe(sittings.length);
+  });
+
+  it("accepts the address as the device did, trailing space and all", () => {
+    const a = assessSitting(replaySitting(sittings[0]!), idx, { requiredLevels: ["hard", "soft"], sittingStart: sittings[0]!.startedAt! });
+    expect(a.invalidKeys).not.toContain("ybm_identity.home_address");
+    expect(a.outcomes.find((o) => o.key === "ybm_identity.home_address")!.outcome).toBe("answered");
+    expect(idx.byKey.get("ybm_identity.home_address")).toMatchObject({ identifying: true, name: "home_address" });
+  });
+
+  it("never lets the address or a name into the research export", () => {
+    const out = buildDashboardBids(
+      input({
+        study: "ybm",
+        studyData: data,
+        selected: new Set(sittings.map((s) => s.sessionId)),
+        sittings: new Map(sittings.map((s) => [s.sessionId, s])),
+        manifest: manifest!,
+        releaseVersions: new Map([[raw.hash, "8.0.0"]]),
+      }),
+    );
+    const everything = out.files.map((f) => f.content).join("\n");
+    expect(everything).not.toContain("Hyde Park Road");
+    expect(everything).not.toContain("LS6 2AA");
+    expect(everything).not.toMatch(/CrossA0|home_address/);
+    // the participant ID is there, as a pseudonym
+    expect(everything).toMatch(/P[0-9A-HJKMNP-TV-Z]{10}/);
+  });
+});
+

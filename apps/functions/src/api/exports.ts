@@ -110,11 +110,11 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
   if (spec.includeFreeText) warnings.push("Includes free-text answers, which may contain names or other identifying details a participant typed. Store the file only where the study's data management plan allows.");
   if (isSensitive(spec) && !spec.deidentified) {
     warnings.push(
-      "Includes identifiers for linkage: participant codes (built from each child's secret-code answers — pseudonymous, and readable by anyone who knows the scheme), study codes, sitting and device IDs and exact times. Names, dates of birth, UPNs and NHS numbers are never included.",
+      "Includes identifiers for linkage: participant codes (up to survey version 7.3.0 built from each child's secret-code answers, readable by anyone who knows the scheme; from 8.0.0 made from name and date of birth, recomputable by anyone who has both — pseudonymous either way), study codes, sitting and device IDs and exact times. Names, dates of birth, home addresses, UPNs and NHS numbers are never included.",
     );
   }
   if (spec.kind === "sessions" && spec.format === "bids") {
-    warnings.push("Sittings that cannot be linked to a participant (an incomplete secret code, a quarantined or unreadable sitting) are left out and listed in the README — never silently.");
+    warnings.push("Sittings that cannot be linked to a participant (an incomplete secret code or, from 8.0.0, a missing name or date of birth; a quarantined or unreadable sitting) are left out and listed in the README — never silently.");
   }
   if (isSensitive(spec)) warnings.push(`Session-level research data. The file is kept for ${actor.policy.exportRetentionHours} hours on the server, then deleted.`);
   if (chosen.length === 0) warnings.push("No sessions match — the export would be empty.");

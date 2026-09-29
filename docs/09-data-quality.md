@@ -143,7 +143,9 @@ compared with the full scores.
 **From r8.0.0 (survey D-51): each participant gets the form for their age.** On
 the day the sitting started, under 18 → the S11-17 word for word (`sdq25_s` 2.0:
 items 19, 20 and 22 take the S11-17 wording above, as item revision 2, under the
-same variables); 18 or over → the S18+ word for word (`sdq25_s18`, variables
+same variables); 18 or over → the S18+ word for word except item 22, which the
+study adapted to "…from home, school or college, university, work or elsewhere"
+(D-52) (`sdq25_s18`, variables
 `sdq25_s18_q1`…, readable names `sdq18_nn_…`). The S18+ differs from the S11-17 in
 12 items (2, 4, 6, 7, 11, 13, 14, 17, 19, 20, 22, 23: "I would rather be alone than
 with other people", "I am generally willing to do what other people want", "I am

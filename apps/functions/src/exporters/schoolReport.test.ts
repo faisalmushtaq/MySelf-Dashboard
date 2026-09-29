@@ -38,7 +38,7 @@ describe("school report", () => {
     for (const s of ["School report", "Northdale College", "How to read this report", "At a glance", "Other schools", "British norms, 11–15", "not a diagnosis"]) expect(text).toContain(s);
     // Other schools are never named, and no participant identifier appears.
     expect(text).not.toMatch(/\bBRD\b|\bLDS\b/);
-    expect(text).not.toMatch(/[A-Z]{2}[0-9]{3}[A-Z]{2}/);
+    expect(text).not.toMatch(/[A-Z]{2}[0-9]{3}[A-Z]{2}|\bP[0-9A-HJKMNP-TV-Z]{10}\b/); // a code, or a name-derived ID (D-52)
   });
 
   it("withholds groups below the minimum size, and other-school comparisons when fewer than two other schools took part", async () => {

@@ -315,7 +315,7 @@ describe("exports", () => {
 
     const plain = await run<{ id: string }>(createExport, researcher, { kind: "session_report", format: "pdf", scope: "single", sessionIds: [sessionId], deidentified: true, includeStudyCode: false });
     const plainText = await read(plain.id);
-    expect(plainText).not.toMatch(/Participant [A-Z]{2}[0-9]{3}[A-Z]{2}/);
+    expect(plainText).not.toMatch(/Participant ([A-Z]{2}[0-9]{3}[A-Z]{2}|P[0-9A-HJKMNP-TV-Z]{10}\b)/);
     expect(plainText).not.toContain("Study code".toUpperCase());
   });
 });
@@ -351,7 +351,7 @@ describe("scores", () => {
     expect(swemwbs.groups.map((g) => g.key)).toEqual(expect.arrayContaining(["BRD", "LDS", "NDC"]));
     // No participant or session identifiers anywhere in the response.
     const text = JSON.stringify(view);
-    expect(text).not.toMatch(/[A-Z]{2}[0-9]{3}[A-Z]{2}/);
+    expect(text).not.toMatch(/[A-Z]{2}[0-9]{3}[A-Z]{2}|\bP[0-9A-HJKMNP-TV-Z]{10}\b/); // a code, or a name-derived ID (D-52)
     for (const s of sittings.slice(0, 10)) expect(text).not.toContain(s.doc.sessionId);
     expect(view.checks["swemwbs"]!.every((c) => c.issues.every((i) => i.level !== "error"))).toBe(true);
   });

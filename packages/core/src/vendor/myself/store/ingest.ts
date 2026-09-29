@@ -1,10 +1,10 @@
-// Vendored from faisalmushtaq/MySelf@b61594c packages/store/src/ingest.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@06abc00 packages/store/src/ingest.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { ReleaseManifest, ResponseScale, ScoringDefinition } from "../schema/index.js";
 import { executeScoring, scoringItemKeys } from "../scoring/index.js";
 import type { Dataset, IdentityRow, ResponseRow, ScoreRow, SessionRow } from "./dataset.js";
-import { deriveParticipantCode } from "./identity.js";
+import { deriveParticipantCode, deriveParticipantId } from "./identity.js";
 
 /**
  * Turning a device's session into rows.
@@ -279,6 +279,19 @@ function secretParts(items: Map<string, ItemState>) {
   };
 }
 
+/** Name and date of birth, which identify a participant from r8.0.0 on (D-52). */
+function nameAndBirth(items: Map<string, ItemState>) {
+  const read = (key: string): string | undefined => {
+    const v = items.get(key)?.value as { kind?: string; value?: string; iso?: string } | null;
+    return v?.kind === "text" ? v.value : v?.kind === "date" ? v.iso : undefined;
+  };
+  return {
+    firstName: read("ybm_identity.first_name") ?? "",
+    lastName: read("ybm_identity.last_name") ?? "",
+    dob: read("ybm_identity.dob") ?? "",
+  };
+}
+
 /**
  * Whole years between a date of birth and a reference date.
  *
@@ -335,6 +348,7 @@ function present(value: unknown, scale: ResponseScale | undefined) {
 export function ingest(sessions: DeviceSession[], options: IngestOptions): IngestResult {
   const { manifest, study } = options;
   const { items: itemIndex, scales, scoring, informant } = indexManifest(manifest);
+  const usesSecretCode = itemIndex.has("ybm_identity.ps_mother_initials");
   const rejected: IngestResult["rejected"] = [];
   const warnings: string[] = [];
 
@@ -357,7 +371,13 @@ export function ingest(sessions: DeviceSession[], options: IngestOptions): Inges
     }
 
     const { items, reviewEdits, durationMs, foregroundMs, wallClockMs, resumedCount } = replay(session);
-    const derived = deriveParticipantCode(secretParts(items));
+    // A sitting that gave a secret code links on it, as it always has — decided
+    // by the sitting as well as the release, so an older sitting read through a
+    // newer release (an unknown hash falls back to the latest) keeps its code.
+    // From r8.0.0 there is no code, and the ID comes from name and date of
+    // birth (D-52).
+    const byCode = usesSecretCode || [...items.keys()].some((k) => k.startsWith("ybm_identity.ps_"));
+    const derived = byCode ? deriveParticipantCode(secretParts(items)) : deriveParticipantId(nameAndBirth(items));
     // An assignment is a statement about this exact sitting and outranks a
     // correction, which is a statement about a code.
     const assigned = options.assignments?.[session.sessionId];
@@ -370,7 +390,9 @@ export function ingest(sessions: DeviceSession[], options: IngestOptions): Inges
       // guessing one would join it to the wrong person. Held back, not dropped.
       rejected.push({
         sessionId: session.sessionId,
-        reason: "secret code incomplete — cannot be linked to a participant",
+        reason: byCode
+          ? "secret code incomplete — cannot be linked to a participant"
+          : "name or date of birth missing — cannot be linked to a participant",
       });
       continue;
     }
@@ -405,7 +427,9 @@ export function ingest(sessions: DeviceSession[], options: IngestOptions): Inges
           // The age is the part of a date of birth that the research actually
           // needs. Derived here, at a known reference date, so analysts are not
           // tempted to ask for the date itself later.
-          if (meta.variable === "first_name") {
+          // Two first names under one code is the twin signature. An ID made
+          // from the name cannot hold two, so only a code is checked (D-52).
+          if (meta.variable === "first_name" && byCode) {
             const seen = namesByParticipant.get(participantId) ?? new Map<string, Set<string>>();
             const key = rendered.trim().toLowerCase();
             const sessions = seen.get(key) ?? new Set<string>();

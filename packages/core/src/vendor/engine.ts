@@ -1,5 +1,5 @@
 /**
- * VENDORED from faisalmushtaq/MySelf at b61594c — do not edit by hand.
+ * VENDORED from faisalmushtaq/MySelf at 06abc00 — do not edit by hand.
  *
  *   packages/schema/src/logic.ts   (LogicExpr type)
  *   packages/engine/src/answers.ts (AnswerValue, AnswerRecord, AnswerStore)

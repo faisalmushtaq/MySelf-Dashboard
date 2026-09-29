@@ -156,11 +156,11 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
       path: "linkage.json",
       content: json({
         Description:
-          "Identifiers for linkage, one row per sitting. Pseudonymous, not anonymous: the participant code is built from the child's secret-code answers and the study code is issued by the research team. Keep this file under the study's data management plan; delete it (with the sub- folders' codes) before sharing a de-identified copy. Names, dates of birth, UPNs and NHS numbers are never in this dataset.",
+          "Identifiers for linkage, one row per sitting. Pseudonymous, not anonymous: the participant code is built from the child's secret-code answers (survey versions up to 7.3.0) or from their name and date of birth (8.0.0 on), and the study code is issued by the research team. Keep this file under the study's data management plan; delete it (with the sub- folders' codes) before sharing a de-identified copy. Names, dates of birth, home addresses, UPNs and NHS numbers are never in this dataset.",
         participant_id: { Description: "BIDS subject label (sub- + participant code)." },
         session_id: { Description: "BIDS session label for this wave." },
         wave: { Description: "The participant's wave, numbered across the whole study in the order sittings happened." },
-        participant_code: { Description: "Derived from the participant's secret code, after the study's code corrections and twin assignments." },
+        participant_code: { Description: "The participant's secret code (survey versions up to 7.3.0) or the ID derived from name and date of birth (8.0.0 on, D-52), after the study's code corrections and twin assignments." },
         study_code: { Description: "Researcher-issued code entered at the start of the sitting (site letters + number)." },
         site: { Description: "Site, from the study code's letters." },
         dashboard_session_id: { Description: "The sitting's identifier in the survey and the dashboard." },
@@ -210,7 +210,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     "## Identifiers",
     "",
     input.identifiers
-      ? "This export contains **pseudonymous identifiers**. The participant code is built from the child's secret-code answers (mother's initials, a house digit, birth month and postcode letters), so anyone who knows the scheme can read those back from it. Store and share it only as the study's data management plan allows. Names, dates of birth, UPNs and NHS numbers are held in the survey's separate identity project and are never exported here."
+      ? "This export contains **pseudonymous identifiers**. Up to survey version 7.3.0 the participant code is built from the child's secret-code answers (mother's initials, a house digit, birth month and postcode letters), so anyone who knows the scheme can read those back from it; from 8.0.0 it is made from name and date of birth, so anyone who has both can recompute it. Store and share it only as the study's data management plan allows. Names, dates of birth, home addresses, UPNs and NHS numbers are held in the survey's separate identity project and are never exported here."
       : "This export is **de-identified, not anonymous**: answers themselves (for example a rare combination of age, school and year group) can still identify someone. Share it only as the study's data management plan allows.",
     "",
     ...(excluded.length
@@ -229,7 +229,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
       ? [
           "## Unresolved code collisions",
           "",
-          `${collisions.length} participant code(s) appear to belong to more than one child — almost always twins, whose secret-code answers are identical. Until a study owner assigns one of them a distinct code, their sittings are filed under one participant and **any analysis of those rows is wrong**. ${input.identifiers ? `Codes: ${collisions.map((c) => c.participantId).join(", ")}.` : ""}`,
+          `${collisions.length} participant code(s) appear to belong to more than one child — almost always twins, whose secret-code answers are identical (from survey version 8.0.0 twins have separate IDs). Until a study owner assigns one of them a distinct code, their sittings are filed under one participant and **any analysis of those rows is wrong**. ${input.identifiers ? `Codes: ${collisions.map((c) => c.participantId).join(", ")}.` : ""}`,
           "",
         ]
       : []),

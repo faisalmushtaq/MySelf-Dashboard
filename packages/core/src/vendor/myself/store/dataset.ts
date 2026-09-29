@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@b61594c packages/store/src/dataset.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@06abc00 packages/store/src/dataset.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import { z } from "zod";
@@ -34,7 +34,7 @@ export const responseStatus = z.enum([
 
 /** One participant, as they appear across every wave they have taken part in. */
 export const participantRow = z.object({
-  /** Derived secret code — the longitudinal key. Never a name. */
+  /** The longitudinal key: the secret code (to r7.3.0) or the ID derived from name and date of birth (r8.0.0 on, D-52). Never a name. */
   participantId: z.string().min(1),
   /** Study this participant belongs to. */
   study: z.string().min(1),

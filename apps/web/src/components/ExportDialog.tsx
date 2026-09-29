@@ -337,7 +337,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                 </span>
               </label>
             ) : null}
-            <p className="hint">Names, dates of birth, UPNs, NHS numbers and secret-code answers are never exported from this dashboard.</p>
+            <p className="hint">Names, dates of birth, home addresses, UPNs, NHS numbers and secret-code answers are never exported from this dashboard.</p>
           </form>
 
           <section className="export-preview" aria-live="polite" aria-busy={previewing}>

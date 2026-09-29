@@ -110,7 +110,8 @@ export function validateAnswer(q: QuestionDef, value: unknown): ValidationResult
         const raw = values[f.key];
         if (raw !== undefined && typeof raw !== "string") return bad(`field ${f.key} is not text`);
         if (f.required && (!raw || raw.trim().length === 0)) return bad(`required field ${f.key} is empty`);
-        if (raw && raw.trim().length > 0 && !testPattern(f.pattern, raw)) return bad(`field ${f.key} does not match its format`);
+        // Judged on the trimmed value, as the device judges it: "LS6 2AA " is a postcode.
+        if (raw && raw.trim().length > 0 && !testPattern(f.pattern, raw.trim())) return bad(`field ${f.key} does not match its format`);
       }
       const known = new Set(fields.map((f) => f.key));
       const stray = Object.keys(values).filter((k) => known.size > 0 && !known.has(k));

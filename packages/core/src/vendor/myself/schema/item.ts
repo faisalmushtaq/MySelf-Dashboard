@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@b61594c packages/schema/src/item.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@06abc00 packages/schema/src/item.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import { z } from "zod";
@@ -236,6 +236,23 @@ export const itemDefinition = z.discriminatedUnion("responseType", [
         }),
       )
       .min(1),
+    /**
+     * One field is a postcode, checked on the device against a list shipped
+     * with the release (D-52). The area a known postcode lies in is shown back;
+     * a postcode not in the list is questioned once and then kept as given —
+     * never refused, since the list can be out of date and people do live
+     * outside it.
+     */
+    postcodeCheck: z
+      .object({
+        /** The field holding the postcode. */
+        field: slug,
+        /** The release asset holding the list (manifest.assets). */
+        asset: slug,
+        /** The area the list covers, as the participant is told it, e.g. "West Yorkshire". */
+        areaName: z.string().min(1),
+      })
+      .optional(),
   }),
   z.object({
     ...baseItem,
