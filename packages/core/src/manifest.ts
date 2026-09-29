@@ -199,6 +199,9 @@ const CONSTRAINT_KEYS = [
   "minYear",
   "maxYear",
   "fields",
+  // The address question's street search (survey r9.0.0, D-53): names the two
+  // keys a chosen street adds beside the fields.
+  "streetCheck",
   "statements",
   "groups",
 ] as const;

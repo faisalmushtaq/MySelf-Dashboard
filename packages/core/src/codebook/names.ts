@@ -173,6 +173,7 @@ const game = (n: number) => [`ybm_gaming.game_time_${n}`, e(`gaming_game${n}_hou
 export const DEFAULT_CODEBOOK: Readonly<Record<string, CodebookEntry>> = {
   // Introduction and identity (identity answers never leave the linkage area)
   "ybm_intro_consent.consent": e("consent", "Consent statements agreed to"),
+  "ybm_intro_consent.linkage_consent": e("linkage_consent", "Agrees to linkage via Connected Yorkshire (r9.0.0 on)"),
   "ybm_identity.first_name": e("first_name", "First name"),
   "ybm_identity.last_name": e("last_name", "Last name"),
   "ybm_identity.dob": e("date_of_birth", "Date of birth"),
@@ -198,6 +199,7 @@ export const DEFAULT_CODEBOOK: Readonly<Record<string, CodebookEntry>> = {
   "macarthur_ssy.family": e("ladder_society", "Family's place in society (ladder, 1–10)"),
   "macarthur_ssy.self": e("ladder_school", "Own standing at school (ladder, 1–10)"),
   "kss.q1": e("kss_sleepiness", "Sleepiness right now (KSS, 1–9)"),
+  "sqs.q1": e("sqs_sleep_quality", "Sleep quality over the past 7 days (SQS, 0–10; r9.0.0 on)"),
   "ybm_sleep_priorities.importance": e("sleep_priorities", "What matters most for a good night's sleep (r1.0.0–r5.0.0)"),
   "ybm_sleep_priorities.know_own": e("sleep_wants_to_know", "What they would like to know about their own sleep (r1.0.0–r5.0.0)"),
 
@@ -245,6 +247,8 @@ export const DEFAULT_CODEBOOK: Readonly<Record<string, CodebookEntry>> = {
   "ybm_social_media.abstain_effect": e("sm_abstain_effect", "Expected effect of giving up social media"),
   "ybm_social_media.abstain_days": e("sm_abstain_days", "Days they think they could go without social media"),
   "ybm_social_media.family_control": e("sm_family_control", "Family manages their social media use"),
+  "ybm_social_media.family_control_how": e("sm_family_control_how", "How family manage their social media use (r9.0.0 on)"),
+  "ybm_social_media.family_control_other": e("sm_family_control_other", "Other ways family manage it, in their words"),
   "ybm_screen_attitudes.control": e("screen_can_control", "Can control their screen use (agreement)"),
   "ybm_screen_attitudes.dependent": e("screen_dependent", "Depends on screens to function day to day (agreement)"),
   "ybm_screen_attitudes.addicted": e("screen_addicted", "Feels addicted to screen activities (agreement)"),

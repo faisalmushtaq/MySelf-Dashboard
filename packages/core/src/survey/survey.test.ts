@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { assessSitting } from "../completeness.js";
 import { indexRelease } from "../manifest.js";
 import { replaySitting } from "../replay.js";
+import { validateAnswer } from "../validate.js";
 import { AnswerStore, evaluate, type AnswerValue } from "../vendor/engine.js";
 import type { Sitting, SittingEvent } from "../types.js";
 import { demoReleases, generateDemoSittings } from "../node/synthetic.js";
@@ -629,3 +630,34 @@ describe("the home address and the name-derived ID under r8.0.0 (D-52)", () => {
   });
 });
 
+
+describe("shorter consent, sleep quality and the street search under r9.0.0 (D-53)", () => {
+  const raw = release("9.0.0") as { hash: string };
+  const idx = indexRelease(raw);
+  const { data, sittings } = crossCheck("9.0.0");
+
+  it("reads every r9.0.0 sitting, with none held back", () => {
+    expect(data.excluded).toEqual([]);
+    expect(data.dataset.sessions).toHaveLength(sittings.length);
+  });
+
+  it("names the new questions and knows the linkage answer is not identifying", () => {
+    expect(idx.byKey.get("ybm_intro_consent.linkage_consent")).toMatchObject({ name: "linkage_consent", identifying: false });
+    expect(idx.byKey.get("sqs.q1")).toMatchObject({ name: "sqs_sleep_quality" });
+    expect(idx.byKey.get("sqs.q1")!.options!.map((o) => o.code)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(idx.byKey.get("ybm_social_media.family_control_how")).toMatchObject({ name: "sm_family_control_how" });
+  });
+
+  it("accepts an address found by street, with its area and postcode district", () => {
+    const q = idx.byKey.get("ybm_identity.home_address")!;
+    const found = { kind: "fields", values: { postcode: "", house: "12", street: "Hyde Park Road", area: "Leeds", postcode_district: "LS6" } };
+    expect(validateAnswer(q, found)).toEqual({ valid: true, empty: false });
+    // anything else beside the fields is still refused
+    expect(validateAnswer(q, { kind: "fields", values: { street: "Hyde Park Road", note: "x" } })).toMatchObject({ valid: false });
+  });
+
+  it("orders ethnic origins by West Yorkshire, keeping every code", () => {
+    const eth = idx.byKey.get("ybm_demographics.ethnicity")!;
+    expect(eth.options!.slice(0, 2).map((o) => o.code)).toEqual([13, 2]);
+  });
+});

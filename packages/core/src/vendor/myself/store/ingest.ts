@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@06abc00 packages/store/src/ingest.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@345e8e3 packages/store/src/ingest.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { ReleaseManifest, ResponseScale, ScoringDefinition } from "../schema/index.js";
