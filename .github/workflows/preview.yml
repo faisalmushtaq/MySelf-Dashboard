@@ -9,7 +9,8 @@ name: Preview the dashboard
 # The functions accept calls from this site's preview channels only because
 # DASHBOARD_PREVIEW_SITE (apps/functions/.env.myself-research) names the site;
 # see previewOrigins() in apps/functions/src/env.ts. A web change that needs a
-# new function must have that function deployed before its preview works.
+# new or changed function asks for a functions deploy by bumping REQUEST in
+# .github/preview/functions.env, in the same push.
 
 on:
   push:
@@ -29,6 +30,8 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -57,6 +60,17 @@ jobs:
           url=$(node -e 'const r=require("./channel.json").result; const s=Object.values(r)[0]; console.log(s.url + "  (expires " + s.expireTime + ")")')
           echo "Dashboard preview: $url"
           echo "### Dashboard preview: $url" >> "$GITHUB_STEP_SUMMARY"
+      # The live functions only when asked, by a change to .github/preview/functions.env
+      # in this push — never as a side effect of an ordinary push.
+      - name: Deploy the functions, if asked
+        run: |
+          before="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "push" ] && git cat-file -e "$before" 2>/dev/null \
+             && git diff --name-only "$before" "${{ github.sha }}" | grep -qx '.github/preview/functions.env'; then
+            pnpm exec firebase deploy --only functions:dashboard --project myself-research --non-interactive
+          else
+            echo "Functions not requested in this push; the preview uses the functions already deployed."
+          fi
       - name: Remove credentials
         if: always()
         run: shred -u "$RUNNER_TEMP/key.json" 2>/dev/null || rm -f "$RUNNER_TEMP/key.json"
