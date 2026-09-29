@@ -7,7 +7,8 @@ import { resetStore } from "./store.js";
 import { rebuildAll } from "./summaries.js";
 
 /**
- * Operations requested by the deploy workflow, run inside Google Cloud.
+ * Operations requested by the Firebase setup workflow (`scripts/firebase-ops.mjs
+ * finish`, run by .github/workflows/firebase-setup.yml), run inside Google Cloud.
  *
  * The first deployment must summarise every sitting already in the survey
  * database. That reads raw logs, so it runs here, in europe-west2 next to the
@@ -15,8 +16,6 @@ import { rebuildAll } from "./summaries.js";
  * document and waits for its result. Requests can be created with server
  * credentials only — the dashboard rules deny every client access to `ops/`.
  */
-
-export const OPS_KINDS = ["rebuild_summaries"] as const;
 
 export const onOpsRequest = onDocumentCreated(
   { document: "ops/{requestId}", database: DASHBOARD_DATABASE, region: REGION, memory: "1GiB", timeoutSeconds: 540, retry: false },

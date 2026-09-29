@@ -66,7 +66,6 @@ export function duration(ms: number | null | undefined): string {
 }
 
 export const shortId = (id: string) => (id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id);
-export const shortHash = (h: string | null | undefined) => (h ? h.replace(/^sha256:/, "").slice(0, 10) : "—");
 
 export function bytes(n: number | null | undefined): string {
   if (!n) return "—";

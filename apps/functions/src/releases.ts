@@ -102,9 +102,3 @@ export async function registerRelease(raw: unknown, study: string, registeredBy:
   listCache = null;
   return meta;
 }
-
-/** Test hook. */
-export function forgetReleases(): void {
-  indexes.clear();
-  listCache = null;
-}

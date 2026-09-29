@@ -1,4 +1,4 @@
-import type { QuestionDef, ReleaseIndex, RequiredLevel } from "./manifest.js";
+import type { ReleaseIndex, RequiredLevel } from "./manifest.js";
 import type { ReplayResult } from "./replay.js";
 import { validateAnswer } from "./validate.js";
 import { AnswerStore, evaluate, type AnswerValue, type LogicExpr } from "./vendor/engine.js";
@@ -461,8 +461,4 @@ export function nextMissingRequired(assessment: Assessment, afterKey?: string): 
   const order = assessment.outcomes.map((o) => o.key);
   const pos = order.indexOf(afterKey);
   return keys.find((k) => order.indexOf(k) > pos) ?? keys[0];
-}
-
-export function questionAt(release: ReleaseIndex, key: string): QuestionDef | undefined {
-  return release.byKey.get(key);
 }
