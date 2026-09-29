@@ -63,11 +63,14 @@ export async function readNarratives(): Promise<StoredNarrativeRun[]> {
   return snap.docs.map((d) => d.data() as StoredNarrativeRun);
 }
 
-let cache: { at: number; value: { study: StudyDataset; sittings: Map<string, Sitting> } } | null = null;
+let cache: { at: number; startMonth: number; value: { study: StudyDataset; sittings: Map<string, Sitting> } } | null = null;
 const TTL_MS = 5 * 60_000;
 
-export async function loadStudyDataset(options: { fresh?: boolean; onProgress?: (fraction: number) => Promise<void> } = {}): Promise<{ study: StudyDataset; sittings: Map<string, Sitting> }> {
-  if (!options.fresh && cache && Date.now() - cache.at < TTL_MS) return cache.value;
+export async function loadStudyDataset(
+  options: { fresh?: boolean; onProgress?: (fraction: number) => Promise<void>; schoolYearStartMonth?: number } = {},
+): Promise<{ study: StudyDataset; sittings: Map<string, Sitting> }> {
+  const startMonth = options.schoolYearStartMonth ?? cache?.startMonth ?? 9;
+  if (!options.fresh && cache && cache.startMonth === startMonth && Date.now() - cache.at < TTL_MS) return cache.value;
   const { rows } = await currentRows();
   const ids = rows.map((r) => r.summary.sessionId);
   const sittings = new Map<string, Sitting>();
@@ -76,9 +79,9 @@ export async function loadStudyDataset(options: { fresh?: boolean; onProgress?: 
     await options.onProgress?.(Math.min(1, (i + 200) / Math.max(1, ids.length)));
   }
   const [releases, links] = await Promise.all([surveyManifests(), linkageRecords()]);
-  const study = deriveStudyDataset({ study: STUDY, sittings: [...sittings.values()], manifests: releases, ...links });
+  const study = deriveStudyDataset({ study: STUDY, sittings: [...sittings.values()], manifests: releases, ...links, schoolYearStartMonth: startMonth });
   const value = { study, sittings };
-  cache = { at: Date.now(), value };
+  cache = { at: Date.now(), startMonth, value };
   return value;
 }
 

@@ -47,6 +47,7 @@ import { ALLOWED_ORIGINS, auth, bucket, dash, EXPORT_PREFIX } from "../env.js";
 import { dpaths } from "../paths.js";
 import { allReleaseIndexes, releaseIndex, releaseList } from "../releases.js";
 import { loadStudyDataset, participantsFor, readNarratives, sha256, surveyManifests } from "../studyData.js";
+import { scoredSessions } from "../scoring.js";
 import { STUDY } from "../env.js";
 import { accessPolicy, studyPolicy } from "../settings.js";
 import { readSittings } from "../sittings.js";
@@ -243,6 +244,8 @@ async function bidsFile(spec: ExportSpec, actor: Actor, rows: SessionRow[], expo
   const sidecar = (included.length ? included : [...manifests.keys()]).sort((a, b) => compareVersions(version(b), version(a)))[0];
   if (!sidecar) throw new HttpsError("failed-precondition", "No registered survey version can be read, so there is nothing to build a BIDS dataset from.");
   const narratives = spec.includeFreeText ? await readNarratives() : [];
+  // Scores from the study's scoring schemes, not the survey's own definitions (docs/08).
+  const scoring = await scoredSessions();
   await progress(0.8);
   const result = buildDashboardBids({
     study: STUDY,
@@ -266,6 +269,7 @@ async function bidsFile(spec: ExportSpec, actor: Actor, rows: SessionRow[], expo
       rulesVersion: RULES_VERSION,
     },
     hash: sha256,
+    scoring: { schemes: scoring.schemes, bySession: new Map(scoring.sessions.map((x) => [x.sessionId, x.scores])) },
   });
   return {
     body: Buffer.from(result.zip),

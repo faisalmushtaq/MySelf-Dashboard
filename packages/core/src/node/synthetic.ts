@@ -68,6 +68,19 @@ const component = (key: string, displayIf?: LogicExpr) => ({
   ...(displayIf ? { displayIf } : {}),
 });
 
+/** The survey's standard measures in the demo: its item keys, placeholder wording, answered by `standardAnswer`. */
+const STANDARD_ITEMS = {
+  swemwbs: ["optimistic", "useful", "relaxed", "problems", "thinking", "close", "mind"],
+  sdq25_s: Array.from({ length: 25 }, (_, i) => `q${i + 1}`),
+  kss: ["q1"],
+  ehi_sf: ["writing", "throwing", "toothbrush", "spoon"],
+} as const;
+const STANDARD = new Set(Object.keys(STANDARD_ITEMS));
+
+function standardItem(key: string, variable: string, stem: string, scaleKey: string): Json {
+  return item(key, variable, "single_choice", stem, { required: "optional", scale: scaleKey, scaleVersion: "1.0.0", presentation: "cards", spectrumReverse: false, autoAdvance: true });
+}
+
 export type DemoVersion = "1.0.0" | "1.1.0" | "2.0.0";
 
 /** Build one version of the synthetic survey as a release manifest (with hash). */
@@ -89,6 +102,11 @@ export function demoManifest(version: DemoVersion): Json {
     ),
     "scale.games": scale("scale.games", [[1, "Yes, most days"], [2, "Sometimes"], [3, "No"]]),
     "scale.travel": scale("scale.travel", [[1, "Walk"], [2, "Bike"], [3, "Bus"], [4, "Car"], [5, "Other"]]),
+    // The survey's standard measures, with its real item keys and codes (item wording is placeholder).
+    "scale.swemwbs_5pt": scale("scale.swemwbs_5pt", [[1, "None of the time"], [2, "Rarely"], [3, "Some of the time"], [4, "Often"], [5, "All of the time"]]),
+    "scale.sdq_3pt": scale("scale.sdq_3pt", [[0, "Not True"], [1, "Somewhat True"], [2, "Certainly True"]]),
+    "scale.kss_9pt": scale("scale.kss_9pt", Array.from({ length: 9 }, (_, i) => [i + 1, `Level ${i + 1}`] as [number, string])),
+    "scale.ehi_sf_5pt": scale("scale.ehi_sf_5pt", [[1, "Always right"], [2, "Usually right"], [3, "Both equally"], [4, "Usually left"], [5, "Always left"]]),
     "scale.month": scale("scale.month", ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => [i + 1, m] as [number, string])),
   };
 
@@ -167,6 +185,10 @@ export function demoManifest(version: DemoVersion): Json {
           : sel("demo_gaming", "plays_games", 1),
       }),
     ]),
+    [refKey("swemwbs")]: instrument("swemwbs", STANDARD_ITEMS.swemwbs.map((k, i) => standardItem(k, `swemwbs_q${i + 1}`, `Wellbeing statement ${i + 1} (synthetic wording)`, "scale.swemwbs_5pt"))),
+    [refKey("sdq25_s")]: instrument("sdq25_s", STANDARD_ITEMS.sdq25_s.map((k, i) => standardItem(k, `sdq25_q${i + 1}`, `Strengths and difficulties statement ${i + 1} (synthetic wording)`, "scale.sdq_3pt"))),
+    [refKey("kss")]: instrument("kss", [standardItem("q1", "kss_q1", "How sleepy are you feeling right now? (synthetic wording)", "scale.kss_9pt")]),
+    [refKey("ehi_sf")]: instrument("ehi_sf", STANDARD_ITEMS.ehi_sf.map((k) => standardItem(k, `ehi_${k}`, `Which hand do you use: ${k}? (synthetic wording)`, "scale.ehi_sf_5pt"))),
     [refKey("demo_finish")]: instrument("demo_finish", [
       item("ladder", "status_ladder", "ladder", "Where would you put yourself on this ladder?", { rungs: 10, lowestValue: 1 }),
       item("future_message", "future_message", "text_long", "If you could send a message to yourself in five years, what would it say?", { required: "optional", maxChars: 2000, minChars: 0 }),
@@ -182,6 +204,8 @@ export function demoManifest(version: DemoVersion): Json {
     { key: "wellbeing", title: "How you've been feeling", components: [component("demo_wellbeing")] },
     { key: "gaming", title: "Gaming", components: [component("demo_gaming")] },
     { key: "finish", title: "Finishing up", components: [component("demo_finish")] },
+    // Last, and optional, so the completeness picture of the demo is unchanged by them.
+    { key: "measures", title: "Standard measures", components: [component("swemwbs"), component("sdq25_s"), component("kss"), component("ehi_sf")] },
   ].map((s) => ({ ...s, randomiseComponents: false }));
 
   const published: Record<DemoVersion, string> = {
@@ -299,6 +323,8 @@ interface WalkOptions {
   textOverride?: string;
   /** The synthetic child answering: their secret-code components and first name. */
   child?: Child;
+  /** Drives the standard measures: a wellbeing trait (SD units), a handedness draw, and their own random stream. */
+  standard?: { trait: number; hand: number; rnd: () => number; site: string };
 }
 
 /** A synthetic child. Returning children and twins reuse the same components. */
@@ -349,6 +375,31 @@ function answerFor(q: QuestionDef, rnd: () => number, opts: WalkOptions): Answer
   }
 }
 
+/** Differences between the demo schools, in SD units of wellbeing, so benchmarking has something to show. */
+const SCHOOL_EFFECT: Record<string, number> = { NDC: 0.35, LDS: 0, BRD: -0.3, TST: 0 };
+
+function standardAnswer(q: QuestionDef, s: NonNullable<WalkOptions["standard"]>, yearGroup: number): number {
+  const noise = () => {
+    // Box–Muller: a standard normal from two uniforms.
+    const u = Math.max(1e-9, s.rnd());
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * s.rnd());
+  };
+  const z = s.trait + (SCHOOL_EFFECT[s.site] ?? 0) - 0.12 * (yearGroup - 7);
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(v)));
+  if (q.instrument === "swemwbs") return clamp(3.3 + 0.75 * z + 0.6 * noise(), 1, 5);
+  if (q.instrument === "kss") return clamp(4.2 - 0.6 * z + 1.4 * noise(), 1, 9);
+  if (q.instrument === "ehi_sf") {
+    if (s.hand < 0.1) return clamp(4.7 + 0.4 * noise(), 4, 5);
+    if (s.hand < 0.13) return clamp(3 + noise(), 2, 4);
+    return clamp(1.2 + 0.4 * noise(), 1, 2);
+  }
+  // SDQ: problem items rise as wellbeing falls; positively worded ones (7, 11, 14, 21, 25) the other way.
+  const n = Number(q.item.slice(1));
+  if ([1, 4, 9, 17, 20].includes(n)) return clamp(1.5 + 0.2 * z + 0.5 * noise(), 0, 2);
+  if ([7, 11, 14, 21, 25].includes(n)) return clamp(1.45 + 0.35 * z + 0.55 * noise(), 0, 2);
+  return clamp(0.55 - 0.45 * z + 0.55 * noise(), 0, 2);
+}
+
 /**
  * Walk the synthetic survey as a participant would: in order, only questions
  * whose display condition holds, recording the events the real app records.
@@ -396,6 +447,20 @@ function walk(release: ReleaseIndex, start: number, rnd: () => number, opts: Wal
         push("response.recorded", q.key, { value, timing: { tooFast: false } });
         store.set(ref(instrument, itemKey), { status: "answered", value });
       }
+      tick(300);
+      push("item.left", q.key, { totalDwellMs: 3000, visit: 1 });
+      continue;
+    }
+    if (STANDARD.has(q.instrument)) {
+      // Answered from the child's traits on a stream of their own, so the rest
+      // of the synthetic study is unchanged by these questions.
+      if (!opts.standard) continue;
+      const yearCode = (store.get(ref("demo_about", "year_group"))?.value as { code?: number } | undefined)?.code ?? 7;
+      const value: AnswerValue = { kind: "choice", code: standardAnswer(q, opts.standard, yearCode) };
+      tick(6000);
+      if (!opts.noPresented) push("item.presented", q.key, { visit: 1, returning: false });
+      push("response.recorded", q.key, { value, timing: { tooFast: false } });
+      store.set(ref(q.instrument, q.item), { status: "answered", value });
       tick(300);
       push("item.left", q.key, { totalDwellMs: 3000, visit: 1 });
       continue;
@@ -500,6 +565,9 @@ export function generateDemoSittings(options: GenerateOptions = {}): DemoSitting
     children.push(child);
     return child;
   };
+  // Traits for the standard measures, on their own stream (see standardAnswer); a returning child keeps theirs.
+  const traitRnd = prng(((options.seed ?? 20260928) ^ 0x7a17) >>> 0);
+  const traits = new Map<Child, { trait: number; hand: number }>();
   scenarios.forEach((scenario, i) => {
     // Spread start times over the period, oldest first; in-progress ones are recent.
     let start =
@@ -520,6 +588,11 @@ export function generateDemoSittings(options: GenerateOptions = {}): DemoSitting
 
     if (i === TWIN) scenario = "complete";
     const opts: WalkOptions = { child: childFor(i) };
+    const u1 = Math.max(1e-9, traitRnd());
+    const drawn = { trait: Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * traitRnd()), hand: traitRnd() };
+    const traitOf = opts.child ? (traits.get(opts.child) ?? drawn) : drawn;
+    if (opts.child && !traits.has(opts.child)) traits.set(opts.child, traitOf);
+    opts.standard = { ...traitOf, site: code.slice(0, 3), rnd: prng(((options.seed ?? 20260928) ^ ((i + 1) * 0x9e3779b1)) >>> 0) };
     let terminal = true;
     switch (scenario) {
       case "complete":

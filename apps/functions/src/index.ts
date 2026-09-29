@@ -21,3 +21,4 @@ export {
 } from "./api/admin.js";
 export { previewExport, createExport, downloadExport, cleanupExports } from "./api/exports.js";
 export { getParticipants } from "./api/participants.js";
+export { getScores, getScoringSettings, saveScoringScheme, saveGroupSettings } from "./api/scores.js";

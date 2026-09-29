@@ -11,6 +11,11 @@ import type { SectionView } from "./present.js";
 import type { SectionSummary } from "./summary.js";
 import type { DisplayStatus, Lifecycle, Marker } from "./status.js";
 import type { ExportFormat, ExportKind, ExportScope, ExportSpecInput } from "./exportSpec.js";
+import type { Observation } from "./scoring/aggregate.js";
+import type { ScoreFocus, ScoreGroupBy } from "./scoring/benchmark.js";
+import type { SchemeIssue } from "./scoring/check.js";
+import type { GroupSettings, YearGroupSource } from "./scoring/groups.js";
+import type { ScoringScheme } from "./scoring/scheme.js";
 
 /**
  * The contract between the web app and the backend, defined once so both sides
@@ -361,4 +366,51 @@ export interface ParticipantsResponse {
   heldBack: HeldBackSittingView[];
   /** Codes two children appear to share (almost always twins). Names never leave the server. */
   sharedCodes: { code: string; sessionIds: string[] }[];
+}
+
+// ── scores ────────────────────────────────────────────────────────────────
+
+export interface ScoresRequest {
+  filters?: FilterState;
+  observation?: Observation;
+  groupBy?: ScoreGroupBy;
+  focus?: ScoreFocus | null;
+  /** Administrators: preview an unsaved scheme in place of the saved one. */
+  draft?: unknown;
+}
+
+export interface SchemeSettingsView {
+  scheme: ScoringScheme;
+  /** "study" when the study has saved its own version. */
+  source: "default" | "study";
+  /** The dashboard default's version, for a scheme that has one. */
+  defaultVersion: string | null;
+  differsFromDefault: boolean;
+  savedAt: string | null;
+  savedBy: string | null;
+  reason: string | null;
+  history: { version: string; savedAt: string | null; savedBy: string | null; reason: string | null; verified: boolean }[];
+  checks: { version: string; issues: SchemeIssue[] }[];
+  /** Linked sittings whose version administers the instrument. */
+  sittings: number;
+}
+
+export interface ScoringSettingsView {
+  schemes: SchemeSettingsView[];
+  defaults: ScoringScheme[];
+  groups: GroupSettings;
+  groupStats: {
+    sittings: number;
+    yearGroupSources: Record<YearGroupSource | "unknown", number>;
+    schools: { key: string; n: number }[];
+  };
+  canEdit: boolean;
+}
+
+export interface SaveSchemeRequest {
+  scheme: unknown;
+  reason: string;
+  /** Record the saving administrator as having checked the scheme against its source. */
+  markVerified?: boolean;
+  verifyNote?: string;
 }

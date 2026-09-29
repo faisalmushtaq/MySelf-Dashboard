@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { DEFAULT_FILTERS, type ParticipantsResponse, type QuerySessionsResponse, type SessionDetailResponse } from "@myself-dashboard/core";
+import { DEFAULT_FILTERS, type ParticipantsResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse } from "@myself-dashboard/core";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
 import { pdfText } from "./pdfText.js";
 
@@ -19,6 +19,8 @@ import { addNote, updateReview } from "../src/api/review.js";
 import { logFigureExport, setDashboardRole, updateAccessPolicy, getSettings } from "../src/api/admin.js";
 import { createExport, downloadExport, expireExports, previewExport } from "../src/api/exports.js";
 import { getParticipants } from "../src/api/participants.js";
+import { getScores, getScoringSettings, saveGroupSettings, saveScoringScheme } from "../src/api/scores.js";
+import { invalidateScoring } from "../src/scoring.js";
 
 /**
  * The backend, end to end against the emulators: real ID tokens from the Auth
@@ -336,6 +338,65 @@ describe("participants", () => {
     const rows = await auditRows("participants.viewed");
     expect(rows.some((r) => r["actorEmail"] === "reviewer@brainpop.example" && r["detail"]?.codesShown === false)).toBe(true);
     await expect(run(getParticipants, stranger, {})).rejects.toMatchObject({ code: "permission-denied" });
+  });
+});
+
+describe("scores", () => {
+  it("summarises every instrument by school, as aggregates only", async () => {
+    invalidateScoring();
+    const view = await run<ScoresView>(getScores, reviewer, { filters: DEFAULT_FILTERS, groupBy: "school" });
+    const swemwbs = view.results.find((r) => r.scheme === "swemwbs" && r.output === "metric")!;
+    expect(swemwbs.overall!.n).toBeGreaterThan(20);
+    expect(swemwbs.groups.map((g) => g.key)).toEqual(expect.arrayContaining(["BRD", "LDS", "NDC"]));
+    // No participant or session identifiers anywhere in the response.
+    const text = JSON.stringify(view);
+    expect(text).not.toMatch(/[A-Z]{2}[0-9]{3}[A-Z]{2}/);
+    for (const s of sittings.slice(0, 10)) expect(text).not.toContain(s.doc.sessionId);
+    expect(view.checks["swemwbs"]!.every((c) => c.issues.every((i) => i.level !== "error"))).toBe(true);
+  });
+
+  it("compares a school's year group with the same year group elsewhere", async () => {
+    const view = await run<ScoresView>(getScores, researcher, { filters: DEFAULT_FILTERS, groupBy: "schoolYear", focus: { school: "NDC", yearGroup: 8 } });
+    expect(view.focus!.peersLabel).toMatch(/^Year \d+ at other schools$/);
+    const r = view.results.find((x) => x.scheme === "sdq25_s" && x.output === "total_difficulties")!;
+    expect(r.focus).toBeDefined();
+    expect(r.focus!.peers!.n).toBeGreaterThan(0);
+  });
+
+  it("lets only administrators preview and save scheme changes, keeping every version and auditing it", async () => {
+    const settings = await run<ScoringSettingsView>(getScoringSettings, researcher, {});
+    expect(settings.canEdit).toBe(false);
+    const kss = settings.schemes.find((s) => s.scheme.key === "kss")!;
+    expect(kss.source).toBe("default");
+    const draft = { ...kss.scheme, version: "1.1.0", outputs: [{ ...kss.scheme.outputs[0]!, thresholds: [{ ...kss.scheme.outputs[0]!.thresholds[0]!, bands: [{ label: "Alert", max: 5, level: 0 }, { label: "Sleepy", max: null, level: 2 }] }] }] };
+    await expect(run(getScores, researcher, { draft })).rejects.toMatchObject({ code: "permission-denied" });
+    const preview = await run<ScoresView>(getScores, admin, { draft, groupBy: "none" });
+    expect(preview.schemes.map((s) => s.key)).toEqual(["kss"]);
+    await expect(run(saveScoringScheme, researcher, { scheme: draft, reason: "stricter cut-off" })).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run(saveScoringScheme, admin, { scheme: { ...draft, version: "1.0.0" }, reason: "same version" })).rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(run(saveScoringScheme, admin, { scheme: { ...draft, outputs: [] }, reason: "broken" })).rejects.toMatchObject({ code: "invalid-argument" });
+    await run(saveScoringScheme, admin, { scheme: draft, reason: "Match the cut-off used in our protocol", markVerified: true, verifyNote: "Checked against protocol v3" });
+    const after = await run<ScoringSettingsView>(getScoringSettings, admin, {});
+    const saved = after.schemes.find((s) => s.scheme.key === "kss")!;
+    expect(saved).toMatchObject({ source: "study", differsFromDefault: true });
+    expect(saved.scheme.version).toBe("1.1.0");
+    expect(saved.scheme.verified).toMatchObject({ by: "brainpopresearch@gmail.com", note: "Checked against protocol v3" });
+    expect(saved.history.map((h) => h.version)).toEqual(["1.1.0"]);
+    const rows = await auditRows("scoring.changed");
+    expect(rows.some((r) => r["target"]?.id === "kss" && r["detail"]?.from === "1.0.0" && r["detail"]?.to === "1.1.0")).toBe(true);
+    // Scores now follow the saved version.
+    const view = await run<ScoresView>(getScores, reviewer, { groupBy: "none" });
+    expect(view.schemes.find((s) => s.key === "kss")!.version).toBe("1.1.0");
+  });
+
+  it("lets administrators name schools and set year-group rules", async () => {
+    await expect(run(saveGroupSettings, researcher, { settings: {}, reason: "names" })).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run(saveGroupSettings, admin, { settings: { yearGroup: { rules: [{ pattern: "([", yearGroup: 8 }] } }, reason: "bad" })).rejects.toMatchObject({ code: "invalid-argument" });
+    await run(saveGroupSettings, admin, { settings: { schools: { NDC: "Northdale College" }, minCell: 5 }, reason: "School names from the fieldwork plan" });
+    const view = await run<ScoresView>(getScores, reviewer, { groupBy: "school" });
+    expect(view.available.schools.find((s) => s.key === "NDC")!.label).toBe("Northdale College (NDC)");
+    expect(view.minCell).toBe(5);
+    expect((await auditRows("groups.changed")).length).toBe(1);
   });
 });
 

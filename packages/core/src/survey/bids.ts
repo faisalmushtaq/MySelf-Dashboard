@@ -4,6 +4,8 @@ import type { StoredNarrativeRun } from "../vendor/myself/store/narratives.js";
 import { buildZip } from "../vendor/myself/store/zip.js";
 import type { Sitting } from "../types.js";
 import { pseudonymiseDataset, subsetDataset, withoutVariables, type StudyDataset } from "./dataset.js";
+import { bandRange, type SchemeScores } from "../scoring/engine.js";
+import { SCHEME_STATUS_LABELS, type ScoringScheme } from "../scoring/scheme.js";
 
 /**
  * The dashboard's BIDS export: the survey's own BIDS layout (built by the
@@ -41,6 +43,11 @@ export interface BidsExportInput {
   };
   /** SHA-256 hex of a file's content. */
   hash: (content: string) => string;
+  /**
+   * Scores from the dashboard's scoring schemes, by sitting. When given they
+   * replace the survey's own derived scores in phenotype/scores.tsv.
+   */
+  scoring?: { schemes: readonly ScoringScheme[]; bySession: ReadonlyMap<string, Record<string, SchemeScores>> };
 }
 
 export interface BidsExportResult {
@@ -69,6 +76,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     .filter((c) => c.sessionIds.length > 0);
 
   let data = subsetDataset(studyData.dataset, chosen);
+  if (input.scoring) data = { ...data, scores: scoreRows(data.sessions, input.scoring) };
   const withheld = input.includeFreeText ? [] : [...new Set(data.responses.filter((r) => input.freeTextVariables.has(r.variable)).map((r) => r.variable))].sort();
   if (!input.includeFreeText) data = withoutVariables(data, input.freeTextVariables);
   const original = data;
@@ -153,6 +161,13 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     });
   }
 
+  if (input.scoring) {
+    const i = files.findIndex((f) => f.path === "phenotype/scores.json");
+    const sidecar = { path: "phenotype/scores.json", content: json(scoresSidecar(input.scoring.schemes, data.scores)) };
+    if (i >= 0) files[i] = sidecar;
+    else if (data.scores.length) files.push(sidecar);
+  }
+
   // ── README.md ─────────────────────────────────────────────────────────────
   const byReason = new Map<string, number>();
   for (const e of excluded) byReason.set(e.reason, (byReason.get(e.reason) ?? 0) + 1);
@@ -167,7 +182,9 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     ...(p.filters.length ? [`- Filters: ${p.filters.join("; ")}.`] : []),
     "- `participants.tsv` — one row per participant; `sub-*/sessions.tsv` — one row per sitting (wave).",
     "- `phenotype/<instrument>.tsv` — one row per participant per wave, stored option codes, with a `<variable>_status` column saying why a value is missing; `phenotype/<instrument>.json` gives each question's wording and what every code means.",
-    "- `phenotype/scores.tsv` — derived scores, where the survey defines scoring; regenerable, never edited.",
+    input.scoring
+      ? "- `phenotype/scores.tsv` — scores from the dashboard's scoring schemes, with a column per threshold band; `phenotype/scores.json` gives each column's method, scheme version, range and whether the scheme has been verified. Regenerable, never edited."
+      : "- `phenotype/scores.tsv` — derived scores, where the survey defines scoring; regenerable, never edited.",
     input.identifiers
       ? "- `linkage.tsv` — identifiers for linkage (participant codes, study codes, sitting and device identifiers, exact times)."
       : "- De-identified: participant codes are replaced by labels (P0001…) that mean nothing outside this export, study codes are removed and times are cut to the day.",
@@ -249,4 +266,63 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     excluded,
     collisions,
   };
+}
+
+type ScoreRowOut = StudyDataset["dataset"]["scores"][number];
+
+/** Dashboard scores as the survey's score rows: a row per output, and one per threshold set holding the band's label. */
+function scoreRows(sessions: StudyDataset["dataset"]["sessions"], scoring: NonNullable<BidsExportInput["scoring"]>): ScoreRowOut[] {
+  const rows: ScoreRowOut[] = [];
+  for (const s of sessions) {
+    const scores = scoring.bySession.get(s.sessionId);
+    if (!scores) continue;
+    for (const scheme of scoring.schemes) {
+      const result = scores[scheme.key];
+      if (!result) continue;
+      for (const o of scheme.outputs) {
+        const v = result.outputs[o.key];
+        const base = { sessionId: s.sessionId, participantId: s.participantId, instrument: scheme.key, scoringKey: scheme.key, scoringVersion: scheme.version, warnings: [] };
+        rows.push({ ...base, output: o.key, value: v?.value ?? null, validCount: v?.valid ?? null });
+        for (const t of o.thresholds) {
+          const band = v?.bands[t.key];
+          rows.push({ ...base, output: `${o.key}_${t.key}`, value: band === null || band === undefined ? null : t.bands[band]!.label, validCount: null });
+        }
+      }
+    }
+  }
+  return rows;
+}
+
+function scoresSidecar(schemes: readonly ScoringScheme[], rows: readonly ScoreRowOut[]): Record<string, unknown> {
+  const present = new Set(rows.map((r) => `${r.instrument}_${r.output}`));
+  const out: Record<string, unknown> = {
+    Description:
+      "Scores computed by the MySelf Research Dashboard from the raw responses with the scoring schemes named below. Regenerable, never edited by hand, and never a substitute for the raw data. 'Verified' says whether a researcher has checked the scheme against the instrument's licensed scoring documentation.",
+  };
+  for (const scheme of schemes) {
+    for (const o of scheme.outputs) {
+      const col = `${scheme.key}_${o.key}`;
+      if (!present.has(col)) continue;
+      out[col] = {
+        LongName: `${scheme.abbreviation ?? scheme.name}: ${o.label}`,
+        Description: o.description ?? o.label,
+        Scheme: `${scheme.key} v${scheme.version} (${SCHEME_STATUS_LABELS[scheme.status]})`,
+        Method: scheme.method,
+        Range: o.range,
+        HigherIs: o.higherIs,
+        Verified: scheme.verified ? `${scheme.verified.by}, ${scheme.verified.at.slice(0, 10)}` : false,
+      };
+      for (const t of o.thresholds) {
+        const bandCol = `${col}_${t.key}`;
+        if (!present.has(bandCol)) continue;
+        out[bandCol] = {
+          LongName: `${scheme.abbreviation ?? scheme.name}: ${o.label} — ${t.label}`,
+          Description: `The band of ${col} under ${t.label}. Source: ${t.source}`,
+          Levels: Object.fromEntries(t.bands.map((b, i) => [b.label, `${o.label} ${bandRange(t, i, o)}`])),
+          Verified: t.verified,
+        };
+      }
+    }
+  }
+  return out;
 }

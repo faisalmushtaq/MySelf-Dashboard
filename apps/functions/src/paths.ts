@@ -4,6 +4,10 @@ import { STUDY } from "./env.js";
 export const dpaths = {
   accessConfig: () => "config/access",
   policyConfig: () => "config/policy",
+  groupsConfig: () => "config/groups",
+  scoringSchemes: (study = STUDY) => `studies/${study}/scoringSchemes`,
+  scoringScheme: (key: string, study = STUDY) => `studies/${study}/scoringSchemes/${key}`,
+  scoringSchemeVersions: (key: string, study = STUDY) => `studies/${study}/scoringSchemes/${key}/versions`,
   user: (uid: string) => `users/${uid}`,
   releases: (study = STUDY) => `studies/${study}/releases`,
   release: (hash: string, study = STUDY) => `studies/${study}/releases/${hash}`,

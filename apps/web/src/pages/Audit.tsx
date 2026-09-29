@@ -19,6 +19,8 @@ const ACTIONS: Record<string, string> = {
   "chart_data.downloaded": "Downloaded chart data",
   "figure.exported": "Exported a figure",
   "participants.viewed": "Viewed participants",
+  "scoring.changed": "Changed a scoring scheme",
+  "groups.changed": "Changed schools and year groups",
   "role.changed": "Changed a role",
   "access_policy.changed": "Changed the access list",
   "policy.changed": "Changed study settings",

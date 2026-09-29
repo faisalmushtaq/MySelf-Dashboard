@@ -5,7 +5,7 @@ import { indexRelease } from "../manifest.js";
 import type { Sitting, SittingEvent } from "../types.js";
 import { demoReleases, generateDemoSittings } from "../node/synthetic.js";
 import { buildDashboardBids, deriveStudyDataset, parseSurveyManifest, participantsOverview, pseudonymiseDataset, scoreStudy, subsetDataset, type BidsExportInput } from "./index.js";
-import { DEFAULT_GROUP_SETTINGS, DEFAULT_SCHEMES } from "../scoring/index.js";
+import { buildScoresView, DEFAULT_GROUP_SETTINGS, DEFAULT_SCHEMES } from "../scoring/index.js";
 
 // ── Fixtures: the synthetic study (never real data) and the real releases ───────
 
@@ -287,9 +287,52 @@ describe("scoring the real survey with the dashboard's schemes", () => {
     expect(own.every((r) => r.value === null)).toBe(true);
   });
 
+  it("writes these scores, their bands and their methods into the BIDS export", () => {
+    const out = buildDashboardBids(
+      input({
+        study: "ybm",
+        studyData: data,
+        selected: new Set([sitting.sessionId]),
+        sittings: new Map([[sitting.sessionId, sitting]]),
+        manifest: manifest!,
+        releaseVersions: new Map([[raw.hash, "7.1.0"]]),
+        scoring: { schemes: DEFAULT_SCHEMES, bySession: new Map([[sitting.sessionId, scored!.scores]]) },
+      }),
+    );
+    const [row] = rows(file(out.files, "phenotype/scores.tsv"));
+    expect(row!["swemwbs_metric"]).toBe("7");
+    expect(row!["swemwbs_metric_warwick_bands"]).toBe("Probable depression");
+    expect(row!["sdq25_s_total_difficulties"]).toBe("10");
+    expect(row!["sdq25_s_total_difficulties_four_band"]).toBe("Close to average");
+    const sidecar = JSON.parse(file(out.files, "phenotype/scores.json")) as Record<string, { Method?: string; Levels?: Record<string, string>; Verified?: unknown }>;
+    expect(sidecar["swemwbs_metric"]!.Method).toContain("Rasch conversion");
+    expect(sidecar["sdq25_s_total_difficulties_four_band"]!.Levels!["Very high"]).toBe("Total difficulties 20–40");
+    expect(sidecar["swemwbs_metric"]!.Verified).toBe(false);
+  });
+
   it("places the sitting in its school and, from the date of birth, its year group — without keeping the date", () => {
     expect(scored).toMatchObject({ school: "NDC", yearGroup: 9, yearGroupSource: "dob" });
     expect(JSON.stringify(data.dataset)).not.toContain("2013-05-04");
+  });
+});
+
+describe("the demo study's standard measures", () => {
+  const scored = scoreStudy(study, { schemes: DEFAULT_SCHEMES, releases: new Map(demo.map((r) => [r.index.hash, r.index])), groups: DEFAULT_GROUP_SETTINGS });
+  const view = buildScoresView(scored, { schemes: DEFAULT_SCHEMES, settings: DEFAULT_GROUP_SETTINGS, observation: "latest", groupBy: "school", now: new Date() });
+  const result = (scheme: string, output: string) => view.results.find((r) => r.scheme === scheme && r.output === output)!;
+
+  it("are scored for every sitting that reached them, with year groups from the year-group question", () => {
+    const swemwbs = result("swemwbs", "metric");
+    expect(swemwbs.overall!.n).toBeGreaterThan(25);
+    expect(scored.filter((s) => s.yearGroup !== null).every((s) => s.yearGroupSource === "item")).toBe(true);
+    expect(view.available.yearGroups.length).toBeGreaterThan(2);
+  });
+
+  it("show the school differences the demo was built with", () => {
+    const bySchool = Object.fromEntries(result("swemwbs", "metric").groups.map((g) => [g.key, g.summary!.mean]));
+    expect(bySchool["NDC"]).toBeGreaterThan(bySchool["BRD"]!);
+    const sdq = Object.fromEntries(result("sdq25_s", "total_difficulties").groups.map((g) => [g.key, g.summary!.mean]));
+    expect(sdq["NDC"]).toBeLessThan(sdq["BRD"]!);
   });
 });
 
