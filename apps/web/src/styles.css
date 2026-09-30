@@ -1,17 +1,25 @@
 /*
  * MySelf Research Dashboard — styles.
  *
- * Basis: the MySelf participant survey's own stylesheet
- * (faisalmushtaq/MySelf apps/participant/src/styles.css), so the survey and the
- * dashboard read as one family. Near-white canvas, white surfaces, ALL TEXT BLACK
- * (hierarchy from size and weight), one accent (#067843) used for state only —
- * selection, the current page, progress — hairline rules, a 6px radius, generous
- * spacing and one typeface: Inter, self-hosted (the CSP allows no font CDN).
- * Headings sit at 600 with the survey's slightly negative tracking; primary
- * buttons are the survey's black "Next" pill.
+ * Basis: the MySelf researcher view's stylesheet
+ * (faisalmushtaq/MySelf apps/researcher/src/styles.css), so the two research
+ * tools read as one family. Its tokens are the participant survey's, set for a
+ * dense working tool rather than one question at a time:
  *
- * The researcher scale is denser than the survey's (0.875rem body, 8px padding
- * on table cells) because this is a data tool: tables still show plenty of rows.
+ *   - one typeface, Inter, self-hosted (the CSP allows no font CDN), at 400,
+ *     500 and 600 only; headings are plain and 600 with no extra tracking;
+ *   - a near-white canvas (#fcfcfb), white cards and panels with a hairline
+ *     border (rgba(0,0,0,.14)) and a 10px radius, no shadows except on things
+ *     that float (popovers, dialogs, toasts);
+ *   - black text for content, muted grey (#6b6b68, 5.3:1 on white) for labels,
+ *     notes, table headings and axis ticks;
+ *   - one accent, green #067843, used sparingly: the primary button, links,
+ *     focus rings, progress and selection;
+ *   - buttons, tabs and inputs are 8px rounded rectangles with a border; the
+ *     current tab (and the current page in the side menu) is an outlined white
+ *     box; primary buttons are filled green;
+ *   - tables are dense and plain: hairline rules on every row, 500-weight
+ *     headings, tabular figures.
  *
  * Status colours mark icons, dots, bars and washes — never text — and always sit
  * beside a label and an icon.
@@ -20,36 +28,37 @@
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
-@import "@fontsource/inter/700.css";
 
 /* ── Tokens ────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Surfaces and ink — the survey's tokens. */
+  /* Surfaces and ink — the researcher view's tokens. */
   --canvas: #fcfcfb;
   --off-white: #f4f4f2;
   --paper: #ffffff;
   --text: #000000;
+  --muted: #6b6b68;
   --hairline: rgba(0, 0, 0, 0.14);
   --hairline-strong: rgba(0, 0, 0, 0.34);
-  --rule: rgba(0, 0, 0, 0.08); /* rows inside a table or list */
+  --rule: var(--hairline); /* rows inside a table or list: a hairline, as in the researcher view */
   --hover: rgba(0, 0, 0, 0.04);
   --accent: #067843;
   --accent-hover: #055c34;
   --accent-wash: rgba(6, 120, 67, 0.07);
   --accent-line: rgba(6, 120, 67, 0.35);
   --warn: #a33b00;
-  --warn-wash: #fdf5f0;
+  --warn-wash: rgba(163, 59, 0, 0.07);
   --warn-line: rgba(163, 59, 0, 0.3);
 
-  --radius: 6px;
-  --radius-lg: 10px;
-  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --radius: 8px; /* buttons, tabs, inputs, small boxes */
+  --radius-lg: 10px; /* cards, panels, table frames, popovers, dialogs */
+  --radius-sm: 6px; /* tags and other small marks */
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.12);
 
-  /* One typeface, as in the survey. */
+  /* One typeface, as in the researcher view. */
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --tracking-tight: -0.021em;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --tracking-tight: -0.01em;
 
   /* Data-vis roles. */
   --viz-accent: #067843;
@@ -95,40 +104,46 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Headings are plain and bold, as in the researcher view: 600, no tracking
+   except the page title's slight tightening. */
 h1,
 h2,
 h3,
 h4 {
   font-weight: 600;
-  line-height: 1.25;
-  margin: 0 0 0.4em;
+  line-height: 1.3;
+  margin: 0 0 0.35em;
 }
 h1 {
-  font-size: 1.625rem;
+  font-size: 1.3rem;
   letter-spacing: var(--tracking-tight);
 }
 h2 {
-  font-size: 1.125rem;
-  letter-spacing: -0.014em;
+  font-size: 1.0625rem;
 }
 h3 {
   font-size: 1rem;
-  letter-spacing: -0.011em;
 }
 h4 {
-  font-size: 0.9375rem;
-  letter-spacing: -0.006em;
+  font-size: 0.875rem;
+}
+strong,
+b {
+  font-weight: 600;
 }
 p {
   margin: 0 0 0.65em;
 }
+/* Links are the accent, as the researcher view's are. In running text they
+   keep an underline so they never rely on colour alone. */
 a {
-  color: var(--text);
-  text-decoration-color: var(--accent);
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-line);
   text-underline-offset: 2px;
 }
 a:hover {
-  text-decoration-thickness: 2px;
+  text-decoration-color: currentColor;
 }
 code,
 kbd {
@@ -169,6 +184,7 @@ kbd {
   top: -48px;
   z-index: 100;
   background: var(--paper);
+  color: var(--text);
   border: 2px solid var(--accent);
   padding: 8px 12px;
   border-radius: var(--radius);
@@ -192,44 +208,44 @@ textarea {
   color: inherit;
 }
 
+/* The researcher view's buttons: 8px rounded rectangles with a border.
+   "Secondary" is white with a strong hairline and turns green on hover;
+   "primary" is filled green. */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--hairline-strong);
   background: var(--paper);
+  color: var(--text);
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.25;
-  transition: border-color 0.15s, background-color 0.15s;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
   text-decoration: none;
   white-space: nowrap;
 }
 .btn:hover:not(:disabled) {
-  border-color: var(--text);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-/* The survey's "Next": a black pill. */
 .btn-primary {
-  background: var(--text);
-  border-color: var(--text);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #2a2a28;
-  border-color: #2a2a28;
-}
-.btn-primary:disabled {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.22);
-  border-color: transparent;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
 }
 .btn-quiet {
   border-color: transparent;
@@ -238,31 +254,38 @@ textarea {
 .btn-quiet:hover:not(:disabled) {
   background: var(--hover);
   border-color: transparent;
+  color: var(--text);
 }
+/* A pressed toggle is the researcher view's current tab: an outlined white box. */
 .btn-quiet[aria-pressed="true"] {
-  background: var(--accent-wash);
-  border-color: var(--accent);
+  background: var(--paper);
+  border-color: var(--hairline-strong);
+  font-weight: 600;
 }
 .btn-small {
   min-height: 30px;
-  padding: 0 11px;
+  padding: 0 10px;
   font-size: 0.8125rem;
 }
 .btn-large {
-  min-height: 48px;
-  padding: 0 1.6rem;
-  font-size: 1rem;
-  letter-spacing: 0.01em;
+  min-height: 44px;
+  padding: 0 1.25rem;
+  font-size: 0.9375rem;
 }
+/* The researcher view's text button: green, underlined on hover. */
 .btn-link {
   background: none;
   border: 0;
   padding: 4px;
-  text-decoration: underline;
-  text-decoration-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+  text-decoration: none;
   text-underline-offset: 2px;
   cursor: pointer;
   min-height: 30px;
+}
+.btn-link:hover:not(:disabled) {
+  text-decoration: underline;
 }
 .icon-btn {
   display: inline-flex;
@@ -270,9 +293,10 @@ textarea {
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid transparent;
   background: transparent;
+  color: var(--text);
   cursor: pointer;
   position: relative;
   transition: background-color 0.15s;
@@ -321,6 +345,7 @@ textarea {
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius);
   background: var(--paper);
+  color: var(--text);
   padding: 6px 10px;
   font-size: 0.875rem;
   font-weight: 400;
@@ -335,10 +360,10 @@ select:hover:not(:disabled),
 textarea:hover {
   border-color: rgba(0, 0, 0, 0.55);
 }
-/* 58% black on white is 5.3:1 — placeholders stay AA. */
+/* The muted grey is 5.3:1 on white — placeholders stay AA. */
 input::placeholder,
 textarea::placeholder {
-  color: rgba(0, 0, 0, 0.58);
+  color: var(--muted);
   opacity: 1;
 }
 textarea {
@@ -421,9 +446,12 @@ legend {
 
 /* ── Text utilities ────────────────────────────────────────────────────── */
 
+/* Secondary text is the researcher view's muted grey (its .note and .dim),
+   not faded black: #6b6b68 is 5.3:1 on white and 4.9:1 on the off-white. */
 .hint {
   font-size: 0.8125rem;
   line-height: 1.5;
+  color: var(--muted);
 }
 .hint.block {
   display: block;
@@ -432,7 +460,7 @@ legend {
 .muted,
 .muted-note,
 .muted-id {
-  opacity: 0.72;
+  color: var(--muted);
 }
 .small {
   font-size: 0.8125rem;
@@ -466,37 +494,46 @@ ul.tight {
   min-height: 100vh;
 }
 
+/* The side menu sits on the canvas, like the researcher view's header, so the
+   current page can be its outlined white box. */
 .sidebar {
   grid-area: side;
   position: sticky;
   top: 0;
   height: 100vh;
-  background: var(--paper);
+  background: var(--canvas);
   border-right: 1px solid var(--hairline);
   display: flex;
   flex-direction: column;
   padding: 18px 12px 14px;
   overflow-y: auto;
 }
+/* The title line, as the researcher view's header: "MySelf" plain and bold,
+   a grey line under it, a hairline rule below both. */
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  color: var(--text);
   text-decoration: none;
-  padding: 2px 8px 22px;
+  padding: 2px 10px 16px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
 }
 .brand strong {
   display: block;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
   line-height: 1.2;
 }
 .brand-sub {
   display: block;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.3;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .brand-mark {
   width: 32px;
@@ -506,7 +543,7 @@ ul.tight {
   color: #fff;
   display: grid;
   place-items: center;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 1rem;
   letter-spacing: -0.02em;
 }
@@ -517,6 +554,8 @@ ul.tight {
   display: grid;
   gap: 2px;
 }
+/* Menu items are the researcher view's tabs: muted grey at 500, black on
+   hover. */
 .sidebar nav a {
   position: relative;
   display: flex;
@@ -524,28 +563,24 @@ ul.tight {
   gap: 10px;
   min-height: 36px;
   padding: 6px 10px;
+  border: 1px solid transparent;
   border-radius: var(--radius);
+  color: var(--muted);
   text-decoration: none;
   font-weight: 500;
-  transition: background-color 0.15s;
+  transition: color 0.15s, background-color 0.15s;
 }
 .sidebar nav a:hover {
+  color: var(--text);
   background: var(--hover);
 }
+/* The current page: the researcher view's current tab — a white box with a
+   hairline edge and black text — plus weight, so it is never colour alone. */
 .sidebar nav a.active {
-  background: var(--accent-wash);
+  background: var(--paper);
+  border-color: var(--hairline-strong);
+  color: var(--text);
   font-weight: 600;
-}
-/* The current page: wash, weight and a bar — not colour alone. */
-.sidebar nav a.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
 }
 .sidebar nav a.active .icon {
   color: var(--accent);
@@ -553,11 +588,11 @@ ul.tight {
 .sidebar-foot {
   margin-top: auto;
   padding: 12px 10px 0;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
 .study-tag {
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  font-weight: 400;
 }
 
 .topbar {
@@ -577,14 +612,16 @@ ul.tight {
 .nav-toggle {
   display: none;
 }
+/* The researcher view's search box: a rectangle, not a pill. */
 .global-search {
   display: flex;
   align-items: center;
   gap: 6px;
   border: 1px solid var(--hairline-strong);
-  border-radius: 999px;
-  padding: 0 12px;
+  border-radius: var(--radius);
+  padding: 0 10px;
   background: var(--paper);
+  color: var(--muted);
   min-width: 220px;
   max-width: 280px;
   flex: 1 1 232px;
@@ -596,6 +633,7 @@ ul.tight {
   width: 100%;
   outline: none;
   background: transparent;
+  color: var(--text);
 }
 .global-search:focus-within,
 .table-search:focus-within {
@@ -617,14 +655,15 @@ ul.tight {
   gap: 6px;
 }
 .version-ctl select {
-  border-radius: 999px;
-  padding-left: 12px;
+  padding-left: 10px;
 }
 .ctl-label {
-  font-weight: 600;
+  font-weight: 500;
 }
 .ctl-sub {
   font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 400;
 }
 .topbar-right {
   display: flex;
@@ -637,7 +676,12 @@ ul.tight {
   align-items: center;
   gap: 6px;
   font-size: 0.8125rem;
+  color: var(--muted);
   padding: 0 4px;
+}
+.freshness strong {
+  color: var(--text);
+  font-weight: 500;
 }
 .fresh-dot {
   width: 7px;
@@ -664,7 +708,8 @@ ul.tight {
   font-size: 0.6875rem;
   display: grid;
   place-items: center;
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .user-menu .user-email {
   max-width: 160px;
@@ -700,9 +745,11 @@ ul.tight {
   outline: none;
 }
 .page {
-  padding: 28px 32px 64px;
+  padding: 24px 32px 64px;
   max-width: 1480px;
 }
+/* The researcher view's header: a plain bold title, a grey line under it and
+   a hairline rule below both. */
 .page-head {
   display: flex;
   justify-content: space-between;
@@ -710,15 +757,18 @@ ul.tight {
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--hairline);
 }
 .page-head h1 {
   margin: 0;
 }
 .page-desc {
   max-width: 76ch;
-  margin: 6px 0 0;
-  font-size: 0.9375rem;
-  line-height: 1.55;
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--muted);
 }
 .page-actions {
   display: flex;
@@ -728,24 +778,26 @@ ul.tight {
 
 /* ── Cards and metrics ─────────────────────────────────────────────────── */
 
+/* The researcher view's panel: white, a hairline edge, a 10px radius, no
+   shadow. */
 .card {
   background: var(--paper);
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  padding: 20px 22px;
+  border-radius: var(--radius-lg);
+  padding: 18px 22px 20px;
   margin: 0 0 20px;
 }
 /* A later heading inside a card starts a new sub-section: give it air. */
 .card > h3:not(:first-child),
 .card > h4:not(:first-child) {
-  margin-top: 1.4em;
+  margin-top: 1.25em;
 }
 .card-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
 }
 .card-head h3 {
@@ -753,8 +805,10 @@ ul.tight {
 }
 .card-desc {
   font-size: 0.8125rem;
+  line-height: 1.5;
   margin: 0;
   max-width: 64ch;
+  color: var(--muted);
 }
 .card-tools {
   display: flex;
@@ -764,6 +818,7 @@ ul.tight {
 .card-foot {
   font-size: 0.8125rem;
   margin-top: 10px;
+  color: var(--muted);
 }
 details.card > summary {
   cursor: pointer;
@@ -784,21 +839,23 @@ details.card[open] > summary {
   transition: opacity 0.2s;
 }
 
+/* The researcher view's summary cards: a small grey label, a large 600
+   tabular number and a grey note. */
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 14px;
-  margin: 4px 0 24px;
+  margin: 4px 0 22px;
 }
 .metric {
   background: var(--paper);
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 112px;
+  gap: 2px;
+  min-height: 104px;
 }
 .metric-hero {
   grid-column: span 2;
@@ -811,30 +868,38 @@ details.card[open] > summary {
   align-items: center;
   gap: 4px;
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 400;
+  color: var(--muted);
 }
 .metric-value {
-  font-size: 1.75rem;
+  font-size: 1.6rem;
   font-weight: 600;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 .metric-hero .metric-value {
-  font-size: 2.75rem;
-  letter-spacing: -0.035em;
-  line-height: 1.05;
+  font-size: 2.4rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 .metric-sub {
   font-size: 0.8125rem;
+  color: var(--muted);
 }
 .metric-link {
   margin-top: auto;
   font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 2px;
   min-height: 26px;
   align-self: flex-start;
+}
+.metric-link:hover {
+  text-decoration: underline;
 }
 
 .infotip {
@@ -850,11 +915,15 @@ details.card[open] > summary {
   display: grid;
   place-items: center;
   border-radius: 50%;
+  color: var(--muted);
   cursor: help;
 }
 .infotip-btn:hover {
   background: var(--hover);
+  color: var(--text);
 }
+/* A definition floats like the researcher view's popover: white, a strong
+   hairline, a 10px radius and a soft shadow. */
 .infotip-body {
   display: none;
   position: absolute;
@@ -862,10 +931,11 @@ details.card[open] > summary {
   top: 28px;
   left: -8px;
   width: min(300px, 80vw);
-  background: #111;
-  color: #fff;
+  background: var(--paper);
+  color: var(--text);
+  border: 1px solid var(--hairline-strong);
   padding: 10px 12px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   font-size: 0.8125rem;
   font-weight: 400;
   text-transform: none;
@@ -879,21 +949,25 @@ details.card[open] > summary {
 
 /* ── Status, badges, tags ──────────────────────────────────────────────── */
 
+/* Status badges are the researcher view's status pill ("Saved"): a small
+   rounded label with a hairline edge; the status colour is on the icon and a
+   faint wash. */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 1px 9px 1px 7px;
+  gap: 4px;
+  padding: 1px 8px 1px 6px;
   border-radius: 999px;
-  font-size: 0.8125rem;
+  font-size: 0.78rem;
   font-weight: 500;
-  line-height: 1.55;
+  line-height: 1.5;
   border: 1px solid var(--hairline-strong);
   background: var(--paper);
   white-space: nowrap;
 }
 .badge-sub {
   font-weight: 400;
+  color: var(--muted);
 }
 .badge .icon {
   color: var(--st, var(--text));
@@ -943,18 +1017,19 @@ details.card[open] > summary {
 .pill {
   display: inline-flex;
   align-items: center;
-  padding: 1px 10px;
+  padding: 1px 8px;
   border-radius: 999px;
+  border: 1px solid var(--hairline);
   background: var(--off-white);
-  font-size: 0.8125rem;
-  line-height: 1.55;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 .tag {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 0 7px;
-  border-radius: 4px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--hairline-strong);
   font-size: 0.75rem;
   line-height: 1.7;
@@ -981,49 +1056,54 @@ details.card[open] > summary {
 }
 .code {
   font-size: 0.75rem;
-  opacity: 0.75;
+  color: var(--muted);
   margin-left: 6px;
 }
 
 /* ── Notices, empty, error and loading states, toasts ──────────────────── */
 
+/* The researcher view's alerts: a quiet one is off-white with a hairline edge;
+   a warning has a warn-coloured edge and a faint warn wash. */
 .notice {
   display: flex;
   gap: 10px;
   align-items: flex-start;
   padding: 12px 14px;
-  border-radius: var(--radius);
-  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--hairline);
   background: var(--off-white);
   margin: 0 0 16px;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 .notice .icon {
   margin-top: 2px;
 }
-/* A warning is the survey's reconcile-this callout: a warn rule on the left. */
 .notice-warn {
   background: var(--warn-wash);
-  border-left: 3px solid var(--warn);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-color: var(--warn);
 }
 .notice-warn .icon {
   color: var(--warn);
 }
+/* Nothing to show: centred, plain, the explanation in grey — as the researcher
+   view's "Nothing here yet". */
 .empty {
   text-align: center;
-  padding: 40px 24px;
-  border: 1px dashed var(--hairline-strong);
-  border-radius: var(--radius);
-  background: var(--paper);
+  padding: 32px 24px;
   margin: 12px 0;
 }
+.empty > .icon {
+  color: var(--muted);
+}
 .empty h3 {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 .empty-body {
-  max-width: 60ch;
+  max-width: 56ch;
   margin: 0 auto;
+  color: var(--muted);
+  line-height: 1.6;
 }
 .empty-action {
   margin-top: 14px;
@@ -1031,10 +1111,10 @@ details.card[open] > summary {
 .error-state {
   display: flex;
   gap: 12px;
-  padding: 16px 18px;
-  border-left: 3px solid var(--warn);
+  padding: 14px 16px;
+  border: 1px solid var(--warn);
   background: var(--warn-wash);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border-radius: var(--radius-lg);
   margin: 12px 0;
 }
 .error-state .icon {
@@ -1093,18 +1173,21 @@ details.card[open] > summary {
   gap: 8px;
   z-index: 80;
 }
+/* A toast is a small floating panel with the researcher view's "what is open"
+   edge: a 3px accent rule on the left (warn for an error). */
 .toast {
-  background: #111;
-  color: #fff;
+  background: var(--paper);
+  color: var(--text);
   padding: 11px 16px;
+  border: 1px solid var(--hairline-strong);
+  border-left: 3px solid var(--accent);
   border-radius: var(--radius);
   box-shadow: var(--shadow-pop);
   max-width: 380px;
   font-size: 0.875rem;
-  border-left: 3px solid var(--accent);
 }
 .toast-error {
-  border-left-color: #ff8a57;
+  border-left-color: var(--warn);
 }
 
 /* ── Filters, popovers, chips, menus ───────────────────────────────────── */
@@ -1131,12 +1214,14 @@ details.card[open] > summary {
   align-items: center;
   margin-top: 10px;
 }
+/* An active filter: the researcher view marks a filtered column with the
+   accent wash; here the chip carries it. */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 1px 3px 1px 10px;
-  border-radius: 999px;
+  padding: 1px 3px 1px 9px;
+  border-radius: var(--radius);
   background: var(--accent-wash);
   border: 1px solid var(--accent-line);
   font-size: 0.8125rem;
@@ -1147,7 +1232,7 @@ details.card[open] > summary {
   background: none;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -1163,9 +1248,14 @@ details.card[open] > summary {
   background: var(--paper);
 }
 .popover > .btn:hover:not(:disabled) {
-  border-color: var(--text);
+  border-color: var(--accent);
   background: var(--paper);
+  color: var(--accent);
 }
+.popover > .btn[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+/* The researcher view's popover: white, a strong hairline, 10px radius. */
 .popover-body {
   position: absolute;
   z-index: 50;
@@ -1174,8 +1264,8 @@ details.card[open] > summary {
   max-height: 70vh;
   overflow: auto;
   background: var(--paper);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
   padding: 12px;
 }
@@ -1190,16 +1280,16 @@ details.card[open] > summary {
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 36px;
+  min-height: 34px;
   padding: 6px 8px;
   border: 0;
   background: none;
   text-align: left;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .menu-row:hover {
-  background: var(--hover);
+  background: var(--off-white);
 }
 .menu-row.selected {
   font-weight: 600;
@@ -1244,15 +1334,18 @@ details.card[open] > summary {
   stroke: var(--grid);
   stroke-width: 1;
 }
+/* Axis ticks are secondary text: the muted grey, tabular. Values drawn at the
+   end of a series stay black. */
 .chart-svg .tick {
   font-size: 11px;
-  fill: #000;
+  fill: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 .chart-svg .end-label {
   font-size: 11.5px;
   font-weight: 600;
-  fill: #000;
+  fill: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 .chart-svg .ring {
   stroke: var(--paper);
@@ -1272,11 +1365,12 @@ details.card[open] > summary {
   top: 8px;
   transform: translateX(-50%);
   background: var(--paper);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--hairline-strong);
   border-radius: var(--radius);
   box-shadow: var(--shadow-pop);
   padding: 8px 10px;
   font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
   pointer-events: none;
   min-width: 140px;
 }
@@ -1301,6 +1395,7 @@ details.card[open] > summary {
   padding: 0;
   margin: 0 0 8px;
   font-size: 0.8125rem;
+  color: var(--muted);
 }
 .legend li {
   display: flex;
@@ -1316,36 +1411,36 @@ details.card[open] > summary {
   max-height: 340px;
 }
 
-/* Two or three mutually exclusive views (Chart / Table, density, preview size). */
+/* Two or three mutually exclusive views (Chart / Table, density, preview
+   size) are the researcher view's tabs: muted grey words, and the chosen one
+   an outlined white box in black — with weight, so never colour alone. */
 .segmented {
   display: inline-flex;
   gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 999px;
-  background: var(--paper);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .segmented button {
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: transparent;
-  padding: 0 11px;
-  min-height: 26px;
+  color: var(--muted);
+  padding: 0 10px;
+  min-height: 28px;
   cursor: pointer;
   font-size: 0.8125rem;
   font-weight: 500;
+  transition: color 0.15s;
 }
 .segmented button:hover:not([aria-pressed="true"]) {
-  background: var(--hover);
+  color: var(--text);
 }
-.segmented button:focus-visible {
-  outline-offset: 1px;
-}
-/* The chosen view: the survey's selected state (accent edge, wash) and bold. */
 .segmented button[aria-pressed="true"] {
-  background: var(--accent-wash);
-  border-color: var(--accent);
-  font-weight: 700;
+  background: var(--paper);
+  border-color: var(--hairline-strong);
+  color: var(--text);
+  font-weight: 600;
 }
 
 .barlist {
@@ -1358,17 +1453,18 @@ details.card[open] > summary {
   grid-template-columns: minmax(120px, 42%) 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 5px 6px;
-  border-radius: var(--radius);
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
   text-decoration: none;
-  min-height: 34px;
+  min-height: 32px;
 }
 a.bar-link:hover {
-  background: var(--hover);
+  background: var(--off-white);
 }
 a.bar-link:hover .bar-text {
+  color: var(--accent);
   text-decoration: underline;
-  text-decoration-color: var(--accent);
 }
 .bar-label {
   display: flex;
@@ -1376,7 +1472,7 @@ a.bar-link:hover .bar-text {
   gap: 6px;
   min-width: 0;
   flex-wrap: wrap;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 .bar-text {
   overflow-wrap: anywhere;
@@ -1384,7 +1480,7 @@ a.bar-link:hover .bar-text {
 .bar-sub {
   width: 100%;
   font-size: 0.75rem;
-  opacity: 0.75;
+  color: var(--muted);
 }
 .bar-track {
   height: 12px;
@@ -1394,24 +1490,27 @@ a.bar-link:hover .bar-text {
   display: block;
   height: 12px;
   max-width: 100%;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 2px 2px 0;
   min-width: 2px;
 }
 .bar-value {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   min-width: 48px;
   text-align: right;
 }
 
 /* ── Tables ────────────────────────────────────────────────────────────── */
 
+/* The researcher view's data table: a white frame with a hairline edge and a
+   10px radius; an off-white heading row at 500 over a strong hairline; dense
+   rows, each ruled with a hairline; tabular figures; an off-white row hover. */
 .table-wrap,
 .table-scroll {
   overflow: auto;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--paper);
 }
 .table-scroll {
@@ -1422,11 +1521,12 @@ table.data {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
 table.data th,
 table.data td {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--rule);
   text-align: left;
   vertical-align: top;
@@ -1435,9 +1535,9 @@ table.data thead th {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--paper);
+  background: var(--off-white);
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   border-bottom: 1px solid var(--hairline-strong);
 }
@@ -1448,14 +1548,26 @@ table.data th.num {
 table.data tbody tr:last-child td {
   border-bottom: 0;
 }
+/* Links in a table are the researcher view's green identifiers: no underline
+   until hovered. */
+table.data td a {
+  text-decoration: none;
+}
+table.data td a:hover {
+  text-decoration: underline;
+}
+/* A small table inside a card is the researcher view's "mini" table: no
+   heading fill, grey headings, hairline rules. */
 table.data.compact th,
 table.data.compact td {
-  padding: 6px 10px;
+  padding: 5px 10px;
   font-size: 0.8125rem;
 }
 table.data.compact thead th {
   position: static;
   background: transparent;
+  color: var(--muted);
+  border-bottom-color: var(--hairline);
 }
 .th-sort {
   display: inline-flex;
@@ -1464,17 +1576,24 @@ table.data.compact thead th {
   background: none;
   border: 0;
   padding: 0;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  min-height: 26px;
+  min-height: 24px;
+}
+.th-sort:hover {
+  color: var(--accent);
+}
+.th-sort .icon:not(.sort-idle) {
+  color: var(--accent);
 }
 .sort-idle {
-  opacity: 0.3;
+  opacity: 0.35;
 }
 .group-row th {
   background: var(--off-white) !important;
   position: static !important;
   font-size: 0.8125rem !important;
+  font-weight: 600 !important;
 }
 .q-cell code {
   display: inline-block;
@@ -1485,7 +1604,7 @@ table.data.compact thead th {
   max-width: 40ch;
 }
 .detail-row td {
-  background: #fbfbfa;
+  background: var(--canvas);
 }
 tr.row-selected > th,
 tr.row-selected > td {
@@ -1508,7 +1627,7 @@ tr.subrow > td {
   white-space: nowrap;
 }
 .sessions-table tbody tr:hover td {
-  background: #fafaf8;
+  background: var(--off-white);
 }
 .sessions-table tbody tr:focus-visible {
   outline: 2px solid var(--accent);
@@ -1525,8 +1644,8 @@ tr.subrow > td {
 }
 .density-compact td,
 .density-compact th {
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
   font-size: 0.8125rem;
 }
 .col-check {
@@ -1576,16 +1695,18 @@ table.data .col-check input {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--hairline-strong);
-  border-radius: 999px;
-  padding: 0 12px;
+  border-radius: var(--radius);
+  padding: 0 10px;
   background: var(--paper);
+  color: var(--muted);
 }
 .table-search input {
   border: 0;
-  min-height: 32px;
+  min-height: 34px;
   width: 240px;
   outline: none;
   padding: 0;
+  color: var(--text);
 }
 .selection-bar {
   display: flex;
@@ -1594,7 +1715,7 @@ table.data .col-check input {
   padding: 8px 12px;
   background: var(--accent-wash);
   border: 1px solid var(--accent-line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   margin-bottom: 10px;
 }
 .pagination {
@@ -1626,7 +1747,7 @@ table.data .col-check input {
   overflow: auto;
   background: var(--paper);
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
@@ -1669,11 +1790,12 @@ table.data .col-check input {
   margin-bottom: 18px;
 }
 .detail-head h2 {
-  font-size: 1.375rem;
+  font-size: 1.3rem;
   letter-spacing: var(--tracking-tight);
 }
 .detail-head h2 code {
   font-size: 0.8em;
+  font-weight: 500;
   letter-spacing: 0;
 }
 .detail-sub {
@@ -1686,10 +1808,11 @@ table.data .col-check input {
   text-align: right;
 }
 .score-value {
-  font-size: 2.25rem;
+  font-size: 2rem;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .score-label {
   display: flex;
@@ -1697,11 +1820,14 @@ table.data .col-check input {
   align-items: center;
   gap: 2px;
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 400;
+  color: var(--muted);
   margin-top: 4px;
 }
 .score-sub {
   font-size: 0.8125rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
   margin-bottom: 8px;
 }
 .detail-body {
@@ -1728,10 +1854,12 @@ table.data .col-check input {
 .kv dt {
   font-weight: 500;
   font-size: 0.8125rem;
+  color: var(--muted);
 }
 .kv dd {
   margin: 0;
   overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 .kv-grid {
   display: grid;
@@ -1772,18 +1900,22 @@ table.data .col-check input {
 .section-progress a {
   display: inline-flex;
   gap: 8px;
-  padding: 3px 11px;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
+  padding: 3px 10px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
   background: var(--paper);
+  color: var(--text);
   text-decoration: none;
   font-size: 0.8125rem;
+  font-weight: 500;
 }
 .section-progress a:hover {
-  border-color: var(--hairline-strong);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .sp-value {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .answer-section {
   margin-bottom: 22px;
@@ -1797,12 +1929,13 @@ table.data .col-check input {
   padding: 10px 0 8px;
   margin: 0;
   border-bottom: 1px solid var(--hairline-strong);
-  font-size: 1rem;
+  font-size: 0.9375rem;
 }
 .sec-meta {
   font-size: 0.8125rem;
   font-weight: 400;
   letter-spacing: 0;
+  color: var(--muted);
 }
 .answer-list {
   list-style: none;
@@ -1813,7 +1946,7 @@ table.data .col-check input {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   gap: 20px;
-  padding: 14px 10px;
+  padding: 12px 10px;
   border-bottom: 1px solid var(--rule);
   scroll-margin-top: 140px;
 }
@@ -1835,12 +1968,15 @@ table.data .col-check input {
   flex-wrap: wrap;
   align-items: center;
   font-size: 0.75rem;
+  color: var(--muted);
 }
-/* The question as the participant saw it: the survey's stem weight. */
+.answer-ids code {
+  color: var(--text);
+}
+/* The question as the participant saw it. */
 .answer-text {
   margin: 6px 0 8px;
-  font-weight: 600;
-  letter-spacing: -0.011em;
+  font-weight: 500;
 }
 .answer-tags {
   display: flex;
@@ -1875,7 +2011,7 @@ table.data .col-check input {
 }
 .answer-time {
   font-size: 0.75rem;
-  opacity: 0.75;
+  color: var(--muted);
 }
 .not-in-version li {
   padding: 3px 0;
@@ -1912,6 +2048,7 @@ table.data .col-check input {
 .notes li {
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
+  background: var(--paper);
   padding: 10px 12px;
   margin-bottom: 6px;
   display: flex;
@@ -1936,13 +2073,15 @@ table.data .col-check input {
 
 /* ── Dialogs and the export form ───────────────────────────────────────── */
 
+/* A dialog is the researcher view's drawer, centred: white, a strong hairline,
+   a soft shadow, a hairline under the title. */
 .dialog {
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-lg);
   padding: 0;
   width: min(640px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
-  box-shadow: var(--shadow-pop);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
   background: var(--paper);
   color: var(--text);
 }
@@ -1950,13 +2089,13 @@ table.data .col-check input {
   width: min(1040px, calc(100vw - 32px));
 }
 .dialog::backdrop {
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(0, 0, 0, 0.28);
 }
 .dialog-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px 14px 22px;
+  padding: 12px 14px 12px 20px;
   border-bottom: 1px solid var(--hairline);
   position: sticky;
   top: 0;
@@ -1965,9 +2104,10 @@ table.data .col-check input {
 }
 .dialog-head h2 {
   margin: 0;
+  font-size: 1rem;
 }
 .dialog-body {
-  padding: 20px 22px;
+  padding: 18px 20px;
 }
 .dialog-body > label {
   margin-bottom: 14px;
@@ -1975,7 +2115,7 @@ table.data .col-check input {
 .dialog-foot {
   display: flex;
   gap: 8px;
-  padding: 14px 22px;
+  padding: 12px 20px;
   border-top: 1px solid var(--hairline);
 }
 .export-grid {
@@ -1991,8 +2131,9 @@ table.data .col-check input {
 }
 .export-preview {
   background: var(--off-white);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  padding: 16px 18px;
+  padding: 14px 16px;
 }
 .export-preview .kv > div {
   grid-template-columns: 130px 1fr;
@@ -2011,9 +2152,9 @@ table.data .col-check input {
 .progress {
   position: relative;
   height: 30px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--paper);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--hairline-strong);
   overflow: hidden;
   margin: 12px 0;
 }
@@ -2372,8 +2513,7 @@ table.data.participants tbody th {
 }
 .scheme-card h2 {
   margin: 0 0 8px;
-  font-size: 1.25rem;
-  letter-spacing: -0.018em;
+  font-size: 1.125rem;
 }
 .scheme-card .tags {
   margin-bottom: 4px;
@@ -2394,9 +2534,11 @@ table.data.participants tbody th {
 .score-stats dt {
   font-size: 0.8125rem;
   font-weight: 500;
+  color: var(--muted);
 }
 .score-stats dd {
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 .score-stats .wide {
   grid-column: 1 / -1;
@@ -2431,8 +2573,8 @@ table.data.participants tbody th {
 }
 .output-title {
   font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: -0.011em;
+  font-size: 0.9375rem;
+  color: var(--text);
 }
 
 /* ── Scoring settings ──────────────────────────────────────────────────── */
@@ -2590,16 +2732,17 @@ table.codebook th[scope="row"] {
   background: var(--paper);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-lg);
-  padding: 32px 32px 26px;
+  padding: 28px 28px 24px;
 }
 .gate-brand {
-  padding: 0 0 26px;
+  padding: 0 0 18px;
+  margin-bottom: 20px;
 }
 .gate h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.75rem;
+  font-size: 1.3rem;
   margin-bottom: 0.35em;
 }
 .gate p {
@@ -2608,6 +2751,14 @@ table.codebook th[scope="row"] {
 }
 .gate .btn-primary {
   margin: 6px 0 4px;
+}
+/* Google's mark keeps its white ground on the green button. */
+.gate .btn-primary svg {
+  box-sizing: content-box;
+  padding: 3px;
+  margin-left: -6px;
+  border-radius: var(--radius-sm);
+  background: #fff;
 }
 .gate .hint {
   font-size: 0.8125rem;
@@ -2680,9 +2831,11 @@ table.codebook th[scope="row"] {
     transform: translateX(-100%);
     transition: transform 0.2s;
   }
+  /* Open, the menu is the researcher view's drawer, from the left. */
   .shell.nav-open .sidebar {
     transform: none;
-    box-shadow: var(--shadow-pop);
+    border-right-color: var(--hairline-strong);
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.1);
   }
   .nav-toggle {
     display: inline-flex;
@@ -2789,10 +2942,9 @@ table.codebook th[scope="row"] {
     background: Highlight !important;
     forced-color-adjust: none;
   }
-  .sidebar nav a.active::before {
-    background: Highlight;
-  }
-  .segmented button[aria-pressed="true"] {
+  .sidebar nav a.active,
+  .segmented button[aria-pressed="true"],
+  .btn-quiet[aria-pressed="true"] {
     border-color: Highlight;
   }
 }

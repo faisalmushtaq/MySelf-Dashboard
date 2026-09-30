@@ -219,9 +219,10 @@ only where there was no equivalent: `react-router-dom` (URL state), `exceljs` (X
 server-side), `pdfkit` + `svg-to-pdfkit` (PDF, server-side). Charts are small hand-written SVG components
 so every chart has a proper accessible name, a data table twin and no third-party
 analytics or CDN. Visual language follows the survey's binding style guide
-(`docs/11-style-guide.md`, D-17) as the survey's own stylesheet now applies it:
-Inter (self-hosted), near-white canvas, black text, one accent `#067843`, category
-accents `#1e6091`, `#964f8c`, `--warn #A33B00`.
+(`docs/11-style-guide.md`, D-17) as the survey's researcher view applies it
+(`apps/researcher/src/styles.css`): Inter (self-hosted), near-white canvas, black
+text with a muted grey `#6b6b68` for labels and notes, hairline borders, one accent
+`#067843`, category accents `#1e6091`, `#964f8c`, `--warn #A33B00`.
 
 ## 2.8 Hosting
 
