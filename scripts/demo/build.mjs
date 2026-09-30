@@ -15,7 +15,7 @@
  * to end instead of recording (editor-walk.mjs), and builds no demo.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 
 const ROOT = new URL("../../", import.meta.url).pathname;
 const CHECK_EDITOR = process.argv.includes("--check-editor");
@@ -38,8 +38,10 @@ run("pnpm", ["--filter", "@myself-dashboard/web", "exec", "vite", "build", "--ou
 });
 
 // The functions serve study "ybm" to the recording's web origin. .env.local is
-// read only by the emulator and is not committed.
-writeFileSync(new URL("apps/functions/.env.local", `file://${ROOT}`), `MYSELF_STUDY=ybm\nDASHBOARD_ORIGINS=http://127.0.0.1:${PORTS.web}\n`);
+// read only by the emulator, is not committed, and is removed afterwards: left
+// behind, it would point the e2e suite's emulators at the demo study.
+const ENV_LOCAL = new URL("apps/functions/.env.local", `file://${ROOT}`);
+writeFileSync(ENV_LOCAL, `MYSELF_STUDY=ybm\nDASHBOARD_ORIGINS=http://127.0.0.1:${PORTS.web}\n`);
 
 const web = spawn("pnpm", ["--filter", "@myself-dashboard/web", "exec", "vite", "preview", "--outDir", "dist-record", "--port", String(PORTS.web), "--host", "127.0.0.1", "--strictPort"], { cwd: ROOT, stdio: "ignore" });
 try {
@@ -48,6 +50,7 @@ try {
   });
 } finally {
   web.kill();
+  rmSync(ENV_LOCAL, { force: true });
 }
 
 if (CHECK_EDITOR) process.exit(0);
