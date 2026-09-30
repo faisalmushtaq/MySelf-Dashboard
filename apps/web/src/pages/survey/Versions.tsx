@@ -81,11 +81,13 @@ export default function Versions() {
         <h2 id="active-h">On devices now</h2>
         {active ? (
           <p>
-            <strong>v{active.version}</strong> — made active {dateTime(active.activatedAt)}. New sittings on every iPad use it; a sitting already under way finishes on the version it started with.
+            <strong>v{active.version}</strong> — made active {dateTime(active.activatedAt)}. New sittings on every iPad use it; a sitting already under way
+            finishes on the version it started with.
           </p>
         ) : (
           <p>
-            No version has been published from the dashboard yet, so each iPad runs the version bundled in the survey app ({list[0] ? `v${list[0].version} at most` : "none registered"}).
+            No version has been published from the dashboard yet, so each iPad runs the version bundled in the survey app (
+            {list[0] ? `v${list[0].version} at most` : "none registered"}).
           </p>
         )}
       </section>
@@ -114,9 +116,7 @@ export default function Versions() {
                   {drafts.data.drafts.map((d) => (
                     <tr key={d.id}>
                       <td>
-                        <Link to={`/survey/drafts/${d.id}`}>
-                          {d.name}
-                        </Link>
+                        <Link to={`/survey/drafts/${d.id}`}>{d.name}</Link>
                       </td>
                       <td>v{d.baseVersion}</td>
                       <td className="num">{int(d.edits)}</td>
@@ -163,7 +163,12 @@ export default function Versions() {
                         <td>
                           <strong>v{v.version}</strong>
                           {active?.hash === v.hash ? <span className="tag tag-good">active</span> : null}
-                          {v.bump ? <div className="hint">{v.bump.toUpperCase()}{v.baseVersion ? ` on v${v.baseVersion}` : ""}</div> : null}
+                          {v.bump ? (
+                            <div className="hint">
+                              {v.bump.toUpperCase()}
+                              {v.baseVersion ? ` on v${v.baseVersion}` : ""}
+                            </div>
+                          ) : null}
                         </td>
                         <td>
                           {dateOnly(v.publishedAt)}
@@ -183,23 +188,36 @@ export default function Versions() {
                         <td>{v.mystory ?? "—"}</td>
                         <td className="num">
                           {int(v.sittings)}
-                          {v.firstSitting ? <div className="hint">{dateOnly(v.firstSitting)} – {dateOnly(v.lastSitting)}</div> : null}
+                          {v.firstSitting ? (
+                            <div className="hint">
+                              {dateOnly(v.firstSitting)} – {dateOnly(v.lastSitting)}
+                            </div>
+                          ) : null}
                         </td>
-                        <td>{when.length ? when.map((p) => `${dateOnly(p.from)} – ${p.to ? dateOnly(p.to) : "now"}`).join("; ") : <span className="hint">—</span>}</td>
+                        <td>
+                          {when.length ? when.map((p) => `${dateOnly(p.from)} – ${p.to ? dateOnly(p.to) : "now"}`).join("; ") : <span className="hint">—</span>}
+                        </td>
                         <td className="row-actions">
-                          <button type="button" className="btn btn-small btn-quiet" onClick={() => void download(v)} title="Download this version's frozen manifest">
-                            <Icon name="download" size={14} /> Manifest
-                          </button>
-                          {can("survey.edit") && editable ? (
-                            <button type="button" className="btn btn-small btn-quiet" onClick={() => startDraft(v)}>
-                              Start a draft
+                          <div className="stack-actions">
+                            <button
+                              type="button"
+                              className="btn btn-small btn-quiet"
+                              onClick={() => void download(v)}
+                              title="Download this version's frozen manifest"
+                            >
+                              <Icon name="download" size={14} /> Manifest
                             </button>
-                          ) : null}
-                          {canPublish && active?.hash !== v.hash && editable ? (
-                            <button type="button" className="btn btn-small" onClick={() => setRollback(v)}>
-                              Make active
-                            </button>
-                          ) : null}
+                            {can("survey.edit") && editable ? (
+                              <button type="button" className="btn btn-small btn-quiet" onClick={() => startDraft(v)}>
+                                Start a draft
+                              </button>
+                            ) : null}
+                            {canPublish && active?.hash !== v.hash && editable ? (
+                              <button type="button" className="btn btn-small" onClick={() => setRollback(v)}>
+                                Make active
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                       {isOpen ? (
@@ -220,7 +238,9 @@ export default function Versions() {
             </table>
           </div>
         )}
-        <p className="hint">Versions before v7.2.0 cannot start a draft: today's publish checks refuse their SWEMWBS scoring (D-49), which later versions corrected.</p>
+        <p className="hint">
+          Versions before v7.2.0 cannot start a draft: today's publish checks refuse their SWEMWBS scoring (D-49), which later versions corrected.
+        </p>
       </section>
 
       <RollbackDialog
@@ -246,7 +266,17 @@ export default function Versions() {
   );
 }
 
-function RollbackDialog({ version, busy, onClose, onConfirm }: { version: VersionRecord | null; busy: boolean; onClose: () => void; onConfirm: (reason: string) => void }) {
+function RollbackDialog({
+  version,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  version: VersionRecord | null;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
   const [reason, setReason] = useState("");
   return (
     <Dialog
@@ -264,7 +294,10 @@ function RollbackDialog({ version, busy, onClose, onConfirm }: { version: Versio
         </>
       }
     >
-      <p>New sittings on every iPad will use v{version?.version} from their next start. Sittings already under way finish on the version they started with. Nothing is deleted: you can make any version active again later.</p>
+      <p>
+        New sittings on every iPad will use v{version?.version} from their next start. Sittings already under way finish on the version they started with.
+        Nothing is deleted: you can make any version active again later.
+      </p>
       <label className="field">
         Why (kept with the version history)
         <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={500} />

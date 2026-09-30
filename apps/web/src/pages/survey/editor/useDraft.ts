@@ -50,12 +50,18 @@ export function useDraft(base: Workspace | null, initial: Edit[], highest: strin
     return { workspace, failed: failed ?? null, changes, next: nextVersion(highest, changes, level) };
   }, [base, edits, highest, level]);
 
-  /** Add an edit — refused on the spot if it cannot apply, with the reason. */
+  /**
+   * Add an edit, or several that belong together — refused on the spot, all of
+   * them, if any cannot apply, with the reason.
+   */
   const push = useCallback(
-    (edit: Edit): string | null => {
+    (edit: Edit | Edit[]): string | null => {
       if (!base || !derived) return "The draft is still loading.";
-      const last = edits.at(-1);
-      const nextEdits = last && sameTarget(last, edit) ? [...edits.slice(0, -1), edit] : [...edits, edit];
+      let nextEdits = edits;
+      for (const e of Array.isArray(edit) ? edit : [edit]) {
+        const last = nextEdits.at(-1);
+        nextEdits = last && sameTarget(last, e) ? [...nextEdits.slice(0, -1), e] : [...nextEdits, e];
+      }
       const check = applyEdits(base, nextEdits);
       if (check.failed) return check.failed.message;
       setEdits(nextEdits);

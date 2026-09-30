@@ -94,7 +94,7 @@ function DraftEditor({
 
   if (!d.derived) return <Loading />;
   const { workspace: ws, failed, changes, next } = d.derived;
-  const push = (e: Edit) => (readOnly ? "This draft cannot be changed." : d.push(e));
+  const push = (e: Edit | Edit[]) => (readOnly ? "This draft cannot be changed." : d.push(e));
 
   /** Save, and say under which id (a new draft gets one on its first save). */
   const save = async (): Promise<string | null> => {
@@ -121,7 +121,15 @@ function DraftEditor({
         title={name}
         description={
           <>
-            A draft of the survey, starting from v{base.base.version}. It would become <strong>v{next.version}</strong> ({next.level}). Nothing reaches an iPad until an owner publishes it.
+            A draft of the survey, starting from v{base.base.version}.{" "}
+            {changes.length === 0 ? (
+              "No changes yet."
+            ) : (
+              <>
+                With its {changes.length} change{changes.length === 1 ? "" : "s"} it would become <strong>v{next.version}</strong> ({next.level}).
+              </>
+            )}{" "}
+            Nothing reaches an iPad until an owner publishes it.
           </>
         }
         actions={
@@ -130,7 +138,7 @@ function DraftEditor({
           ) : (
             <>
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>
-                {saving ? "Saving…" : d.dirty ? "Save the draft" : "Saved"}
+                {saving ? "Saving…" : d.dirty || !id ? "Save the draft" : "Saved"}
               </button>
               {id ? (
                 <button
