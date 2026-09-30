@@ -135,6 +135,10 @@ for (const observation of ["latest", "first", "all", "wave_1", "wave_2", "wave_3
   for (const groupBy of ["school", "yearGroup", "schoolYear", "gender", "wave", "none"]) await call("getScores", { ...scores, observation, groupBy });
 for (const school of ["NTH", "STH", "WST"]) await call("getScores", { ...scores, focus: { school } });
 for (const yearGroup of [7, 8, 9, 10, 11, 12, 13]) await call("getScores", { ...scores, focus: { yearGroup } });
+// The survey researcher view's figures for each dataset choice. They are computed from
+// the raw sittings, which the demo does not carry, so only recorded filters play back.
+const researcher = seen("getResearcherView")[0]?.data ?? { filters: {} };
+for (const dataset of ["all", "test"]) await call("getResearcherView", { ...researcher, filters: { ...researcher.filters, dataset } });
 console.log(`walked ${routes.length + 2} pages; swept ${sessionIds.size} sessions; ${calls.length} calls in all`);
 
 // ── 3. What the web app reads from Firestore directly ───────────────────────

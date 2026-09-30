@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { DEFAULT_FILTERS, type CodebookResponse, type ParticipantsResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse } from "@myself-dashboard/core";
+import { DEFAULT_FILTERS, type AnalyticsResponse, type CodebookResponse, type ParticipantsResponse, type ResearcherViewResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse } from "@myself-dashboard/core";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
 import { pdfText } from "./pdfText.js";
 
@@ -14,7 +14,7 @@ import { invalidateSettings } from "../src/settings.js";
 import { resetStore } from "../src/store.js";
 import { whoAmI } from "../src/api/access.js";
 import { getSessionDetail, querySessions } from "../src/api/sessions.js";
-import { getAnalytics, getQuestionAnalytics, getQuestionHistory } from "../src/api/analytics.js";
+import { getAnalytics, getQuestionAnalytics, getQuestionHistory, getResearcherView } from "../src/api/analytics.js";
 import { addNote, updateReview } from "../src/api/review.js";
 import { logFigureExport, setDashboardRole, updateAccessPolicy, getSettings } from "../src/api/admin.js";
 import { createExport, downloadExport, expireExports, previewExport } from "../src/api/exports.js";
@@ -174,6 +174,22 @@ describe("analytics", () => {
     expect(m["complete"]! + m["incomplete"]! + m["abandoned"]! + m["inProgress"]! + m["notStarted"]!).toBe(m["started"]);
     expect(r.releases).toHaveLength(3);
     expect(r.freshness.summaryCount).toBe(sittings.length);
+  });
+
+  it("gives the survey researcher view's figures for the same filters, counted by its own rules", async () => {
+    const { analytics } = await run<AnalyticsResponse>(getAnalytics, reviewer, { filters: DEFAULT_FILTERS });
+    const v = await run<ResearcherViewResponse>(getResearcherView, reviewer, { filters: DEFAULT_FILTERS });
+    const m = analytics.metrics;
+    expect(v.figures.sittings).toBe(m.started);
+    expect(v.figures.reachedEnd).toBe(m.reachedEnd);
+    expect(v.figures.allRequiredAnswered).toBe(m.allRequiredAnswered);
+    expect(v.figures.finishedOrAbandoned).toBe(m.completionRateDenominator);
+    expect([v.quarantined, v.unreadable]).toEqual([m.quarantined, m.unreadable]);
+    expect(v.figures.participants).toBeGreaterThan(30);
+    expect(v.figures.linked + v.figures.notLinked).toBe(v.figures.sittings);
+    // Aggregates only: no participant code, study code or sitting id leaves the server.
+    expect(JSON.stringify(v)).not.toMatch(/[A-Z]{2}[0-9]{3}[A-Z]{2}|ses_/);
+    await expect(run(getResearcherView, stranger, { filters: DEFAULT_FILTERS })).rejects.toMatchObject({ code: "permission-denied" });
   });
 
   it("question analysis is for one version; history covers all", async () => {

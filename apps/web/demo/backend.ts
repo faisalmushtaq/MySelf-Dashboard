@@ -103,11 +103,11 @@ const canonical = (v: unknown): string => {
 // Fields that pick WHICH thing is asked for: an answer about another session or another grouping is never a fair stand-in.
 const IDENTITY = ["sessionId", "key", "versionHash", "compareWith", "groupBy", "observation", "focus"];
 
-async function replay(name: string, data: unknown): Promise<unknown> {
+async function replay(name: string, data: unknown, options: { exact?: (recorded: unknown) => boolean } = {}): Promise<unknown> {
   const mine = (await recorded()).filter((c) => c.name === name && c.status === 200);
   const want = canonical(data);
-  let best = mine.find((c) => canonical(c.data) === want);
-  if (!best) {
+  let best = options.exact ? mine.find((c) => options.exact!(c.data)) : mine.find((c) => canonical(c.data) === want);
+  if (!best && !options.exact) {
     const d = (data ?? {}) as Data;
     let score = -Infinity;
     for (const c of mine) {
@@ -182,6 +182,13 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
     const base = (await replay("getAnalytics", data)) as Data;
     const freshness = (base["freshness"] ?? {}) as Data;
     return { ...base, analytics: computeAnalytics(all.filter(makePredicate(filters, ctx)), { ...ctx, range: rangeFor(filters, ctx), releases }), freshness: { ...freshness, summaryCount: summaries.length } };
+  },
+
+  async getResearcherView(data) {
+    // Computed from the raw sittings, which the demo does not carry: played back for the
+    // filters it was recorded with, and never as a stand-in for figures under other filters.
+    const want = canonical(sanitiseFilters(data["filters"]));
+    return replay("getResearcherView", data, { exact: (d) => canonical(sanitiseFilters((d as Data | null)?.["filters"])) === want });
   },
 
   async getQuestionAnalytics(data) {

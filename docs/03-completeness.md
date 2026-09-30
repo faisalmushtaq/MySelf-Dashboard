@@ -1,10 +1,15 @@
 # 3. Completeness and status — definitions
 
-These rules are implemented once, in `packages/core/src/completeness.ts` and
-`packages/core/src/status.ts`, and every number in the dashboard comes from them.
-The same text is shown in the app (Help, and the ⓘ beside each metric). Rule set
-version: **`completeness@1`** — stored on every summary so a change of rules is a
-visible rebuild, not a silent drift.
+These rules are implemented once, **in the survey**: `packages/store/src/completeness.ts`
+(the assessment) and `packages/store/src/counting.ts` (the lifecycle, test codes and the
+counts) in faisalmushtaq/MySelf, vendored verbatim into
+`packages/core/src/vendor/myself/store/`. The survey's researcher view counts its
+sittings with the same files, so the two tools cannot drift apart
+(`scripts/check-vendored.mjs` fails CI when the copies differ; §3.8). Here
+`packages/core/src/completeness.ts` and `status.ts` build on them, and every number in
+the dashboard comes from them. The same text is shown in the app (Help, and the ⓘ beside
+each metric). Rule set version: **`completeness@1`** — stored on every summary so a change
+of rules is a visible rebuild, not a silent drift.
 
 ## 3.1 Inputs
 
@@ -87,7 +92,7 @@ shown rather than a wrong one.
 A sitting has one **lifecycle** status and zero or more **markers**.
 
 **Terminal** means the survey reached its end: `complete: true` on the sitting, or a
-`session.completed` event in its log.
+`session.completed` event in its log. The lifecycle is the survey's `lifecycleOf`.
 
 | Lifecycle | Rule |
 |---|---|
@@ -100,7 +105,7 @@ A sitting has one **lifecycle** status and zero or more **markers**.
 | Marker | Rule |
 |---|---|
 | Invalid | quarantined by the survey (two contradicting copies), log unreadable (missing chunks), or marked invalid by a researcher |
-| Test session | study code matches a test pattern in the policy (proposed default: codes starting `TST` or `ZZZ`), or marked as test by a researcher |
+| Test session | study code matches a test pattern in the policy (default `^TST` and `^ZZZ`, case-insensitive: the survey's `DEFAULT_COUNTING_RULES`), or marked as test by a researcher |
 | Needs review | review status is *Needs review*; or an open flag; or — while the review is still *Unreviewed* — an automatic data-quality signal (invalid answers, unknown question ids, device clock ahead of the server, too-fast answers ≥ policy threshold) |
 
 The badge shows the most severe marker (Invalid › Test › Needs review), otherwise the
@@ -111,17 +116,27 @@ marker matches the marker. By default the dashboard shows **production** data on
 
 ## 3.5 Overview metrics
 
+**Quarantined and unreadable sittings are left out of every figure on the Overview**
+(and of the completeness report built from the same analytics), and a notice says how
+many. The survey's researcher view never receives them, so counting them here would make
+the two disagree; nothing true can yet be said about them anyway. They stay in the
+session list, marked invalid, for somebody to look at.
+
 | Metric | Definition |
 |---|---|
-| Sessions started | Sittings in the current filters |
+| All required answered (hero; the completion rate) | Complete ÷ (Complete + Incomplete + Abandoned), shown as "66 of 77 finished or abandoned sittings". In-progress, not-started and invalid sittings are excluded — they have not had, or cannot be judged to have had, the chance to finish. Was "Completion rate". |
+| Reached the end | (Complete + Incomplete) ÷ the same denominator: reached the finish screen, whether or not every required question was answered |
+| Sittings | Sittings in the current filters, except quarantined and unreadable ones. Was "Sessions started". |
 | Completed / Incomplete / Abandoned | Lifecycle counts |
 | Sessions requiring review | Needs-review marker count |
-| Completion rate | Complete ÷ (Complete + Incomplete + Abandoned). In-progress, not-started and invalid sittings are excluded — they have not had, or cannot be judged to have had, the chance to finish. |
 | Median completion time | Median device-measured duration (monotonic clock) of complete sittings that were **never resumed** — a resumed sitting's timer covers only its last stretch (`docs/06`, `durationMs`). Shows *n*; hidden below 5. |
 | New in period | Sittings the server first received inside the date range |
 | Most recent response | Latest device `tWall` of any response, with the server's latest receipt beside it |
 | Data last refreshed | When summaries were last written, and when this view was computed |
 | Active published version | The policy's active release, else the newest release in the registry |
+
+Below the metrics, **"As the survey's researcher view counts them"** shows the researcher
+view's own Overview for the same filters (§3.8).
 
 **Date filters** state which timestamp they use: session start (default), completion,
 last activity (all device clock), or received (server clock). Days are bucketed in the
@@ -147,3 +162,44 @@ condition changed, revision changed. Pooling is:
 - **caution** — wording or labels changed (codes identical): pooled only with the
   warning visible;
 - **incompatible** — type or option codes changed: never pooled; shown side by side.
+
+## 3.8 The survey's researcher view
+
+The survey's researcher view (MySelf `apps/researcher`) summarises the same sittings,
+from `studies/{study}/sessions`. It counts them with the survey's `counting.ts`, and the
+Overview shows its figures, computed by that code on the server (`getResearcherView`,
+over the study the survey's own ingest links), so a researcher can hold the two side by
+side. `packages/core/src/survey/crossapp.test.ts` feeds one study — the demo generator's,
+with the real app's recorded scenarios, sittings with no name or date of birth, and
+quarantined and unreadable ones — down both tools and requires every shared figure to
+match.
+
+| Label (both tools) | Counts |
+|---|---|
+| Sittings | Every sitting in scope, whatever its state, including those that cannot be linked to a participant ("3 not linked to a participant"). Quarantined and unreadable sittings are left out, and counted. Test sittings are left out unless the researcher view's "Include test sittings" is ticked — here, the *Production and test* filter. |
+| Participants | Distinct participants among the linked sittings, by the survey's linkage (name and date of birth, corrections, twin assignments) |
+| Followed up | Participants with more than one sitting in scope; "up to wave n" |
+| Reached the end | Complete + Incomplete, "n of m finished or abandoned sittings" |
+| All required answered | Complete, of the same m — the dashboard's completion rate |
+| Median length | Device-timed length of the linked sittings that reached the end, resumed or not. **Not** *Median completion time* (§3.5), which takes complete, never-resumed sittings only |
+| Skipped | Skipped or declined ÷ answered, skipped or declined, over the linked sittings |
+| Answered very fast | Answers flagged too fast ÷ answers given, over the linked sittings |
+
+The researcher view formats rates to one decimal place ("85.7%"); the dashboard's own
+tiles round to whole percentages ("86%"). The counts beside them are identical.
+
+**Where the two can still differ**, and why:
+
+- **Different sittings.** The researcher view counts what was last pulled into that
+  browser, plus files imported there by hand, which the dashboard never sees. It says
+  when it last pulled and how many sittings came from where.
+- **Policy.** The researcher view counts with the survey's defaults (required = `hard`
+  and `soft`; abandoned after 24 hours; test codes `^TST`, `^ZZZ`), because it cannot
+  read `config/policy`. A study that changes one of these here should expect the two to
+  differ by it.
+- **Reviews.** A sitting a researcher *marks* as test or invalid here is left out here
+  only; the researcher view cannot see reviews.
+- **An unregistered version.** The researcher view links a sitting whose release it does
+  not know by reading it through the latest release; the dashboard's linkage leaves it out
+  (so the panel here reports it as not linked). Both count it as a sitting, and neither
+  can call it incomplete.

@@ -30,7 +30,10 @@ any web server (for example `python3 -m http.server` in that folder).
   browser, using the same core routines the functions use. So every filter
   works. Flags and notes change in memory until the tab is closed. Everything
   else is played back from the recording. Saving settings and exporting are
-  switched off.
+  switched off. The survey researcher view's figures on the Overview are
+  computed from raw sittings, which the demo does not carry, so they are played
+  back only for the filters they were recorded under (every dataset choice,
+  otherwise the defaults).
 
 ## How it is put together
 
