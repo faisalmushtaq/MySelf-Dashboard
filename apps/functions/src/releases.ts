@@ -92,12 +92,18 @@ export function prepareRelease(raw: unknown, study: string): { meta: ReleaseMeta
   };
 }
 
-export async function registerRelease(raw: unknown, study: string, registeredBy: string): Promise<ReleaseMeta> {
+/**
+ * Register a version. `provenance` is what the survey editor knows about how
+ * the version was made — its base, why, what changed, who published it
+ * (docs/11) — kept beside the metadata so the version history can be read
+ * without opening a manifest.
+ */
+export async function registerRelease(raw: unknown, study: string, registeredBy: string, provenance: Record<string, unknown> = {}): Promise<ReleaseMeta> {
   const { meta, manifestJson } = prepareRelease(raw, study);
   const db = dash();
   const batch = db.batch();
   batch.set(db.doc(dpaths.releaseManifest(meta.hash, study)), { manifestJson });
-  batch.set(db.doc(dpaths.release(meta.hash, study)), { ...meta, registeredAt: FieldValue.serverTimestamp(), registeredBy });
+  batch.set(db.doc(dpaths.release(meta.hash, study)), { ...meta, ...provenance, registeredAt: FieldValue.serverTimestamp(), registeredBy });
   await batch.commit();
   listCache = null;
   return meta;

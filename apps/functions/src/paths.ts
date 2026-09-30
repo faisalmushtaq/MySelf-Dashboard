@@ -23,6 +23,11 @@ export const dpaths = {
   exportJobs: (study = STUDY) => `studies/${study}/exportJobs`,
   exportJob: (id: string, study = STUDY) => `studies/${study}/exportJobs/${id}`,
   audit: (study = STUDY) => `studies/${study}/auditLog`,
+  /** Survey editor drafts and the history of which version was active (docs/11). */
+  surveyDrafts: (study = STUDY) => `studies/${study}/surveyDrafts`,
+  surveyDraft: (id: string, study = STUDY) => `studies/${study}/surveyDrafts/${id}`,
+  releaseActivations: (study = STUDY) => `studies/${study}/releaseActivations`,
+  surveyPublishing: (study = STUDY) => `studies/${study}/meta/surveyPublishing`,
 } as const;
 
 /** Survey database layout (MySelf packages/firebase/src/layout.ts). */
@@ -34,4 +39,8 @@ export const spaths = {
   corrections: (study = STUDY) => `studies/${study}/corrections`,
   assignments: (study = STUDY) => `studies/${study}/assignments`,
   narratives: (study = STUDY) => `studies/${study}/narratives`,
+  /** Versions published from the dashboard, and the one devices use (survey D-54). */
+  releases: (study = STUDY) => `studies/${study}/releases`,
+  release: (hash: string, study = STUDY) => `studies/${study}/releases/${hash}`,
+  activeRelease: (study = STUDY) => `studies/${study}/config/activeRelease`,
 } as const;

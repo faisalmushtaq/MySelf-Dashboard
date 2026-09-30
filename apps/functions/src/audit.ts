@@ -31,7 +31,12 @@ export type AuditAction =
   | "access_policy.changed"
   | "policy.changed"
   | "summaries.rebuilt"
-  | "release.registered";
+  | "release.registered"
+  | "survey.draft_saved"
+  | "survey.draft_deleted"
+  | "survey.published"
+  | "survey.activated"
+  | "survey.provenance_exported";
 
 export interface AuditEntry {
   action: AuditAction;

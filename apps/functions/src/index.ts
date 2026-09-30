@@ -23,3 +23,15 @@ export { previewExport, createExport, downloadExport, cleanupExports } from "./a
 export { getParticipants } from "./api/participants.js";
 export { getScores, getScoringSettings, saveScoringScheme, saveGroupSettings } from "./api/scores.js";
 export { getCodebook } from "./api/codebook.js";
+export {
+  listSurveyDrafts,
+  getSurveyDraft,
+  saveSurveyDraft,
+  deleteSurveyDraft,
+  previewSurveyDraft,
+  publishSurveyVersion,
+  activateSurveyVersion,
+  listSurveyVersions,
+  exportSurveyProvenance,
+  getSurveyManifest,
+} from "./api/editor.js";
