@@ -1,9 +1,16 @@
 /* The survey editor and versions pages (docs/11). Uses the dashboard's tokens only. */
 
+/* Tabs in the editor look like the dashboard's other chosen-view toggles. */
 .segmented button[aria-selected="true"] {
-  background: var(--accent-wash);
-  border-color: var(--accent);
-  font-weight: 700;
+  background: var(--paper);
+  border-color: var(--hairline-strong);
+  color: var(--text);
+  font-weight: 600;
+}
+@media (forced-colors: active) {
+  .segmented button[aria-selected="true"] {
+    border-color: Highlight;
+  }
 }
 .survey-editor .segmented {
   margin: 4px 0 16px;
