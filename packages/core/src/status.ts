@@ -1,16 +1,21 @@
 import { isTestCode, type Policy } from "./policy.js";
 import type { ReviewDoc } from "./review.js";
 import { REVIEW_WARNINGS, type SessionSummary } from "./summary.js";
+import { LIFECYCLES, lifecycleOf, type Lifecycle } from "./vendor/myself/store/counting.js";
 
 /**
  * Session status, derived when read (docs/03 §3.4).
  *
  * Not stored, because two of its inputs move on their own: "abandoned" depends
  * on the current time, and "needs review" on the review record.
+ *
+ * The lifecycle is the survey's `lifecycleOf` (vendored counting rules), the same
+ * function its researcher view counts "reached the end" and "all required answered"
+ * with. The markers are the dashboard's own: they depend on reviews, which only the
+ * dashboard holds.
  */
 
-export const LIFECYCLES = ["not_started", "in_progress", "abandoned", "incomplete", "complete"] as const;
-export type Lifecycle = (typeof LIFECYCLES)[number];
+export { LIFECYCLES, type Lifecycle };
 
 export const MARKERS = ["invalid", "test", "needs_review"] as const;
 export type Marker = (typeof MARKERS)[number];
@@ -57,20 +62,19 @@ export function deriveStatus(
   policy: Pick<Policy, "abandonAfterHours" | "testCodePatterns" | "tooFastWarningCount">,
   now: Date,
 ): DerivedStatus {
-  let lifecycle: Lifecycle;
-  if (s.terminal) {
-    lifecycle = s.releaseKnown && s.counts.requiredMissing > 0 ? "incomplete" : "complete";
-  } else if (!s.hasResponses) {
-    lifecycle = "not_started";
-  } else {
-    const heard = [s.receivedAt, s.lastActivityAt]
-      .map((t) => (t ? Date.parse(t) : NaN))
-      .filter((t) => Number.isFinite(t));
-    // The server's clock first: a device clock can be hours out (audit F4).
-    const lastHeard = s.receivedAt && Number.isFinite(Date.parse(s.receivedAt)) ? Date.parse(s.receivedAt) : Math.max(...heard, -Infinity);
-    const windowMs = policy.abandonAfterHours * 3_600_000;
-    lifecycle = Number.isFinite(lastHeard) && now.getTime() - lastHeard <= windowMs ? "in_progress" : "abandoned";
-  }
+  // The server's clock first: a device clock can be hours out (audit F4).
+  const lifecycle: Lifecycle = lifecycleOf(
+    {
+      terminal: s.terminal,
+      hasResponses: s.hasResponses,
+      releaseKnown: s.releaseKnown,
+      requiredMissing: s.counts.requiredMissing,
+      receivedAt: s.receivedAt,
+      lastActivityAt: s.lastActivityAt,
+    },
+    policy.abandonAfterHours,
+    now,
+  );
 
   const signals = [...s.warnings];
   if (s.tooFastCount >= policy.tooFastWarningCount && !signals.includes("too_fast")) signals.push("too_fast");
@@ -89,6 +93,19 @@ export function deriveStatus(
   }
   const ordered = MARKER_PRECEDENCE.filter((m) => markers.has(m));
   return { lifecycle, markers: ordered, display: ordered[0] ?? lifecycle, signals: signals.sort(), openFlags };
+}
+
+/**
+ * Why a sitting is left out of every figure, if it is: quarantined by the survey (two
+ * copies that contradict each other), or a log whose chunks are not all there.
+ *
+ * The survey's researcher view never receives either kind — its pull leaves them out
+ * and says how many — so the Overview leaves them out too, and says how many, rather
+ * than counting sittings nobody can yet say anything true about. They stay in the
+ * session list, marked invalid, because somebody has to look at them.
+ */
+export function heldBackReason(s: Pick<SessionSummary, "quarantined" | "unreadable">): "quarantined" | "unreadable" | null {
+  return s.quarantined ? "quarantined" : s.unreadable ? "unreadable" : null;
 }
 
 export function matchesStatus(d: DerivedStatus, wanted: DisplayStatus): boolean {

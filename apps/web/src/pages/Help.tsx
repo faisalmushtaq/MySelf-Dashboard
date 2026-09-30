@@ -54,6 +54,16 @@ export function HelpContent() {
         </p>
       </section>
       <section>
+        <h3>Reached the end, and all required answered</h3>
+        <p className="formula">Reached the end = (Complete + Incomplete) ÷ (Complete + Incomplete + Abandoned)</p>
+        <p className="formula">All required answered = Complete ÷ (Complete + Incomplete + Abandoned)</p>
+        <p>
+          Both are out of the sessions that have finished or been abandoned; in-progress, not-started and invalid sessions are in neither. Quarantined and
+          unreadable sittings are left out of the Overview altogether, and a notice says how many. The survey&apos;s researcher view counts with the same rules — its
+          own code, copied here — so a number the two show under one name is the same number, and the Overview shows its figures for the same filters.
+        </p>
+      </section>
+      <section>
         <h3>What happened to each question</h3>
         <dl className="defs">
           {[...OUTCOMES, "not_in_version" as const].map((o) => (

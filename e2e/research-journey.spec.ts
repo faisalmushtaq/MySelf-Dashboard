@@ -23,7 +23,7 @@ test("a researcher reviews incomplete sessions and exports them; a stranger is d
 
   // 2. The Overview loads with real figures.
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await expect(page.getByText("Completion rate", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Key figures" }).getByText("All required answered", { exact: true })).toBeVisible();
   const incompleteCard = page.locator(".metric", { has: page.getByText("Incomplete", { exact: true }) });
   const incompleteCount = Number(await incompleteCard.locator(".metric-value").innerText());
   expect(incompleteCount).toBeGreaterThan(1);

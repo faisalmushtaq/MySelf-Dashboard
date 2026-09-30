@@ -77,7 +77,7 @@ test("an administrator sees the audit log, access settings and filter-empty stat
 test("the main screens have no serious accessibility violations (axe, WCAG 2.1 AA)", async ({ page }) => {
   await signIn(page, ADMIN);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await expect(page.getByText("Completion rate", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Key figures" }).getByText("All required answered", { exact: true })).toBeVisible();
   const check = async (label: string) => {
     const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     const serious = r.violations.filter((v) => v.impact === "serious" || v.impact === "critical");

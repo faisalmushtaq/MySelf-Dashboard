@@ -12,7 +12,7 @@ below was checked against the repository on 2026-09-30.
 
 | Path | What it is |
 |---|---|
-| `packages/core/` | All domain logic, no Firebase: release manifests and their index (`manifest.ts`), log replay and the completeness engine (`replay.ts`, `completeness.ts`, `summary.ts`, `status.ts`), filters, sorting and paging (`filters.ts`, `query.ts`), analytics and question statistics, exports, roles (`roles.ts`), and **the API contract** (`api.ts`). Sub-folders: `figures/` (publication figures), `scoring/` (schemes, engine, benchmarks, school reports), `codebook/` (readable names), `quality/` (the automated quality review), `survey/` (BIDS and participant linkage on the survey's own data layer; server only), `node/` (hashing and the synthetic demo data; Node only), `vendor/` (copied verbatim from the survey — never edit by hand). Built to `dist/`, which the web app and functions import. |
+| `packages/core/` | All domain logic, no Firebase: release manifests and their index (`manifest.ts`), log replay and the completeness engine (`replay.ts`, `completeness.ts`, `summary.ts`, `status.ts` — the rules themselves are the survey's, vendored, and shared with its researcher view: [03-completeness.md](03-completeness.md) §3.8), filters, sorting and paging (`filters.ts`, `query.ts`), analytics and question statistics, exports, roles (`roles.ts`), and **the API contract** (`api.ts`). Sub-folders: `figures/` (publication figures), `scoring/` (schemes, engine, benchmarks, school reports), `codebook/` (readable names), `quality/` (the automated quality review), `survey/` (BIDS and participant linkage on the survey's own data layer; server only), `node/` (hashing and the synthetic demo data; Node only), `vendor/` (copied verbatim from the survey — never edit by hand). Built to `dist/`, which the web app and functions import. |
 | `apps/functions/` | The backend, Firebase Functions codebase `dashboard` in europe-west2. `src/index.ts` lists everything deployed; `src/api/*.ts` are the callables; `summaries.ts` is the trigger that summarises each sitting; `store.ts` the in-memory mirror behind lists and metrics; `authz.ts` access decisions; `audit.ts` the audit log; `exporters/` Excel and PDF; `test/` integration tests against the emulators; `build-deploy.mjs` bundles everything into `functions-bundle/` for deployment. |
 | `apps/web/` | The React + Vite single-page app. `src/App.tsx` (sign-in gate and routes), `src/app/` (shell and navigation, auth, study data, filters), `src/pages/` (one file per page; a page too big for one file keeps its parts in a sibling folder named after it, e.g. `pages/scoring-settings/`), `src/components/`, `src/charts/`, `src/lib/` (Firebase client, typed API client, hooks, formatting, figure files), `src/styles.css` (all styles). |
 | `firestore/` | `dashboard.rules` (security rules for the `dashboard` database), `dashboard.indexes.json`, `storage.emulator.rules`, and `test/rules.test.ts`. |
@@ -55,7 +55,8 @@ below was checked against the repository on 2026-09-30.
    allowlist (`config/access`) and the role claim, the handler reads the
    in-memory mirror (`store.ts`) and computes with `packages/core`, and the
    response is one of the shapes in `packages/core/src/api.ts`. Participants,
-   scores and exports need the survey's own linkage (codes, waves,
+   scores, exports and the Overview's "As the survey's researcher view counts
+   them" (`getResearcherView`) need the survey's own linkage (codes, waves,
    corrections), so `studyData.ts` reads raw sittings server-side through the
    vendored data layer in `packages/core/src/survey/`.
 4. **Direct reads.** The web app also reads a few collections of the
@@ -185,14 +186,17 @@ release is registered its sittings show "unknown version" and no completeness.
 
 ### Re-vendor the survey
 
-The dashboard judges "would this question have been shown?" and builds its
-BIDS export with the survey's own code, copied verbatim into
-`packages/core/src/vendor/`:
+The dashboard judges "would this question have been shown?", judges
+completeness, counts sittings and builds its BIDS export with the survey's own
+code, copied verbatim into `packages/core/src/vendor/`:
 
 - `vendor/myself/{schema,scoring,store}/*.ts` — the data layer, written by
   `node scripts/vendor-survey.mjs ../MySelf` (path to a survey checkout;
   run from the repository root). `vendor/myself/index.ts` is the dashboard's
-  own list of what it uses.
+  own list of what it uses. `store/completeness.ts` and `store/counting.ts`
+  are the rules the survey's researcher view counts by too; `completeness.ts`,
+  `replay.ts`, `validate.ts`, `status.ts` and `policy.ts` here build on them,
+  and their `@myself/engine` import is rewritten to `vendor/engine.ts`.
 - `vendor/engine.ts` — the display-condition evaluator, copied by hand from
   the survey's `packages/engine/src/answers.ts` and `evaluate.ts` (its header
   says which parts).
@@ -202,7 +206,11 @@ fails when either has drifted from the survey. CI runs it on every push with a
 checkout of the survey made with the `SURVEY_REPO_TOKEN` secret; without that
 secret the check finds no checkout and skips. After
 re-vendoring, run every suite: the BIDS, participant and completeness tests
-exercise the copied code.
+exercise the copied code, and `packages/core/src/survey/crossapp.test.ts`
+feeds one study through the researcher view's code and the dashboard's and
+fails if any figure the two show under one label differs. A change to a
+counting rule belongs in the survey, not here; update
+[03-completeness.md](03-completeness.md) with it.
 
 ### Add a scoring scheme
 
@@ -227,10 +235,10 @@ exercise the copied code.
 
 | Suite | Command | Needs | Now |
 |---|---|---|---|
-| Unit | `pnpm -r test` | core built | 309: core 274, functions 27, web 8 |
+| Unit | `pnpm -r test` | core built | 357: core 322, functions 27, web 8 |
 | Typecheck | `pnpm -r typecheck` | core built | all packages |
 | Rules | `pnpm test:rules` | Java (Firestore emulator) | 29 |
-| Functions integration | `pnpm test:integration` | Java, core built | 37 |
+| Functions integration | `pnpm test:integration` | Java, core built | 38 |
 | End to end | `pnpm e2e:build` then `pnpm test:e2e` | Java, a Chromium | 10 |
 | Privacy lint | `pnpm lint:privacy` | — | no console logging or analytics in `apps/web` |
 | Vendored drift | `pnpm check:vendored ../MySelf` | a survey checkout | engine and data layer match |
@@ -295,6 +303,10 @@ only into the dashboard's own resources: the `dashboard` database, the
   belong to the survey repository.
 - **`packages/core/src/vendor/` and `releases/` are copies.** Re-vendor or
   re-copy; never edit.
+- **A number the survey's researcher view also shows is counted by its code.**
+  Sittings, Reached the end, All required answered and the rest (03 §3.8) come
+  from the vendored `counting.ts`; give a measure of the dashboard's own a
+  different name.
 - **Privacy:** no `console.log`/`info`/`debug` and no analytics in the web app
   (`pnpm lint:privacy`); identifying answers never leave the server; audit
   details carry ids and counts, never answers, free text or names.

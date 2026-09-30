@@ -19,7 +19,7 @@ const range = resolveRange("all", {}, now, tz);
 describe("overview metrics", () => {
   const a = computeAnalytics(production, { now, timeZone: tz, range, releases: rels });
 
-  it("lifecycle counts add up to the sittings started", () => {
+  it("lifecycle counts add up to the sittings counted", () => {
     const m = a.metrics;
     expect(m.complete + m.incomplete + m.abandoned + m.inProgress + m.notStarted).toBe(m.started);
   });
@@ -52,12 +52,33 @@ describe("overview metrics", () => {
   it("reports activity per version, newest first, with an unregistered version last", () => {
     expect(a.versions.map((v) => v.version)).toEqual(["2.0.0", "1.1.0", "1.0.0", null]);
     expect(a.versions.at(-1)!.known).toBe(false);
-    expect(a.versions.reduce((n, v) => n + v.sessions, 0)).toBe(production.length);
+    // Every counted sitting, once: quarantined and unreadable ones are left out of the Overview.
+    expect(a.versions.reduce((n, v) => n + v.sessions, 0)).toBe(production.filter((r) => !r.summary.quarantined && !r.summary.unreadable).length);
   });
 
   it("section completion treats a skipped-by-logic section as not applicable", () => {
     const social = a.sections.find((s) => s.key === "social_media")!;
     expect(social.sessionsApplicable).toBeLessThan(a.sections.find((s) => s.key === "sleep")!.sessionsApplicable);
+  });
+
+  it("counts the two completion measures over one denominator", () => {
+    const m = a.metrics;
+    expect(m.allRequiredAnswered).toBe(Math.round(m.completionRate! * m.completionRateDenominator));
+    expect(m.reachedEnd).toBeGreaterThanOrEqual(m.allRequiredAnswered);
+    expect(m.reachedEnd).toBeLessThanOrEqual(m.completionRateDenominator);
+  });
+
+  it("leaves quarantined and unreadable sittings out of every figure, and counts them", () => {
+    // As the survey's researcher view never receives them (its pull leaves them out).
+    const clean = production.filter((r) => !r.summary.quarantined && !r.summary.unreadable);
+    const held = clean.slice(0, 3).map((r, i) => ({ ...r, summary: { ...r.summary, quarantined: i < 2, unreadable: i === 2 } }));
+    const b = computeAnalytics([...held, ...clean.slice(3)], { now, timeZone: tz, range, releases: rels });
+    expect(b.metrics.quarantined).toBe(2);
+    expect(b.metrics.unreadable).toBe(1);
+    expect(b.metrics.started).toBe(clean.length - 3);
+    const m = b.metrics;
+    expect(m.complete + m.incomplete + m.abandoned + m.inProgress + m.notStarted).toBe(m.started);
+    expect(b.versions.reduce((n, v) => n + v.sessions, 0)).toBe(clean.length - 3);
   });
 
   it("median is the middle value", () => {

@@ -24,6 +24,7 @@ import { ChartCard } from "../charts/ChartCard";
 import { LineChart } from "../charts/LineChart";
 import { BarList } from "../charts/BarList";
 import { Columns } from "../charts/Columns";
+import { ResearcherView } from "./overview/ResearcherView";
 
 export function useAnalytics() {
   const { filters } = useFilters();
@@ -84,6 +85,14 @@ export default function Overview() {
       ) : null}
       {a && m && m.started > 0 ? (
         <div className={loading ? "dimmed" : ""} aria-busy={loading}>
+          {m.quarantined + m.unreadable > 0 ? (
+            <Notice tone="warn">
+              {int(m.quarantined + m.unreadable)} sitting{m.quarantined + m.unreadable === 1 ? " is" : "s are"} left out of these figures
+              {m.quarantined > 0 ? `: ${int(m.quarantined)} quarantined by the survey (two copies of one sitting that contradict each other)` : ""}
+              {m.unreadable > 0 ? `${m.quarantined > 0 ? "," : ":"} ${int(m.unreadable)} with a log too torn to read` : ""}. The survey&apos;s researcher view leaves them out
+              too. <Link to={link({ statuses: ["invalid"] })}>Show them</Link> with the other invalid sessions.
+            </Notice>
+          ) : null}
           {m.unknownVersionCount > 0 ? (
             <Notice tone="warn">
               {m.unknownVersionCount} session{m.unknownVersionCount === 1 ? " uses" : "s use"} a survey version that is not in the registry, so their completeness is
@@ -93,12 +102,24 @@ export default function Overview() {
           <section className="metric-grid" aria-label="Key figures">
             <Metric
               hero
-              label="Completion rate"
+              label="All required answered"
               value={pct(m.completionRate)}
-              sub={`${int(m.complete)} of ${int(m.completionRateDenominator)} finished or abandoned sessions`}
-              definition="Complete ÷ (Complete + Incomplete + Abandoned). In-progress, not-started and invalid sessions are excluded: they have not had, or cannot be judged to have had, the chance to finish."
+              sub={`${int(m.allRequiredAnswered)} of ${int(m.completionRateDenominator)} finished or abandoned sittings`}
+              definition="The completion rate: Complete ÷ (Complete + Incomplete + Abandoned). Complete means the sitting reached the end with every required question that applied answered or declined. In-progress, not-started and invalid sessions are excluded: they have not had, or cannot be judged to have had, the chance to finish. The survey's researcher view shows the same measure under the same name."
             />
-            <Metric label="Sessions started" value={int(m.started)} href={link({})} definition="Every session in the current filters, whatever its status." />
+            <Metric
+              label="Reached the end"
+              value={pct(m.completionRateDenominator > 0 ? m.reachedEnd / m.completionRateDenominator : null)}
+              sub={`${int(m.reachedEnd)} of ${int(m.completionRateDenominator)} finished or abandoned sittings`}
+              definition="(Complete + Incomplete) ÷ (Complete + Incomplete + Abandoned): sittings that reached the finish screen, whether or not every required question was answered. The survey's researcher view shows the same measure under the same name."
+            />
+            <Metric
+              label="Sittings"
+              value={int(m.started)}
+              sub={m.quarantined + m.unreadable > 0 ? `${int(m.quarantined + m.unreadable)} quarantined or unreadable left out` : undefined}
+              href={link({})}
+              definition="Every session in the current filters, whatever its status, except quarantined and unreadable ones, which are left out and counted in the notice above. The survey's researcher view counts its sittings the same way."
+            />
             <Metric label="Completed" value={int(m.complete)} href={link({ statuses: ["complete"] })} definition={STATUS_HELP.complete} />
             <Metric label="Incomplete" value={int(m.incomplete)} href={link({ statuses: ["incomplete"] })} definition={STATUS_HELP.incomplete} />
             <Metric label="Abandoned" value={int(m.abandoned)} href={link({ statuses: ["abandoned"] })} definition={STATUS_HELP.abandoned} />
@@ -125,6 +146,8 @@ export default function Overview() {
             />
           </section>
 
+          <ResearcherView />
+
           <div className="grid-2">
             <ChartCard
               id="sessions-over-time"
@@ -144,7 +167,7 @@ export default function Overview() {
             <ChartCard
               id="completion-rate-over-time"
               title="Completion rate over time"
-              description={`Of sessions started each ${a.granularity} that have finished or been abandoned, the share that are complete.`}
+              description={`Of sessions started each ${a.granularity} that have finished or been abandoned, the share that are complete: all required answered.`}
               table={{ columns: [a.granularity === "week" ? "Week starting" : "Day", "Completion rate (%)", "Sessions judged"], rows: a.series.map((p) => [p.bucket, p.completionRate === null ? null : Math.round(p.completionRate * 100), p.terminalOrAbandoned]) }}
             >
               <LineChart

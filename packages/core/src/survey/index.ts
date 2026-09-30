@@ -6,4 +6,5 @@ export * from "../vendor/myself/index.js";
 export * from "./dataset.js";
 export * from "./bids.js";
 export * from "./participants.js";
+export * from "./researcherView.js";
 export * from "./scores.js";

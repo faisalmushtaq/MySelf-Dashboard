@@ -2,14 +2,19 @@ import { addDays, dayKey, daysBetween, weekStart, type ResolvedRange } from "./d
 import type { ReleaseIndex } from "./manifest.js";
 import { compareVersions } from "./manifest.js";
 import type { SessionRow } from "./filters.js";
-import { DISPLAY_STATUSES, type DisplayStatus } from "./status.js";
+import { DISPLAY_STATUSES, heldBackReason, type DisplayStatus } from "./status.js";
 
 /**
  * Overview metrics and charts, computed from summaries (never raw logs).
  * Definitions: docs/03-completeness.md §3.5.
+ *
+ * Quarantined and unreadable sittings are left out of every figure here, and counted,
+ * as the survey's researcher view leaves them out (`heldBackReason`). The rows passed in
+ * may include them: the session list shows them, so the filters that feed both do too.
  */
 
 export interface OverviewMetrics {
+  /** Sittings counted: every one in the filters except those held back. Shown as "Sittings". */
   started: number;
   complete: number;
   incomplete: number;
@@ -22,6 +27,13 @@ export interface OverviewMetrics {
   flagged: number;
   completionRate: number | null;
   completionRateDenominator: number;
+  /** Complete among the finished or abandoned valid sittings: "All required answered", the numerator of completionRate. */
+  allRequiredAnswered: number;
+  /** Complete + incomplete among the finished or abandoned valid sittings: "Reached the end". */
+  reachedEnd: number;
+  /** Left out of every figure: quarantined by the survey, or a log too torn to read. */
+  quarantined: number;
+  unreadable: number;
   medianDurationMs: number | null;
   durationN: number;
   newInPeriod: number;
@@ -212,9 +224,17 @@ export interface AnalyticsContext {
   releases: readonly ReleaseIndex[];
 }
 
-export function computeAnalytics(rows: readonly SessionRow[], ctx: AnalyticsContext): Analytics {
+export function computeAnalytics(inFilters: readonly SessionRow[], ctx: AnalyticsContext): Analytics {
   const defs = definitionsFrom(ctx.releases);
   const tz = ctx.timeZone;
+  let quarantined = 0;
+  let unreadable = 0;
+  const rows = inFilters.filter((r) => {
+    const reason = heldBackReason(r.summary);
+    if (reason === "quarantined") quarantined += 1;
+    if (reason === "unreadable") unreadable += 1;
+    return reason === null;
+  });
 
   // ── metrics ──────────────────────────────────────────────────────────────
   const counts = new Map<DisplayStatus, number>(DISPLAY_STATUSES.map((s) => [s, 0]));
@@ -246,6 +266,7 @@ export function computeAnalytics(rows: readonly SessionRow[], ctx: AnalyticsCont
   const usable = rows.filter((r) => !r.status.markers.includes("invalid"));
   const done = usable.filter((r) => ["complete", "incomplete", "abandoned"].includes(r.status.lifecycle));
   const completeN = done.filter((r) => r.status.lifecycle === "complete").length;
+  const incompleteN = done.filter((r) => r.status.lifecycle === "incomplete").length;
   const metrics: OverviewMetrics = {
     started: rows.length,
     complete: counts.get("complete") ?? 0,
@@ -259,6 +280,10 @@ export function computeAnalytics(rows: readonly SessionRow[], ctx: AnalyticsCont
     flagged,
     completionRate: done.length > 0 ? completeN / done.length : null,
     completionRateDenominator: done.length,
+    allRequiredAnswered: completeN,
+    reachedEnd: completeN + incompleteN,
+    quarantined,
+    unreadable,
     medianDurationMs: durations.length >= MIN_DURATION_N ? median(durations) : null,
     durationN: durations.length,
     newInPeriod,

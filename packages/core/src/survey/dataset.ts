@@ -1,6 +1,6 @@
 import { releaseManifest, type ReleaseManifest } from "../vendor/myself/schema/index.js";
 import { ingest, type DeviceSession } from "../vendor/myself/store/ingest.js";
-import { emptyDataset, type Dataset, type ParticipantRow } from "../vendor/myself/store/dataset.js";
+import { emptyDataset, type Dataset } from "../vendor/myself/store/dataset.js";
 import type { Sitting } from "../types.js";
 import { schoolYearOn } from "../scoring/groups.js";
 
@@ -120,40 +120,10 @@ export function deriveStudyDataset(input: {
 }
 
 /**
- * The dataset restricted to some sittings. Wave numbers stay as derived from
- * the whole study — a filtered export may hold a child's wave 2 without their
- * wave 1, and that is the truth — while each participant's summary row is
- * recomputed from the sittings actually included.
+ * The dataset restricted to some sittings: the survey's own function (vendored), so
+ * a filtered export here and the researcher view's count restrict it the same way.
  */
-export function subsetDataset(d: Dataset, sessionIds: ReadonlySet<string>): Dataset {
-  const sessions = d.sessions.filter((s) => sessionIds.has(s.sessionId));
-  const byParticipant = new Map<string, typeof sessions>();
-  for (const s of sessions) {
-    const list = byParticipant.get(s.participantId);
-    if (list) list.push(s);
-    else byParticipant.set(s.participantId, [s]);
-  }
-  const participants: ParticipantRow[] = d.participants
-    .filter((p) => byParticipant.has(p.participantId))
-    .map((p) => {
-      const mine = [...byParticipant.get(p.participantId)!].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-      return {
-        ...p,
-        sessionCount: mine.length,
-        firstSeen: mine[0]!.startedAt,
-        lastSeen: mine[mine.length - 1]!.startedAt,
-        sites: [...new Set(mine.map((s) => s.site).filter((x): x is string => !!x))],
-      };
-    });
-  return {
-    generatedAt: d.generatedAt,
-    releaseHashes: [...new Set(sessions.map((s) => s.releaseHash))],
-    participants,
-    sessions,
-    responses: d.responses.filter((r) => sessionIds.has(r.sessionId)),
-    scores: d.scores.filter((r) => sessionIds.has(r.sessionId)),
-  };
-}
+export { subsetDataset } from "../vendor/myself/store/dataset.js";
 
 /**
  * Participant codes replaced by labels that mean nothing outside this export
