@@ -329,6 +329,10 @@ export function applyEdit(current: Workspace, edit: Edit, base: Workspace): Work
       break;
     }
   }
+  // MyStory, when there is one, is always the last thing before the finish
+  // screen and the hand-back (survey D-54): no edit may put anything after it.
+  const story = d.sections.findIndex((s) => s.components.some((c) => c.kind === "narrative"));
+  if (story >= 0 && story !== d.sections.length - 1) throw new EditError("MyStory stays the last section; put the other sections before it");
   return ws;
 }
 
