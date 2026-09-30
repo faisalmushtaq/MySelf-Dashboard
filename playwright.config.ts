@@ -9,8 +9,13 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * Where browsers were installed elsewhere (and `playwright install` is not
  * allowed), point at the binary: PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chrome.
+ *
+ * The app is served on 127.0.0.1:4173. If something else already listens there
+ * (the survey's own `vite preview` uses the same port), set E2E_PORT to a free
+ * port: otherwise reuseExistingServer quietly tests whatever app is on 4173.
  */
 const executablePath = process.env["PLAYWRIGHT_CHROMIUM_EXECUTABLE"];
+const port = Number(process.env["E2E_PORT"] ?? 4173);
 
 export default defineConfig({
   testDir: "e2e",
@@ -21,7 +26,7 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"]],
   use: {
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: `http://127.0.0.1:${port}`,
     trace: "retain-on-failure",
     acceptDownloads: true,
     viewport: { width: 1440, height: 1000 },
@@ -33,8 +38,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm --filter @myself-dashboard/web exec vite preview --outDir dist-emulators --port 4173 --host 127.0.0.1 --strictPort",
-    url: "http://127.0.0.1:4173",
+    command: `pnpm --filter @myself-dashboard/web exec vite preview --outDir dist-emulators --port ${port} --host 127.0.0.1 --strictPort`,
+    url: `http://127.0.0.1:${port}`,
     reuseExistingServer: true,
     timeout: 60_000,
   },
