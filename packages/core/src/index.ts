@@ -23,3 +23,4 @@ export * from "./figures/index.js";
 export * from "./scoring/index.js";
 export * from "./codebook/index.js";
 export * from "./quality/index.js";
+export * from "./editor/index.js";
