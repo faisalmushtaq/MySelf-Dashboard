@@ -23,6 +23,8 @@ const SavedViews = lazy(() => import("./pages/SavedViews"));
 const Audit = lazy(() => import("./pages/Audit"));
 const Settings = lazy(() => import("./pages/Settings"));
 const HelpPage = lazy(() => import("./pages/Help"));
+const SurveyVersions = lazy(() => import("./pages/survey/Versions"));
+const SurveyEditor = lazy(() => import("./pages/survey/Editor"));
 
 export function App() {
   return (
@@ -171,6 +173,8 @@ function Gate() {
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/scoring" element={<ScoringSettings />} />
                   <Route path="/help" element={<HelpPage />} />
+                  <Route path="/survey" element={<SurveyVersions />} />
+                  <Route path="/survey/drafts/:id" element={<SurveyEditor />} />
                   <Route
                     path="*"
                     element={

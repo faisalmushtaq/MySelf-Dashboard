@@ -126,4 +126,17 @@ with the Admin SDK; see survey D-54): `studies/{study}/releases/{hash}` and
   refusing a broken draft.
 - **The functions**, against the emulators: roles, both databases written,
   activation history, audit rows.
-- **End to end:** edit, preview, publish, and a device picks the new version.
+- **End to end:** `pnpm demo:check-editor` runs the editor in a browser against
+  the Emulator Suite, seeded with the made-up study on the real releases
+  (`scripts/demo/editor-walk.mjs`). It:
+  1. starts a draft from v9.0.0;
+  2. rewords a question;
+  3. checks that a licensed instrument is locked;
+  4. approves a MyStory protocol under a new version and ends the survey with it;
+  5. passes the publish checks and publishes v10.0.0;
+  6. confirms the survey's database now points devices at v10.0.0, with MyStory
+     last and its protocol frozen;
+  7. confirms the registry kept the provenance;
+  8. rolls back to v9.0.0.
+
+  That devices pick the version up is the survey's side (D-54), tested there.

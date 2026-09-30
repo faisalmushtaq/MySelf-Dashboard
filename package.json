@@ -17,6 +17,7 @@
     "dev:emulators": "firebase emulators:start --only auth,firestore,functions,storage --project demo-myself-dashboard --config firebase.emulators.json",
     "seed:emulators": "node scripts/emulator-setup.mjs",
     "demo:build": "node scripts/demo/build.mjs",
+    "demo:check-editor": "node scripts/demo/build.mjs --check-editor",
     "e2e:build": "pnpm --filter @myself-dashboard/core build && pnpm --filter @myself-dashboard/functions build && pnpm --filter @myself-dashboard/web build:emulators",
     "test:integration": "pnpm --filter @myself-dashboard/functions test:integration",
     "check:vendored": "node scripts/check-vendored.mjs",

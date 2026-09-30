@@ -45,6 +45,10 @@ export const CAPABILITIES = [
   "settings.access",
   "settings.policy",
   "data.rebuild",
+  /** Change survey drafts in the editor (docs/11). */
+  "survey.edit",
+  /** Publish a survey version, or make an earlier one active again: owners only. */
+  "survey.publish",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -63,6 +67,7 @@ const MATRIX: Record<Role, ReadonlySet<Capability>> = {
     "export.freeText",
     "export.studyCode",
     "audit.readOwn",
+    "survey.edit",
   ]),
   analyst: new Set<Capability>(["view.dashboard", "views.private", "export.aggregate", "audit.readOwn"]),
 };

@@ -31,6 +31,7 @@ const NAV: NavItem[] = [
   { to: "/scores", label: "Scores", icon: "scores", filtered: true },
   { to: "/figures", label: "Figures", icon: "figure", filtered: true },
   { to: "/participants", label: "Participants", icon: "people" },
+  { to: "/survey", label: "Survey versions", icon: "note" },
   { to: "/reports", label: "Reports and exports", icon: "reports", capability: "export.aggregate" },
   { to: "/views", label: "Saved views", icon: "views", capability: "views.private" },
   { to: "/audit", label: "Audit activity", icon: "audit", capability: "audit.readOwn" },

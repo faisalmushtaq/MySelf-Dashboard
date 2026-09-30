@@ -26,6 +26,12 @@ import type {
   UpdateReviewRequest,
   WhoAmIResponse,
   Policy,
+  SurveyDraftDoc,
+  SurveyDraftInput,
+  SurveyDraftSummary,
+  SurveyPreviewResponse,
+  SurveyVersionsResponse,
+  Edit,
 } from "@myself-dashboard/core";
 import { firebase } from "./firebase";
 
@@ -67,6 +73,17 @@ export const api = {
   saveScoringScheme: call<SaveSchemeRequest, { key: string; version: string }>("saveScoringScheme"),
   saveGroupSettings: call<{ settings: GroupSettings; reason: string }, { ok: true }>("saveGroupSettings"),
   logFigureExport: call<{ format: string; panels: string[]; width: string; colour: string; dpi: number | null }, { ok: boolean }>("logFigureExport"),
+  // The survey editor (docs/11).
+  listSurveyVersions: call<Record<string, never>, SurveyVersionsResponse>("listSurveyVersions"),
+  exportSurveyProvenance: call<Record<string, never>, { csv: string; json: string }>("exportSurveyProvenance"),
+  getSurveyManifest: call<{ hash: string }, { manifestJson: string }>("getSurveyManifest"),
+  listSurveyDrafts: call<Record<string, never>, { drafts: SurveyDraftSummary[] }>("listSurveyDrafts"),
+  getSurveyDraft: call<{ id: string }, SurveyDraftDoc>("getSurveyDraft"),
+  saveSurveyDraft: call<{ id?: string; name: string; baseHash: string; edits: Edit[]; rev?: number }, { id: string; rev: number }>("saveSurveyDraft"),
+  deleteSurveyDraft: call<{ id: string }, { ok: true }>("deleteSurveyDraft"),
+  previewSurveyDraft: call<SurveyDraftInput, SurveyPreviewResponse>("previewSurveyDraft", 130_000),
+  publishSurveyVersion: call<SurveyDraftInput & { notes: string; draftId?: string }, { hash: string; version: string }>("publishSurveyVersion", 130_000),
+  activateSurveyVersion: call<{ hash: string; reason: string }, { hash: string; version: string }>("activateSurveyVersion"),
 };
 
 export interface ApiError {
