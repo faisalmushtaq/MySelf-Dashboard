@@ -76,7 +76,7 @@ await settle("overview");
 const routes = [
   "/sessions", "/sessions?st=incomplete", "/sessions?st=complete", "/sessions?st=abandoned", "/sessions?st=in_progress",
   "/completeness", "/questions", "/codebook", "/figures", "/scores", "/participants", "/reports", "/views", "/audit",
-  "/settings", "/settings/scoring", "/help",
+  "/settings", "/settings/scoring", "/help", "/survey",
 ];
 for (const r of routes) {
   await page.goto(BASE + r);
@@ -128,6 +128,9 @@ for (let p = 1, pages = 1; p <= pages; p += 1) {
   for (const row of r?.items ?? []) sessionIds.add(row.sessionId);
 }
 for (const id of sessionIds) await call("getSessionDetail", { ...detail, sessionId: id });
+
+// Every version's manifest, for the survey editor's drafts.
+for (const v of (await call("listSurveyVersions", {}))?.versions ?? []) await call("getSurveyManifest", { hash: v.hash });
 
 // Scores, every way the page can group and count them, and each school in focus.
 const scores = seen("getScores")[0]?.data ?? {};
