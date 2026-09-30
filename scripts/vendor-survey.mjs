@@ -18,7 +18,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export const VENDORED = {
-  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "index"],
+  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "published", "index"],
   scoring: ["executor", "definitions", "references", "index"],
   store: ["dataset", "identity", "ingest", "bids", "narratives", "zip", "summary", "completeness", "counting"],
   // The release builder and publish gate, for the survey editor (docs/11), with

@@ -13,6 +13,8 @@
  * web app.
  */
 export { releaseManifest, type ReleaseManifest } from "./schema/index.js";
+// Where versions published from the dashboard live in the survey's database, and their documents (survey D-54).
+export { publishedPaths, publishedReleaseDoc, activeReleaseDoc, type PublishedReleaseDoc, type ActiveReleaseDoc } from "./schema/index.js";
 export { ingest, resolveAlias, type DeviceSession, type DeviceEvent, type IngestResult } from "./store/ingest.js";
 export { emptyDataset, type Dataset, type SessionRow as DatasetSession, type ResponseRow as DatasetResponse, type ScoreRow as DatasetScore, type ParticipantRow as DatasetParticipant } from "./store/dataset.js";
 export { buildBidsExport, type BidsFile, type BidsOptions } from "./store/bids.js";

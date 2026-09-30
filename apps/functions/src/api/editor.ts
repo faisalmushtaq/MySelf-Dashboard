@@ -13,6 +13,7 @@ import {
   type Workspace,
 } from "@myself-dashboard/core";
 import { rebuild } from "@myself-dashboard/core/node";
+import { activeReleaseDoc, publishedPaths, publishedReleaseDoc } from "@myself-dashboard/core/survey";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { actorFields, audit, auditIn } from "../audit.js";
@@ -194,7 +195,7 @@ export const publishSurveyVersion = onCall({ ...callableOptions, memory: "1GiB" 
     publishedBy: publisher,
   };
   const meta = await registerRelease(manifest, STUDY, actor.uid, provenance);
-  await makeActive(actor, manifest as never, notes, "publish");
+  await makeActive(actor, manifest as never, notes, "publish", notes);
   if (typeof data["draftId"] === "string" && data["draftId"]) {
     await db.doc(dpaths.surveyDraft(data["draftId"])).set({ status: "published", publishedVersion: meta.version, publishedHash: meta.hash, publishedAt: FieldValue.serverTimestamp() }, { merge: true });
   }
@@ -202,16 +203,37 @@ export const publishSurveyVersion = onCall({ ...callableOptions, memory: "1GiB" 
   return { hash: meta.hash, version: meta.version };
 });
 
-/** Write a version to the survey's database and point devices at it, and record the activation. */
-async function makeActive(actor: Actor, manifest: { hash: string; release: { version: string; key: string; publishedAt: string; engineVersion: string } }, reason: string, how: "publish" | "rollback") {
+/**
+ * Write a version to the survey's database and point devices at it, and record
+ * the activation. Both documents are checked against the survey's own
+ * description of them (its schema/published.ts, vendored) before they are
+ * written, so a device never reads one it would refuse.
+ */
+async function makeActive(
+  actor: Actor,
+  manifest: { hash: string; release: { version: string; key: string; publishedAt: string; publishedBy?: string; engineVersion: string } },
+  reason: string,
+  how: "publish" | "rollback",
+  notes?: string,
+) {
   const survey = research();
   const r = manifest.release;
-  await survey.doc(spaths.release(manifest.hash)).set(
-    { hash: manifest.hash, version: r.version, key: r.key, study: STUDY, publishedAt: r.publishedAt, engineVersion: r.engineVersion, manifestJson: JSON.stringify(manifest), source: "editor" },
-    { merge: true },
-  );
+  const release = publishedReleaseDoc.parse({
+    hash: manifest.hash,
+    manifestJson: JSON.stringify(manifest),
+    version: r.version,
+    key: r.key,
+    study: STUDY,
+    publishedAt: r.publishedAt,
+    ...(r.publishedBy ? { publishedBy: r.publishedBy } : {}),
+    engineVersion: r.engineVersion,
+    source: "editor",
+    ...(notes ? { notes } : {}),
+  });
+  await survey.doc(publishedPaths.release(STUDY, manifest.hash)).set(release, { merge: true });
   const activatedAt = new Date().toISOString();
-  await survey.doc(spaths.activeRelease()).set({ hash: manifest.hash, version: r.version, key: r.key, activatedAt, activatedBy: actor.email ?? actor.uid });
+  const active = activeReleaseDoc.parse({ hash: manifest.hash, version: r.version, key: r.key, activatedAt, activatedBy: actor.email ?? actor.uid });
+  await survey.doc(publishedPaths.activeRelease(STUDY)).set(active);
   await dash().collection(dpaths.releaseActivations()).add({ hash: manifest.hash, version: r.version, activatedAt, activatedBy: actor.email ?? actor.uid, reason, how });
 }
 
