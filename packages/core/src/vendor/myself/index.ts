@@ -3,7 +3,11 @@
  * release schema, scoring, and `@myself/store` — ingest (participant codes,
  * waves, corrections, twin assignments, scores), the BIDS builder and the zip
  * writer. The dashboard's BIDS export uses these unchanged, so a dataset
- * exported here is the dataset the survey's own nightly export writes.
+ * exported here is the dataset the survey's own nightly export writes. And the
+ * completeness and counting rules the survey's researcher view counts by
+ * (store/completeness.ts, store/counting.ts), which the dashboard's own
+ * completeness, status and Overview are built on — those reach the web app
+ * through the main entry (completeness.ts, status.ts), not through this one.
  *
  * Server-only: imported through `@myself-dashboard/core/survey`, never by the
  * web app.
@@ -15,3 +19,5 @@ export { buildBidsExport, type BidsFile, type BidsOptions } from "./store/bids.j
 export { type StoredNarrativeRun } from "./store/narratives.js";
 export { buildZip, type ZipEntry } from "./store/zip.js";
 export { deriveParticipantCode, isParticipantCode } from "./store/identity.js";
+export { countSittings, headlineFigures, isTestCode, DEFAULT_COUNTING_RULES, type CountResult, type HeadlineFigures, type SittingState } from "./store/counting.js";
+export { summarise, type DatasetSummary } from "./store/summary.js";

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_COUNTING_RULES, isTestCode as matchesTestPattern } from "./vendor/myself/store/counting.js";
 
 /**
  * Study-level settings that change what the numbers mean. Stored in
@@ -6,12 +7,15 @@ import { z } from "zod";
  * none of these is a constant somebody has to find in the code.
  */
 export const policySchema = z.object({
+  // The three defaults below are the survey's (DEFAULT_COUNTING_RULES in its vendored
+  // counting.ts): the researcher view cannot read this policy, so it counts with those,
+  // and a study that changes one here should expect the two tools to differ by it.
   /** Which `required` levels count as required for completeness (A2). */
-  requiredLevels: z.array(z.enum(["hard", "soft", "optional"])).min(1).default(["hard", "soft"]),
+  requiredLevels: z.array(z.enum(["hard", "soft", "optional"])).min(1).default([...DEFAULT_COUNTING_RULES.requiredLevels]),
   /** A sitting not heard from for this long is abandoned (A3). */
-  abandonAfterHours: z.number().min(1).max(24 * 60).default(24),
+  abandonAfterHours: z.number().min(1).max(24 * 60).default(DEFAULT_COUNTING_RULES.abandonAfterHours),
   /** Study codes matching any of these (case-insensitive regex) are test sittings (A4). */
-  testCodePatterns: z.array(z.string().max(200)).max(50).default(["^TST", "^ZZZ"]),
+  testCodePatterns: z.array(z.string().max(200)).max(50).default([...DEFAULT_COUNTING_RULES.testCodePatterns]),
   /** May read-only reviewers read free-text answers? (A5) */
   reviewerCanViewFreeText: z.boolean().default(false),
   /** Hours an export file is kept before it is deleted (A7). */
@@ -34,13 +38,7 @@ export function readPolicy(raw: unknown): Policy {
   return parsed.success ? parsed.data : DEFAULT_POLICY;
 }
 
+/** A test sitting's study code, by the survey's rule (vendored counting.ts) and this study's patterns. */
 export function isTestCode(studyCode: string | undefined, policy: Pick<Policy, "testCodePatterns">): boolean {
-  if (!studyCode) return false;
-  return policy.testCodePatterns.some((p) => {
-    try {
-      return new RegExp(p, "i").test(studyCode);
-    } catch {
-      return false;
-    }
-  });
+  return matchesTestPattern(studyCode, policy.testCodePatterns);
 }
