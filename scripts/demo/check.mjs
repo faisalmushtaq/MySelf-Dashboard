@@ -18,7 +18,7 @@ page.on("console", (m) => m.type() === "error" && !m.text().startsWith("Failed t
 page.on("requestfailed", (r) => problems.push(`request failed: ${r.url()}`));
 page.on("response", (r) => r.status() >= 400 && !r.url().endsWith("/favicon.ico") && problems.push(`HTTP ${r.status()}: ${r.url()}`));
 
-const routes = ["overview", "sessions", "sessions?st=incomplete", "completeness", "questions", "codebook", "figures", "scores", "participants", "reports", "views", "audit", "settings", "settings/scoring", "help"];
+const routes = ["overview", "sessions", "sessions?st=incomplete", "completeness", "questions", "codebook", "figures", "scores", "participants", "reports", "views", "audit", "settings", "settings/scoring", "help", "survey"];
 let n = 0;
 async function visit(route) {
   await page.goto(`${URL_}#/${route}`);
@@ -47,6 +47,17 @@ if (SHOTS) await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, "0"
 await page.getByRole("button", { name: "Next", exact: true }).click().catch((e) => problems.push(`next: ${e.message}`));
 await page.waitForTimeout(1200);
 console.log("next:", (await page.locator(".detail-nav .position").textContent().catch(() => "no position"))?.trim());
+
+// The survey editor: a draft from the newest version opens, and a change registers.
+await page.goto(`${URL_}#/survey`);
+await page.getByRole("button", { name: /New draft from v/ }).click();
+await page.getByRole("heading", { name: /Changes to v/ }).waitFor({ timeout: 20_000 }).catch((e) => problems.push(`editor: ${e.message}`));
+const wording = page.locator("li.question").filter({ has: page.locator("code", { hasText: "ybm_intro_consent.linkage_consent" }) }).getByLabel("Wording");
+await wording.fill("May we link your answers to your health and school records?").catch((e) => problems.push(`editor: ${e.message}`));
+await wording.blur().catch(() => {});
+await page.getByRole("tab", { name: /Changes and publish/ }).click().catch((e) => problems.push(`editor: ${e.message}`));
+console.log("editor:", (await page.locator(".changes-panel h2").first().textContent().catch(() => "no changes panel"))?.trim());
+if (SHOTS) await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, "0")}-editor.png`, fullPage: true });
 
 console.log(problems.length ? `\n${problems.length} problems:\n${[...new Set(problems)].join("\n")}` : "\nno problems");
 await browser.close();
