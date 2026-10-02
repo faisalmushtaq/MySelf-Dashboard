@@ -194,7 +194,7 @@ export default function Versions() {
                                   <span className="nowrap">{dateOnly(p.from)}</span> – <span className="nowrap">{p.to ? dateOnly(p.to) : "now"}</span>
                                   <div className="hint">
                                     {HOW[p.how]}
-                                    {p.by && p.how !== "set_up" ? (
+                                    {p.by && p.how === "made_live_again" ? (
                                       <>
                                         {" "}
                                         by <Email address={p.by} />

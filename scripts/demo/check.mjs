@@ -42,7 +42,7 @@ const studio = page.getByRole("link", { name: /Edit in Studio/ });
 const [href, target, rel] = await Promise.all(["href", "target", "rel"].map((a) => studio.getAttribute(a).catch(() => null)));
 if (!href?.startsWith("https://") || target !== "_blank" || rel !== "noopener noreferrer") problems.push(`survey versions: Edit in Studio is ${href} ${target} ${rel}`);
 const versionRows = await page.locator(".versions-table tbody tr:not(.row-detail):not(.row-problem)").count();
-for (const want of ["v9.0.0, live since", "Versions are edited, previewed and published in", "np.phone_wellbeing", "already live when Studio was set up", "made live again: MyStory needs", "Written by"]) {
+for (const want of ["v9.0.0, live since", "Versions are edited, previewed and published in", "np.phone_wellbeing", "already live when Studio was set up", "made live again by", "MyStory needs the newer app on every iPad first", "Written by"]) {
   if ((await page.getByText(want, { exact: false }).count()) === 0) problems.push(`survey versions: "${want}" is not on the page`);
 }
 for (const name of [/publish/i, /make live/i, /draft/i, /roll ?back/i, /restore/i]) {
