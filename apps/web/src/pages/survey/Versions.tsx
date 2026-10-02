@@ -108,12 +108,10 @@ export default function Versions() {
                 <tr>
                   <th>Version</th>
                   <th>Published</th>
-                  <th>Made in</th>
                   <th>What changed</th>
                   <th>MyStory</th>
                   <th className="num">Sittings</th>
                   <th>On the iPads</th>
-                  <th aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -125,47 +123,74 @@ export default function Versions() {
                       <tr className={v.live ? "row-current" : undefined}>
                         <td>
                           <strong>v{v.version}</strong> {v.live ? <span className="tag tag-good">live</span> : null}
+                          <div className="hint nowrap">{v.source === "studio" ? "Made in Studio" : "From the repository"}</div>
                           {v.bump ? (
-                            <div className="hint">
+                            <div className="hint nowrap">
                               {v.bump.toUpperCase()}
                               {v.basedOn ? ` on v${v.basedOn}` : ""}
                             </div>
                           ) : null}
+                          {!v.inStudio ? <div className="hint nowrap">not in Studio</div> : null}
+                          <button type="button" className="btn-link nowrap" onClick={() => void download(v)} title={`Download the frozen manifest of v${v.version}`}>
+                            <Icon name="download" size={14} /> Manifest
+                          </button>
                         </td>
-                        <td>
+                        <td className="published">
                           {v.publishedAt ? dateOnly(v.publishedAt) : "—"}
-                          {v.publishedBy && v.publishedBy !== "repository" ? <div className="hint">by {v.publishedBy}</div> : null}
-                          {v.authors.length ? <div className="hint">written by {v.authors.join(", ")}</div> : null}
-                        </td>
-                        <td>
-                          {v.source === "studio" ? "Studio" : "The repository"}
-                          {!v.inStudio ? <div className="hint">not in Studio</div> : null}
+                          {v.publishedBy && v.publishedBy !== "repository" ? (
+                            <div className="hint">
+                              by <Email address={v.publishedBy} />
+                            </div>
+                          ) : null}
                         </td>
                         <td className="what-changed">
                           {v.releaseNote ? <div>{v.releaseNote}</div> : <span className="hint">—</span>}
+                          {v.authors.length ? (
+                            <div className="hint">
+                              Written by{" "}
+                              {v.authors.map((a, i) => (
+                                <Fragment key={a}>
+                                  {i > 0 ? ", " : ""}
+                                  <Email address={a} />
+                                </Fragment>
+                              ))}
+                            </div>
+                          ) : null}
                           {v.changes.length > 0 ? (
                             <button type="button" className="btn-link" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : key)}>
                               {v.changes.length} change{v.changes.length === 1 ? "" : "s"}
                             </button>
                           ) : null}
                         </td>
-                        <td>{v.myStory ? <code>{myStoryLabel(v.myStory)}</code> : <span className="hint">—</span>}</td>
+                        <td className="mystory">
+                          {v.myStory ? (
+                            <>
+                              <code title={myStoryLabel(v.myStory)}>{v.myStory.protocol}</code>
+                              {v.myStory.protocolVersion ? <div className="hint">version {v.myStory.protocolVersion}</div> : null}
+                            </>
+                          ) : (
+                            <span className="hint">—</span>
+                          )}
+                        </td>
                         <td className="num">
                           {int(v.sittings)}
                           {v.sittings > 0 ? (
-                            <div className="hint">
-                              {int(v.complete)} complete · {int(v.partial)} partial
-                              <br />
-                              {dateOnly(v.firstSitting)} – {dateOnly(v.lastSitting)}
-                            </div>
+                            <>
+                              <div className="hint nowrap">
+                                {int(v.complete)} complete · {int(v.partial)} partial
+                              </div>
+                              <div className="hint">
+                                <span className="nowrap">{dateOnly(v.firstSitting)}</span> – <span className="nowrap">{dateOnly(v.lastSitting)}</span>
+                              </div>
+                            </>
                           ) : null}
                         </td>
-                        <td>
+                        <td className="live-periods">
                           {v.livePeriods.length ? (
                             <ul className="periods">
                               {v.livePeriods.map((p, i) => (
                                 <li key={i}>
-                                  {dateOnly(p.from)} – {p.to ? dateOnly(p.to) : "now"}
+                                  <span className="nowrap">{dateOnly(p.from)}</span> – <span className="nowrap">{p.to ? dateOnly(p.to) : "now"}</span>
                                   <div className="hint">
                                     {HOW[p.how]}
                                     {p.reason ? `: ${p.reason}` : ""}
@@ -177,15 +202,10 @@ export default function Versions() {
                             <span className="hint">—</span>
                           )}
                         </td>
-                        <td className="row-actions">
-                          <button type="button" className="btn btn-small btn-quiet" onClick={() => void download(v)} title="Download this version's frozen manifest">
-                            <Icon name="download" size={14} /> Manifest
-                          </button>
-                        </td>
                       </tr>
                       {v.problem || (!v.registered && v.sittings > 0) ? (
                         <tr className="row-problem">
-                          <td colSpan={8}>
+                          <td colSpan={6}>
                             <span className="tag tag-warn">
                               <Icon name="alert" size={12} /> Not read
                             </span>{" "}
@@ -196,7 +216,7 @@ export default function Versions() {
                       ) : null}
                       {isOpen ? (
                         <tr className="row-detail">
-                          <td colSpan={8}>
+                          <td colSpan={6}>
                             <ul className="changes">
                               {v.changes.map((c, i) => (
                                 <li key={i}>{c}</li>
@@ -218,6 +238,19 @@ export default function Versions() {
         </p>
       </section>
     </div>
+  );
+}
+
+/** An address that may wrap after its "@", never in the middle of a word. */
+function Email({ address }: { address: string }) {
+  const at = address.indexOf("@");
+  if (at < 0) return <>{address}</>;
+  return (
+    <>
+      {address.slice(0, at + 1)}
+      <wbr />
+      {address.slice(at + 1)}
+    </>
   );
 }
 

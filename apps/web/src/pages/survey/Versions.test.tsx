@@ -51,8 +51,10 @@ describe("the Survey versions page", () => {
     render(<Versions />);
     expect(await screen.findByText(/live since/)).toHaveTextContent("v9.0.0, live since 23 Sept 2026");
     expect(screen.getByText(/2 sittings were recorded under a version/)).toBeInTheDocument();
-    expect(screen.getByText("np.phone_wellbeing@0.1.1")).toBeInTheDocument();
+    expect(screen.getByText("np.phone_wellbeing")).toHaveAttribute("title", "np.phone_wellbeing@0.1.1");
+    expect(screen.getByText("version 0.1.1")).toBeInTheDocument();
     expect(screen.getByText("by a@brainpop.example")).toBeInTheDocument();
+    expect(screen.getByText("Written by a@brainpop.example")).toBeInTheDocument();
     expect(screen.getByText("2 complete · 1 partial", { exact: false })).toBeInTheDocument();
     expect(screen.getByText(/made live again: Back to the shorter survey/)).toBeInTheDocument();
     expect(screen.getByText("not in Studio")).toBeInTheDocument();

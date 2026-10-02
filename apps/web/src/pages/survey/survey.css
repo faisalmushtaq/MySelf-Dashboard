@@ -18,13 +18,28 @@
 .versions-table td {
   vertical-align: top;
 }
+/* Wide enough that an email address or a date never breaks mid-word. */
+.versions-table td.published {
+  min-width: 200px;
+  overflow-wrap: break-word;
+}
 .versions-table td.what-changed {
   min-width: 220px;
-  max-width: 360px;
-  overflow-wrap: anywhere;
+  max-width: 300px;
+  overflow-wrap: break-word;
+}
+.versions-table td.mystory {
+  min-width: 140px;
+}
+.versions-table td.live-periods {
+  min-width: 170px;
+  max-width: 230px;
 }
 .versions-table code {
   font-size: 0.8125rem;
+}
+.versions-table .nowrap {
+  white-space: nowrap;
 }
 tr.row-current td {
   background: var(--accent-wash);
@@ -36,6 +51,6 @@ tr.row-problem td {
   background: var(--warn-wash);
   font-size: 0.875rem;
 }
-td.row-actions {
-  white-space: nowrap;
+.versions-table .btn-link {
+  padding-left: 0;
 }
