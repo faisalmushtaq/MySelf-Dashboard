@@ -2,8 +2,10 @@
 /**
  * Seed a running Emulator Suite with the made-up YBM study (./ybm-study.mjs):
  * the real r8.0.0 and r9.0.0 releases, invented children, a few reviews and
- * notes. The dashboard's own trigger summarises the sittings, as in production.
- * Nothing here is participant data.
+ * notes, and MySelf Studio's records of the survey's versions (./studio.mjs),
+ * among them r10.0.0, which only Studio holds. The dashboard's own trigger
+ * summarises the sittings, as in production, registering r10.0.0 from Studio's
+ * copy when it meets the first sitting under it. Nothing here is participant data.
  *
  * Emulator hosts come from FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST
  * (set by `firebase emulators:exec`); the study from MYSELF_STUDY (default ybm).
@@ -14,6 +16,7 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { indexRelease } from "@myself-dashboard/core";
 import { verifyManifestHash } from "@myself-dashboard/core/node";
+import { mystoryRelease, MYSTORY_DAY, studioDocuments } from "./studio.mjs";
 import { generateYbmStudy, SCHOOLS } from "./ybm-study.mjs";
 
 const PROJECT = process.env.GCLOUD_PROJECT ?? "demo-myself-dashboard";
@@ -59,7 +62,9 @@ for (const db of ["(default)", "dashboard"]) await fetch(`http://${FS}/emulator/
 await putRules("dashboard", readFileSync(new URL("../../firestore/dashboard.rules", import.meta.url), "utf8"));
 await putRules("(default)", "rules_version = '2';\nservice cloud.firestore { match /databases/{database}/documents { match /{d=**} { allow read, write: if false; } } }\n");
 
-const { sittings, releases } = generateYbmStudy({ study: STUDY });
+// r10.0.0, published in Studio on 1 October, is not registered here: the dashboard meets it in its sittings.
+const mystory = mystoryRelease(OWNER.email);
+const { sittings, releases } = generateYbmStudy({ study: STUDY, later: [{ manifest: mystory, day: MYSTORY_DAY, count: 3 }] });
 const r9 = indexRelease(releases.at(-1));
 await dash.doc("config/access").set({ emails: [OWNER.email], domains: ["brainpop.example"] });
 await dash.doc("config/policy").set({ abandonAfterHours: 24, testCodePatterns: ["^TST", "^ZZZ"], requiredLevels: ["hard", "soft"], reviewerCanViewFreeText: false, exportRetentionHours: 24, timeZone: "Europe/London", tooFastWarningCount: 10, activeReleaseHash: r9.hash });
@@ -78,6 +83,11 @@ const owner = await googleUser(OWNER.email);
 await getAuth(app).setCustomUserClaims(owner, { role: OWNER.role });
 const colleague = await googleUser(COLLEAGUE.email);
 await getAuth(app).setCustomUserClaims(colleague, { role: COLLEAGUE.role });
+
+// Studio's records first: a sitting under r10.0.0 is read through Studio's copy of it.
+for (const [path, data] of studioDocuments({ study: STUDY, owner: { uid: owner, email: OWNER.email }, colleague: { uid: colleague, email: COLLEAGUE.email }, mystory })) {
+  await research.doc(path).set(data);
+}
 
 for (let i = 0; i < sittings.length; i += 10) {
   const batch = research.batch();
@@ -121,5 +131,10 @@ for (const [s, reason, note] of flagged) {
   }
 }
 
-console.log(`seeded ${sittings.length} made-up sittings (${releases.map((r) => indexRelease(r).version).join(", ")}) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+const adopted = await dash.doc(`studies/${STUDY}/releases/${mystory.hash}`).get();
+if (adopted.get("provenance.source") !== "studio") {
+  console.error("r10.0.0 was not registered from MySelf Studio's copy — is the Functions emulator running this build?");
+  process.exit(1);
+}
+console.log(`seeded ${sittings.length} made-up sittings (${[...releases, mystory].map((r) => indexRelease(r).version).join(", ")}; 10.0.0 registered from Studio) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(0);

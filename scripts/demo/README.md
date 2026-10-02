@@ -13,13 +13,21 @@ any web server (for example `python3 -m http.server` in that folder).
 
 ## What is in it
 
-- **The data is invented.** `ybm-study.mjs` generates 77 sittings under the real
+- **The data is invented.** `ybm-study.mjs` generates 80 sittings under the real
   r8.0.0 and r9.0.0 releases: invented names and dates of birth, invented
   schools ("Sample School North" and so on), university campuses as addresses.
   Answers follow each release's display rules. A hidden trait per child keeps
   the standard measures consistent with one another. The three sittings the real
   survey app recorded in its own browser test (`packages/core/src/survey/fixtures/r9-scenarios.json`)
   are added unchanged. Nothing is, or comes from, participant data.
+- **So is MySelf Studio's history.** `studio.mjs` writes the documents Studio
+  would hold in the survey's database: set up from the live survey on 30
+  September (r5.0.0 to r9.0.0 from the repository, r9.0.0 live), an invented
+  r10.0.0 published in Studio on 1 October that ends with MyStory, and r9.0.0
+  made live again the next day, with a reason. Three more invented children sit
+  r10.0.0 on 1 October. r10.0.0 is not put in the dashboard's registry: the
+  dashboard's trigger meets it in those sittings, checks Studio's copy and
+  registers it, as in production, and the seed fails if it does not.
 - **The answers are the real dashboard's.** `seed.mjs` loads the study into the
   Emulator Suite, where the dashboard's own trigger summarises it. Then
   `record.mjs` walks every page in a browser and records each function's answer.
@@ -29,8 +37,9 @@ any web server (for example `python3 -m http.server` in that folder).
   computes the session list, the Overview and the question analysis in the
   browser, using the same core routines the functions use. So every filter
   works. Flags and notes change in memory until the tab is closed. Everything
-  else is played back from the recording. Saving settings and exporting are
-  switched off. The survey researcher view's figures on the Overview are
+  else is played back from the recording, including Survey versions and its
+  provenance export. Saving settings and exporting sessions are switched off.
+  The survey researcher view's figures on the Overview are
   computed from raw sittings, which the demo does not carry, so they are played
   back only for the filters they were recorded under (every dataset choice,
   otherwise the defaults).
@@ -42,10 +51,11 @@ any web server (for example `python3 -m http.server` in that folder).
 | `firebase.demo.json` | Emulator ports kept apart from the e2e suite's (9109, 8291, 5111) |
 | `scripts/demo/build.mjs` | Runs everything below, in order |
 | `scripts/demo/ybm-study.mjs` | The made-up study |
+| `scripts/demo/studio.mjs` | MySelf Studio's records of its versions, for Survey versions |
 | `scripts/demo/seed.mjs` | Loads it into the emulators |
 | `scripts/demo/record.mjs` | Walks the dashboard and records it |
 | `scripts/demo/pack.mjs` | Splits the recording into small, lazily loaded files |
-| `scripts/demo/check.mjs` | Opens the built demo and fails on any error (`DEMO_URL=…`) |
+| `scripts/demo/check.mjs` | Opens the built demo and fails on any error (`DEMO_URL=…`); checks Survey versions and its downloads |
 | `apps/web/vite.demo.config.ts` | Builds the web app with the stand-ins below |
 | `apps/web/demo/` | Stand-ins for `firebase/*` and the router (addresses go in the `#`), plus the demo's backend |
 

@@ -2,9 +2,11 @@
 /**
  * Open the built demo (apps/web/dist-demo, served at DEMO_URL) in a browser and
  * visit every page, failing on any page error, console error or failed call.
+ * Survey versions is checked more closely: Studio's history, the link to
+ * Studio, no editing controls, and its three downloads.
  * DEMO_SHOTS=<folder> keeps a screenshot of each page.
  */
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { chromium } from "@playwright/test";
 
 const URL_ = process.env.DEMO_URL ?? "http://127.0.0.1:4280/demo/index.html";
@@ -32,6 +34,39 @@ async function visit(route) {
   }
 }
 for (const r of routes) await visit(r);
+
+// Survey versions: MySelf Studio's history, read-only, the way to Studio, and its downloads.
+await page.goto(`${URL_}#/survey`);
+await page.locator(".versions-table").waitFor({ timeout: 10_000 }).catch((e) => problems.push(`survey versions: ${e.message}`));
+const studio = page.getByRole("link", { name: /Edit in Studio/ });
+const [href, target, rel] = await Promise.all(["href", "target", "rel"].map((a) => studio.getAttribute(a).catch(() => null)));
+if (!href?.startsWith("https://") || target !== "_blank" || rel !== "noopener noreferrer") problems.push(`survey versions: Edit in Studio is ${href} ${target} ${rel}`);
+const versionRows = await page.locator(".versions-table tbody tr:not(.row-detail):not(.row-problem)").count();
+for (const want of ["v9.0.0, live since", "Versions are edited, previewed and published in", "np.phone_wellbeing", "already live when Studio was set up", "made live again: MyStory needs", "Written by"]) {
+  if ((await page.getByText(want, { exact: false }).count()) === 0) problems.push(`survey versions: "${want}" is not on the page`);
+}
+for (const name of [/publish/i, /make live/i, /draft/i, /roll ?back/i, /restore/i]) {
+  if ((await page.getByRole("button", { name }).count()) > 0) problems.push(`survey versions: a button matching ${name} — the page should change nothing`);
+}
+const fetchDownload = async (button) => {
+  const [download] = await Promise.all([page.waitForEvent("download", { timeout: 10_000 }), button.click()]);
+  return { name: download.suggestedFilename(), text: readFileSync(await download.path(), "utf8") };
+};
+try {
+  const manifest = await fetchDownload(page.getByRole("button", { name: /Manifest/ }).first());
+  const csv = await fetchDownload(page.getByRole("button", { name: /Version history \(CSV\)/ }));
+  const json = await fetchDownload(page.getByRole("button", { name: "JSON", exact: true }));
+  const lines = csv.text.replace(/^﻿/, "").trim().split("\r\n");
+  if (!csv.text.startsWith("﻿survey,version,release_key,hash")) problems.push("survey versions: the CSV does not start with its header");
+  if (lines.length !== versionRows + 1) problems.push(`survey versions: the CSV has ${lines.length - 1} rows for ${versionRows} versions`);
+  const parsed = JSON.parse(json.text);
+  console.log(
+    `survey versions          ${versionRows} versions; ${manifest.name} (${JSON.parse(manifest.text).hash.slice(0, 15)}…); ${csv.name} ${lines.length - 1} rows; ${json.name} live v${parsed.live[0]?.version}`,
+  );
+} catch (e) {
+  problems.push(`survey versions downloads: ${e.message}`);
+}
+if (SHOTS) await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, "0")}-survey-versions.png`, fullPage: true });
 
 // A session, then the next one, then a flag and a note.
 await page.goto(`${URL_}#/sessions`);

@@ -39,7 +39,8 @@ import firestoreSeed from "./data/firestore.json";
  * the question analysis are computed in the browser from the recorded session
  * summaries with the functions' own core routines, so every filter works; and
  * reviews and notes change in memory, so flagging a session works until the tab
- * is closed. Saving settings and exporting are switched off.
+ * is closed. Saving settings and exporting sessions are switched off; the survey's
+ * version history and its provenance export play back as recorded.
  */
 
 type Data = Record<string, unknown>;
@@ -267,6 +268,13 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
     return { id: note.id, noteCount };
   },
 
+  // The version history is MySelf Studio's records, as recorded; the export is invented data, so it plays back too.
+  async exportSurveyProvenance(data) {
+    const out = await replay("exportSurveyProvenance", data);
+    audit("survey.provenance_exported", { type: "study", id: STUDY });
+    return out;
+  },
+
   async logChartDownload() {
     return { ok: true };
   },
@@ -285,7 +293,6 @@ const SWITCHED_OFF: Record<string, string> = {
   setDashboardRole: "Roles cannot be changed in this demo.",
   rebuildSummaries: "This demo has no server to rebuild.",
   registerReleaseManifest: "This demo has no server to register a version with.",
-  exportSurveyProvenance: "Exports are switched off in this demo.",
 };
 
 export async function callFunction(name: string, data: unknown): Promise<unknown> {

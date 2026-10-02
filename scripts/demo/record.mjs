@@ -129,8 +129,9 @@ for (let p = 1, pages = 1; p <= pages; p += 1) {
 }
 for (const id of sessionIds) await call("getSessionDetail", { ...detail, sessionId: id });
 
-// Every version's manifest, to download from Survey versions.
+// Survey versions: every version's manifest, to download, and the provenance export.
 for (const v of (await call("listSurveyVersions", {}))?.versions ?? []) await call("getSurveyManifest", { hash: v.hash });
+await call("exportSurveyProvenance", {});
 
 // Scores, every way the page can group and count them, and each school in focus.
 const scores = seen("getScores")[0]?.data ?? {};

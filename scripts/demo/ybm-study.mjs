@@ -240,9 +240,10 @@ function schoolTime(dayMs, rnd) {
 /**
  * The study: `count` sittings from September 2026 under r9.0.0, and a first wave
  * in June 2026 under r8.0.0 for some of the same children, plus the three
- * sittings the real survey app recorded.
+ * sittings the real survey app recorded. `later` adds `count` sittings on `day`
+ * under each `manifest` given, for versions published after these.
  */
-export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date(), study = "ybm" } = {}) {
+export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date(), study = "ybm", later = [] } = {}) {
   const rnd = prng(seed);
   const scenarios = scenarioSittings();
   const templates = templatesFrom(scenarios);
@@ -250,7 +251,7 @@ export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date()
   const r8 = indexRelease(readRelease("8.0.0"));
   const sites = ["NTH", "STH", "WST"];
   const years = [7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 13];
-  const children = Array.from({ length: count }, (_, i) => {
+  const newChild = (i, rnd) => {
     const site = sites[i % 3];
     const year = years[Math.floor(rnd() * years.length)];
     return {
@@ -264,7 +265,8 @@ export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date()
       englishFirst: rnd() < 0.72,
       otherLanguages: rnd() < 0.42,
     };
-  });
+  };
+  const children = Array.from({ length: count }, (_, i) => newChild(i, rnd));
 
   const plan = [];
   const kinds = ["incomplete", "incomplete", "incomplete", "abandoned", "abandoned", "abandoned", "in_progress", "in_progress", "speeder", "speeder", "declined", "test"];
@@ -278,20 +280,10 @@ export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date()
   const septSpan = Date.parse("2026-09-29T00:00:00.000Z") - septStart;
   const juneStart = Date.parse("2026-06-08T00:00:00.000Z");
   const out = [];
-  plan.forEach(({ child, kind, idx, june }, n) => {
-    let start = june ? schoolTime(juneStart + Math.floor(rnd() * 18) * 86_400_000, rnd) : schoolTime(septStart + Math.floor((n / plan.length) * septSpan), rnd);
-    if (kind === "in_progress") start = now.getTime() - (1 + Math.floor(rnd() * 3)) * 3_600_000;
-    const code = kind === "test" ? `TST${String(n + 1).padStart(4, "0")}` : `${child.site}${String(1001 + n).padStart(4, "0")}`;
-    const opts = {
-      idx, child, start, code, rnd, templates,
-      skipRate: kind === "incomplete" ? 0.08 : 0,
-      ...(kind === "abandoned" ? { stopAfter: 8 + Math.floor(rnd() * 60) } : {}),
-      ...(kind === "in_progress" ? { stopAfter: 5 + Math.floor(rnd() * 20) } : {}),
-      tooFast: kind === "speeder",
-      decline: kind === "declined",
-    };
+  const sitting = (opts, n, kind) => {
+    const { idx, start, code, rnd } = opts;
     const w = walk(opts);
-    out.push({
+    return {
       sessionId: `ses_${ulid(start, rnd)}`,
       deviceId: `inst_demo_${(n % 4) + 1}`,
       study,
@@ -307,7 +299,34 @@ export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date()
       receivedAt: at(kind === "in_progress" ? Math.min(now.getTime() - 60_000, w.end + 30_000) : w.end + (5 + Math.floor(rnd() * 120)) * 60_000),
       quarantined: false,
       provenance: "device",
-    });
+    };
+  };
+  plan.forEach(({ child, kind, idx, june }, n) => {
+    let start = june ? schoolTime(juneStart + Math.floor(rnd() * 18) * 86_400_000, rnd) : schoolTime(septStart + Math.floor((n / plan.length) * septSpan), rnd);
+    if (kind === "in_progress") start = now.getTime() - (1 + Math.floor(rnd() * 3)) * 3_600_000;
+    const code = kind === "test" ? `TST${String(n + 1).padStart(4, "0")}` : `${child.site}${String(1001 + n).padStart(4, "0")}`;
+    const opts = {
+      idx, child, start, code, rnd, templates,
+      skipRate: kind === "incomplete" ? 0.08 : 0,
+      ...(kind === "abandoned" ? { stopAfter: 8 + Math.floor(rnd() * 60) } : {}),
+      ...(kind === "in_progress" ? { stopAfter: 5 + Math.floor(rnd() * 20) } : {}),
+      tooFast: kind === "speeder",
+      decline: kind === "declined",
+    };
+    out.push(sitting(opts, n, kind));
+  });
+  // Sittings under versions published later in MySelf Studio (./studio.mjs): new
+  // children on the day each version was on the iPads, drawn from their own
+  // random stream so the rest of the study is the same with or without them.
+  later.forEach(({ manifest, day, count: k }, j) => {
+    const more = prng(seed + 1 + j);
+    const idx = indexRelease(manifest);
+    for (let i = 0; i < k; i += 1) {
+      const n = plan.length + i;
+      const child = newChild(n, more);
+      const start = schoolTime(Date.parse(day), more);
+      out.push(sitting({ idx, child, start, code: `${child.site}${String(1001 + n).padStart(4, "0")}`, rnd: more, templates }, n, "complete"));
+    }
   });
   for (const s of scenarios) {
     out.push({ ...s, deviceId: "inst_scenarios", study, chunkCount: 0, eventCount: s.events.length, receivedAt: s.completedAt, quarantined: false, provenance: "device" });
