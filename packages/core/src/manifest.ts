@@ -241,18 +241,12 @@ export function indexRelease(raw: unknown, hashOverride?: string): ReleaseIndex 
 }
 
 /**
- * Canonical JSON exactly as the survey computes it for a release hash
- * (faisalmushtaq/MySelf packages/release/src/canonical.ts): sorted keys, no
- * whitespace, `undefined` members dropped. Hashing itself lives in `./node`.
+ * Canonical JSON exactly as the survey computes it for a release hash: the
+ * survey's own implementation (its packages/schema/src/canonical.ts, vendored),
+ * sorted keys, no whitespace, `undefined` members dropped. Hashing itself lives
+ * in `./node`.
  */
-export function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, v]) => v !== undefined)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
-}
+export { canonicalJson } from "./vendor/myself/schema/canonical.js";
 
 /** Compare two semver-ish version strings numerically ("7.10.0" > "7.9.0"). */
 export function compareVersions(a: string, b: string): number {

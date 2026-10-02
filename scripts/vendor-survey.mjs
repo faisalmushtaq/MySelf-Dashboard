@@ -5,10 +5,9 @@
  *
  *   node scripts/vendor-survey.mjs [path-to-MySelf-checkout]   (default ../MySelf)
  *
- * Run it when the survey changes its schema, scoring, ingest, BIDS builder,
- * the completeness and counting rules the two tools share, the release builder
- * or the MyStory protocol code, then run the tests: scripts/check-vendored.mjs
- * fails CI until you do.
+ * Run it when the survey changes its schema, its release hashing, scoring,
+ * ingest, BIDS builder, or the completeness and counting rules the two tools
+ * share, then run the tests: scripts/check-vendored.mjs fails CI until you do.
  *
  * `@myself/engine` resolves to the dashboard's hand-copied evaluator
  * (vendor/engine.ts), which check-vendored.mjs compares with the survey's.
@@ -18,23 +17,17 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export const VENDORED = {
-  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "published", "index"],
+  // `canonical` is the survey's one release-hash implementation: the dashboard
+  // verifies a version MySelf Studio published with it before reading any
+  // sitting under that version (docs/11).
+  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "canonical", "index"],
   scoring: ["executor", "definitions", "references", "index"],
   store: ["dataset", "identity", "ingest", "bids", "narratives", "zip", "summary", "completeness", "counting"],
-  // The release builder and publish gate, for the survey editor (docs/11), with
-  // the parts of the MyStory protocol code and model config it needs.
-  release: ["builder", "canonical"],
-  narrative: ["protocol", "config", "toml", "prompts", "protocols"],
-  llm: ["types"],
 };
 const REWRITES = {
   "@myself/schema": "../schema/index.js",
   "@myself/scoring": "../scoring/index.js",
   "@myself/engine": "../../engine.js",
-  // The survey's @myself/narrative index also exports its model runner, which
-  // the dashboard does not need; narrative/index.ts here exports the rest.
-  "@myself/narrative": "../narrative/index.js",
-  "@myself/llm": "../llm/types.js",
 };
 
 export function vendoredBody(source) {
