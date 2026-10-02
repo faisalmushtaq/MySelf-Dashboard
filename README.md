@@ -60,6 +60,7 @@ Screenshots (emulator seed, synthetic sittings only):
 8. [Scores, benchmarks and school reports](docs/08-scoring.md)
 9. [Codebook and data-quality review](docs/09-data-quality.md)
 10. [**Maintainers' guide**: repository map, data flow, recipes, tests, deploys](docs/10-maintainers-guide.md)
+11. [Survey versions: MySelf Studio's history, read-only, and the sittings under each version](docs/11-survey-editor.md)
 
 ## Quick start (local, synthetic data)
 

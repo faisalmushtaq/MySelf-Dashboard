@@ -426,8 +426,9 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
    abandonment window, reviewer free text, Workspace domain).
 2. Survey-side changes S1–S5 ([04-risks.md §4.2](04-risks.md)), S1 first.
 3. Enable App Check for the web app, then `DASHBOARD_ENFORCE_APP_CHECK=true`.
-4. Add the release-sync step to the survey's publishing workflow (or Survey
-   Studio) so new versions register themselves.
+4. Versions published in MySelf Studio register themselves (docs/11). Releases
+   committed to the survey's `releases/` outside Studio still need the sync
+   script or Settings → Survey versions.
 5. Add WebKit to the e2e matrix; add a physical-tablet accessibility pass
    (VoiceOver), as the survey does for iPads.
 6. Consider email digests of sessions needing review during fieldwork.

@@ -1,142 +1,203 @@
-# 11. The survey editor
+# 11. Survey versions
 
-Change the survey from the dashboard, see exactly what changed, and publish it
-as a new, correctly numbered version that iPads pick up for their next sitting.
-Every version's history can be extracted.
+**Survey → Survey versions** is a read-only record of every version of the
+survey: who wrote and published it, what changed, whether it ends with MyStory,
+when it was the version the iPads ran, and how many sittings the dashboard has
+recorded under it. Its history exports as CSV or JSON.
 
-The survey's side of this (how a device picks its version, where published
-versions live, MyStory) is its decision D-54, in its docs/06. This document is
-the dashboard's side.
+Versions are edited, previewed and published in **MySelf Studio**, in the
+survey's researcher view (survey docs/16). The page says so and links there.
+Nothing on it changes what the iPads run.
 
-## What it is for
+## Why the dashboard no longer edits the survey
 
-- **Edit** a draft that starts from any published version. Change wording,
-  answer options, which sections and questions are asked and in what order,
-  required levels, screens, and whether the version ends with MyStory, including
-  the protocol and its TOML.
-- **See the change**: every difference from the base version, marked as
-  participant-visible or researcher-only, and the version number that follows
-  (survey docs/06 §3). Preview the draft in the real participant app.
-- **Publish**, owners only. The draft goes through the survey's own release
-  builder and publish gate, is frozen and hashed, registered, and made the
-  version new sittings use.
-- **Keep track.** A Versions page lists every version: when it was active, what
-  changed from the one before, who published it and why, and how many sittings
-  it collected. It exports all of that as CSV or JSON. Making an earlier version
-  active again is the rollback.
+This branch once carried a survey editor in the dashboard that published live
+versions (survey decision D-54). Meanwhile the survey gained MySelf Studio,
+which edits, versions and publishes survey versions itself, with preview,
+history, rollback and an audit trail.
 
-## How a draft is edited: unfreeze, change, rebuild
+Two publishers would each decide what the iPads run, and each would have its
+own idea of which version is live. The research team chose Studio as the one
+editor and publisher. So the dashboard's editor was retired before it was ever
+deployed, and D-54 was removed on the survey side too. What went:
 
-A published manifest already holds everything that built it:
-- its composition, which is the draft;
-- the frozen instruments (the administered form only);
-- its scales, scoring and MyStory protocols;
-- its assets.
+- the editor pages, the draft, preview, publish and make-active callables, and
+  the editor model;
+- every write to the survey's database (`releases/{hash}`,
+  `config/activeRelease`) and the dashboard collections `surveyDrafts`,
+  `releaseActivations` and `meta/surveyPublishing`, which were never in
+  production;
+- the vendored release builder and MyStory protocol code it needed;
+- the capabilities `survey.edit` and `survey.publish`. One read capability,
+  `survey.versions`, replaces them, held by owners, researchers and analysts.
 
-So a draft is *unfrozen* from a base manifest. Edits are applied to that
-content, and publishing *rebuilds* it with the survey's `buildRelease`, the
-function `publish.mjs` uses. This gives three guarantees:
+What the dashboard does instead is read Studio, and read the sittings collected
+under Studio's versions.
 
-1. **Nothing the editor does bypasses the publish gate.** Licences, unresolved
-   references, bands, pipes, scoring references, assets and the MyStory protocol
-   checks all run on every publish.
-2. **The editor needs no copy of the survey's question library.** It works from
-   what was actually fielded.
-3. **Rebuilding an unedited draft reproduces the base manifest byte for byte**,
-   apart from the release block. A test holds this for every committed release.
+## Where the history comes from
 
-The builder is vendored from the survey (`packages/release`: `builder.ts`,
-`canonical.ts`), with the MyStory protocol code it needs (`packages/narrative`).
-`scripts/check-vendored.mjs` checks them like the rest of the vendored code.
+Studio keeps its records in the survey's `(default)` database, all under
+`studies/{study}/` (survey docs/16 §5.2 and §9.2; the shapes are
+`packages/studio/src/contract.ts` there). The dashboard's functions read them
+with the Admin SDK and never write to them. No browser reads them.
 
-## Edits the editor offers
+| Studio's document | What the page takes from it |
+|---|---|
+| `surveys/{surveyId}` | the survey's title |
+| `surveys/{surveyId}/versions/{version}` | version, release key, hash, engine version, source (Studio or the repository), release note, change summary, bump, based on, authors, publisher, published at |
+| `published/{surveyId}` | the live version: hash, version, release key, generation |
+| `publicReleases/{hashHex}` | the manifest itself, as Studio froze it, for MyStory and for downloads |
+| `studioAudit/{id}` | only the rows that moved the live pointer: `survey.imported`, `version.published`, `version.activated` |
 
-| Change | Where | Counts as |
+Before an administrator presses **Set up from the live survey** in Studio these
+are empty, and every iPad runs the release bundled in the survey app. The page
+then says the iPads run "the version built into the app" and lists the
+dashboard's registry alone.
+
+A version in the dashboard's registry that Studio has no record of (one
+published from the repository before Studio's set-up, such as r1.0.0–r4.0.0)
+is listed too, as from the repository and not in Studio.
+
+## What the page shows
+
+- **On the iPads now.** Studio's live version, and since when. New sittings use
+  it from each iPad's next start screen; a sitting already under way finishes on
+  the version it started with.
+- **History**, newest first. For each version:
+  - the version, whether it is live, where it was made, and the bump on the
+    version it was based on;
+  - when it was published and by whom; who wrote it (the draft's editors);
+  - the release note, and Studio's change summary one line per change;
+  - **MyStory**: whether the version ends with it, and which protocol. Read from
+    the manifest: the last section holds a `narrative` component (survey docs/16
+    §10.1);
+  - **sittings**: how many the dashboard has recorded under it, how many reached
+    the end and how many did not, and the first and last;
+  - **on the iPads**: each period it was live (below);
+  - a manifest download.
+- A version the dashboard cannot read says why, under its row (below).
+
+Release notes, change summaries and addresses are the research team's own, and
+are shown as text, never as markup. The page carries no participant data: the
+sittings are counts and dates, counted on the server from the dashboard's own
+summaries, so nothing about a sitting reaches the browser.
+
+## When each version was live
+
+From the audit rows that moved the live pointer. Each period runs until the next
+row:
+
+- **already live when Studio was set up**: the set-up row, for the version that
+  was live then. It was live before the trail began, so its earlier time is not
+  in it;
+- **published**: a publish in Studio;
+- **made live again**: Studio's emergency rollback, with the reason given.
+
+With no trail at all, the live pointer alone says which version is live, from
+the time it records.
+
+## Sittings under a version Studio published
+
+A sitting names its version by the release's content hash. When a sitting's
+summary is written (`summaries.ts`) and the registry does not hold that hash,
+`resolveRelease` (`releases.ts`):
+
+1. reads `publicReleases/{hashHex}` from the survey's database;
+2. checks it, as the participant app does before it renders a release:
+   - the manifest hashes, with the survey's own canonical code (its
+     `packages/schema/src/canonical.ts`, vendored), to the hash it is filed
+     under, and states that hash;
+   - the document agrees with its manifest about hash, version, release key and
+     study, and the study is this one;
+3. registers it in the dashboard's registry with
+   `provenance: { source: "studio", surveyId, version, from }`, once, in a
+   transaction, with a `release.registered` audit row;
+4. summarises the sitting through it. From then on its sittings are read and
+   counted like any other version's.
+
+A copy that fails a check is **refused**: logged as an error, audited once as
+`release.refused` with the reason, and nothing is read through it. Its sittings
+stay under "an unregistered version", never read through another version. The
+page marks the version "Not read" with the reason.
+
+A sitting that arrived before its version could be read stays unread until its
+summary is rebuilt: **Settings → Data maintenance → Re-summarise sessions with
+unknown versions**. The page says so for any such version.
+
+## Downloads
+
+- **Manifest**: the registry's copy, or else Studio's copy once it passes the
+  checks above. A copy that fails them is not served.
+- **Version history (CSV)** and **JSON**: the provenance export, audited as
+  `survey.provenance_exported`. One row per version, newest first:
+
+| Column | From |
+|---|---|
+| `survey` | Studio's survey ID (empty for a version only the registry knows) |
+| `version`, `release_key`, `hash`, `engine_version` | the version record, or the registry |
+| `status` | `live` or `not live`, from Studio's live pointer |
+| `source` | `studio` or `repository` |
+| `in_studio` | whether Studio has a record of it |
+| `read_by_dashboard` | whether it is in the registry, so its sittings are read |
+| `authors`, `published_by`, `published_at` | the version record |
+| `based_on`, `release_note`, `changes`, `bump` | the version record |
+| `mystory`, `mystory_protocol` | `on`/`off` and `key@version`, from the manifest |
+| `sittings`, `sittings_complete`, `sittings_partial`, `first_sitting`, `last_sitting` | the dashboard's summaries (counts and dates only) |
+| `live_periods` | the audit trail, as above |
+| `problem` | why the dashboard cannot read it, if it cannot |
+
+"Complete" is a sitting that reached the end, as Studio counts them. The CSV is
+written with `toCsv`: a cell that starts with `=`, `+`, `-`, `@`, a tab or a
+carriage return is prefixed with `'`, so a spreadsheet shows it rather than
+runs it; quoting follows RFC 4180, with a byte-order mark.
+
+## Functions and access
+
+| Callable | Capability | Does |
 |---|---|---|
-| Question wording, lede, help text | study-owned modules (`ybm_*`) only | participant-visible |
-| Answer option labels, add an option | study-owned scales only; the editor lists every question sharing the scale | participant-visible |
-| Required level (hard/soft/optional), allow "prefer not to say" | where the instrument's fidelity flags allow | participant-visible |
-| Leave out / restore a question, a component or a section | any | participant-visible |
-| Reorder components within a section, or sections | any | participant-visible |
-| Add a question (single choice, multiple choice, short or long text, number) | study-owned modules | participant-visible (new variable) |
-| Show-only-if condition (question is / is not an option) | new and edited questions; existing complex conditions are shown read-only | participant-visible |
-| Screens (welcome, finish, review and the others) and the study label | any | participant-visible |
-| MyStory on or off, protocol choice, protocol TOML | the final section | participant-visible |
-| Variable names and labels for new questions, release notes | any | researcher-only |
+| `listSurveyVersions` | `survey.versions` | the live version and the history |
+| `getSurveyManifest` | `survey.versions` | one version's manifest, by hash |
+| `exportSurveyProvenance` | `survey.versions` | the history as CSV and JSON, audited |
 
-Licensed instruments whose licence forbids modification (`modifiable: no`) can
-be left out or restored, never reworded. The editor says why.
+All three go through `requireActor`, like every callable: a verified Google
+account on the access list with a dashboard role. Studio's own roles play no
+part here. The web app's link to Studio is `VITE_STUDIO_URL`, by default
+`https://faisalmushtaq.github.io/MySelf/researcher/#/surveys`, opened in a new
+tab with `rel="noopener noreferrer"`.
 
-## The version number
+## Code
 
-`nextVersion(base, changes)` in `packages/core/src/editor/version.ts`:
-- **MAJOR** if any change is participant-visible (survey docs/06 §3: wording is
-  never a PATCH);
-- **MINOR** if there are only additions that leave every existing path alone;
-- **PATCH** for metadata only.
-
-The page shows the reason for the level it chose. An owner may raise the level,
-never lower it.
-
-## Data
-
-Dashboard database (the backend writes; the web reads through the functions):
-- `studies/{study}/surveyDrafts/{draftId}`: `{ name, baseHash, edits, updatedAt,
-  updatedBy, status }`. `edits` is the list of changes, in order, so a draft
-  can be replayed, reviewed and reverted one change at a time.
-- `studies/{study}/releases/{hash}` and `releaseManifests/{hash}`: the existing
-  registry. Its metadata gains `source: "editor" | "repository"`, `baseHash`,
-  `notes`, `changes` (summary), `bump`, `bumpReasons` and `publishedBy`.
-- `studies/{study}/releaseActivations/{id}`: `{ hash, version, activatedAt,
-  activatedBy, reason }`, one row per activation. When each version was live is
-  read from these rows.
-
-Survey database (written by `publishSurveyVersion` and `activateSurveyVersion`
-with the Admin SDK; see survey D-54): `studies/{study}/releases/{hash}` and
-`studies/{study}/config/activeRelease`.
-
-## Functions
-
-| Callable | Who | Does |
-|---|---|---|
-| `listSurveyVersions` | any dashboard role | versions, activation history, sittings per version, changes from the previous |
-| `getSurveyDraft` / `saveSurveyDraft` / `deleteSurveyDraft` | researcher, owner | drafts |
-| `previewSurveyDraft` | researcher, owner | applies the edits, runs the builder, and returns the draft manifest, the gate's problems, the diff and the next version |
-| `publishSurveyVersion` | owner | rebuilds, writes both databases, makes the version active, audits |
-| `activateSurveyVersion` | owner | makes an earlier version active again (the rollback), audits |
-| `exportSurveyProvenance` | any dashboard role | every version's provenance, as CSV and JSON |
-
-## Pages
-
-- **Survey → Versions**: the history and provenance, active version, rollback,
-  exports, and each version's manifest to download.
-- **Survey → Editor**: a draft beside its base.
-  - Sections and components as an outline.
-  - A question's wording and options edited in place.
-  - A MyStory panel: on or off, the protocol, and its TOML with live checks.
-  - A changes list with the version it implies.
-  - Preview, which opens the participant app in preview mode with the draft.
-  - Publish.
+- `packages/core/src/versions.ts`: the merge, live periods, MyStory and the CSV
+  (pure, unit-tested).
+- `apps/functions/src/studio.ts`: reads Studio's records.
+- `apps/functions/src/releases.ts`: `checkStudioRelease`, `studioRelease`,
+  `resolveRelease`.
+- `apps/functions/src/api/versions.ts`: the three callables.
+- `apps/web/src/pages/survey/Versions.tsx`: the page.
 
 ## Tests
 
-- **Round trip:** every committed release unfreezes and rebuilds unchanged.
-- **Each edit** has its own test. Among them: the version number on each kind of
-  change; the licence refusal; MyStory placement and protocol checks; the gate
-  refusing a broken draft.
-- **The functions**, against the emulators: roles, both databases written,
-  activation history, audit rows.
-- **End to end:** `pnpm demo:check-editor` runs the editor in a browser against
-  the Emulator Suite, seeded with the made-up study on the real releases
-  (`scripts/demo/editor-walk.mjs`). It:
-  1. starts a draft from v9.0.0;
-  2. rewords a question;
-  3. checks that a licensed instrument is locked;
-  4. approves a MyStory protocol under a new version and ends the survey with it;
-  5. passes the publish checks and publishes v10.0.0;
-  6. confirms the survey's database now points devices at v10.0.0, with MyStory
-     last and its protocol frozen;
-  7. confirms the registry kept the provenance;
-  8. rolls back to v9.0.0.
+- **Unit:** `packages/core/src/versions.test.ts` (merge, live periods, MyStory,
+  CSV); `apps/functions/src/releases.test.ts` (Studio's copy accepted, and
+  refused when changed, misfiled, inconsistent, not JSON or another study's);
+  `apps/web/src/pages/survey/Versions.test.tsx` (the link, no editing controls,
+  text not markup, downloads).
+- **Emulators:** `apps/functions/test/api.integration.test.ts`, "survey
+  versions from MySelf Studio": a sitting under a Studio version is read and its
+  version registered once; a changed copy is refused once and nothing is read;
+  the history, manifests, export and who may call them.
+- **Offline demo:** `scripts/demo/studio.mjs` seeds an invented Studio history
+  (set-up, a version with MyStory, a rollback) and `scripts/demo/check.mjs`
+  checks the page and its downloads (scripts/demo/README.md).
 
-  That devices pick the version up is the survey's side (D-54), tested there.
+## Known limitations
+
+- A placement can now list part of a form (`items`, survey D-49). The
+  completeness rules the dashboard shares with the survey (vendored
+  `store/completeness.ts`) do not read it yet, in the survey either, so such a
+  version would be judged as if the whole form were placed. That is the
+  survey's to change; the dashboard follows when it re-vendors.
+- Live periods before Studio's set-up are not known.
+- The dashboard's own "active version" (Settings → Study settings, else the
+  newest registered) does not follow Studio's live pointer. After a rollback
+  the newest registered version may not be the live one.

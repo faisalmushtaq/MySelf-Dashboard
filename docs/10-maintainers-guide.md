@@ -13,7 +13,7 @@ below was checked against the repository on 2026-09-30.
 | Path | What it is |
 |---|---|
 | `packages/core/` | All domain logic, no Firebase: release manifests and their index (`manifest.ts`), log replay and the completeness engine (`replay.ts`, `completeness.ts`, `summary.ts`, `status.ts` — the rules themselves are the survey's, vendored, and shared with its researcher view: [03-completeness.md](03-completeness.md) §3.8), filters, sorting and paging (`filters.ts`, `query.ts`), analytics and question statistics, exports, roles (`roles.ts`), and **the API contract** (`api.ts`). Sub-folders: `figures/` (publication figures), `scoring/` (schemes, engine, benchmarks, school reports), `codebook/` (readable names), `quality/` (the automated quality review), `survey/` (BIDS and participant linkage on the survey's own data layer; server only), `node/` (hashing and the synthetic demo data; Node only), `vendor/` (copied verbatim from the survey — never edit by hand). Built to `dist/`, which the web app and functions import. |
-| `apps/functions/` | The backend, Firebase Functions codebase `dashboard` in europe-west2. `src/index.ts` lists everything deployed; `src/api/*.ts` are the callables; `summaries.ts` is the trigger that summarises each sitting; `store.ts` the in-memory mirror behind lists and metrics; `authz.ts` access decisions; `audit.ts` the audit log; `exporters/` Excel and PDF; `test/` integration tests against the emulators; `build-deploy.mjs` bundles everything into `functions-bundle/` for deployment. |
+| `apps/functions/` | The backend, Firebase Functions codebase `dashboard` in europe-west2. `src/index.ts` lists everything deployed; `src/api/*.ts` are the callables; `summaries.ts` is the trigger that summarises each sitting; `studio.ts` reads MySelf Studio's version records, read-only; `store.ts` the in-memory mirror behind lists and metrics; `authz.ts` access decisions; `audit.ts` the audit log; `exporters/` Excel and PDF; `test/` integration tests against the emulators; `build-deploy.mjs` bundles everything into `functions-bundle/` for deployment. |
 | `apps/web/` | The React + Vite single-page app. `src/App.tsx` (sign-in gate and routes), `src/app/` (shell and navigation, auth, study data, filters), `src/pages/` (one file per page; a page too big for one file keeps its parts in a sibling folder named after it, e.g. `pages/scoring-settings/`), `src/components/`, `src/charts/`, `src/lib/` (Firebase client, typed API client, hooks, formatting, figure files), `src/styles.css` (all styles). |
 | `firestore/` | `dashboard.rules` (security rules for the `dashboard` database), `dashboard.indexes.json`, `storage.emulator.rules`, and `test/rules.test.ts`. |
 | `scripts/` | `emulator-setup.mjs` (seed the emulators with synthetic data), `sync-releases.mjs` (register release manifests), `vendor-survey.mjs` and `check-vendored.mjs` (copy the survey's code and check it has not drifted), `check-privacy.mjs` (no console logging or analytics in the web app), `bootstrap-admin.mjs` (first administrator, by hand), `firebase-ops.mjs` (first-time setup, run by the setup workflow). |
@@ -21,7 +21,7 @@ below was checked against the repository on 2026-09-30.
 | `e2e/` | Playwright tests against the full emulator suite: `research-journey`, `roles-and-states` (with axe accessibility checks), `figures`, `scores`, `codebook`; `support.ts` signs in as each role. |
 | `.github/` | `workflows/ci.yml` (every push), `deploy.yml` (manual), `firebase-setup.yml` (first-time setup), `preview.yml` (preview channel); `firebase-setup/request.env` and `preview/functions.env` are the files whose changes trigger those runs (§10.6). |
 | `firebase.json`, `.firebaserc`, `firebase.emulators.json` | Deploy config — only the `dashboard` database, the `dashboard` functions codebase and the `dashboard` Hosting target — and the local emulator ports. |
-| `docs/` | 01–09: audit, architecture, completeness, risks, plan, handover, figures, scoring, data quality; this guide; `screenshots/` from synthetic data only. |
+| `docs/` | 01–09: audit, architecture, completeness, risks, plan, handover, figures, scoring, data quality; this guide; 11: Survey versions (MySelf Studio's history); `screenshots/` from synthetic data only. |
 
 ## 10.2 How data flows
 
@@ -30,7 +30,8 @@ below was checked against the repository on 2026-09-30.
                                                 studies/{study}/sessions/{id}   (+ chunks/ for long logs)
                                                           │
                           onSessionWritten (apps/functions/src/summaries.ts)
-                          assembleSitting (sittings.ts) → releaseIndex (releases.ts)
+                          assembleSitting (sittings.ts) → resolveRelease (releases.ts:
+                          the registry, else MySelf Studio's checked copy, registered)
                           → buildSummary (packages/core/src/summary.ts)
                                                           ▼
                                              Firestore "dashboard"
@@ -47,7 +48,9 @@ below was checked against the repository on 2026-09-30.
    the server.
 2. **Summaries.** `onSessionWritten` runs on every write to a sitting,
    reassembles its log, finds the release it was collected under (by content
-   hash) and writes one de-identified summary — statuses, completeness, section
+   hash; a version published in MySelf Studio is registered from Studio's copy
+   in `(default)` once its hash checks out — docs/11) and writes one
+   de-identified summary — statuses, completeness, section
    progress, data-quality signals — to the dashboard's own database. A deleted
    sitting leaves a tombstone. `rebuildSummaries` (Settings → Data maintenance)
    does the same for every sitting.
@@ -163,6 +166,11 @@ pnpm --filter @myself-dashboard/core exec vitest run src/codebook
 
 A sitting is tied to its release by the manifest's content hash; until that
 release is registered its sittings show "unknown version" and no completeness.
+
+**A version published in MySelf Studio needs none of this.** The summary
+trigger registers it from Studio's copy, checked against its hash, when its
+first sitting arrives (docs/11); step 5 below catches sittings that arrived
+before that. The steps are for a release made in the survey repository.
 
 1. Copy the survey's `releases/<key>.manifest.json` into `releases/` unchanged
    and add its source commit to `releases/README.md`.
