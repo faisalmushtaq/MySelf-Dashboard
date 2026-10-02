@@ -32,6 +32,8 @@ export type AuditAction =
   | "policy.changed"
   | "summaries.rebuilt"
   | "release.registered"
+  /** MySelf Studio's copy of a version failed its checks, so nothing is read through it (docs/11). */
+  | "release.refused"
   | "survey.provenance_exported";
 
 export interface AuditEntry {

@@ -1,13 +1,14 @@
 import { PassThrough } from "node:stream";
 import { beforeAll, describe, expect, it } from "vitest";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { DEFAULT_FILTERS, type AnalyticsResponse, type CodebookResponse, type ParticipantsResponse, type ResearcherViewResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse } from "@myself-dashboard/core";
+import { DEFAULT_FILTERS, type AnalyticsResponse, type CodebookResponse, type ParticipantsResponse, type ResearcherViewResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse, type SurveyVersionsResponse } from "@myself-dashboard/core";
+import { contentHash, demoManifest } from "@myself-dashboard/core/node";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
 import { pdfText } from "./pdfText.js";
 
 import { dash } from "../src/env.js";
-import { registerRelease } from "../src/releases.js";
+import { registerRelease, resetStudioCache } from "../src/releases.js";
 import { summariseSitting } from "../src/summaries.js";
 import { handleOpsRequest } from "../src/ops.js";
 import { invalidateSettings } from "../src/settings.js";
@@ -22,6 +23,7 @@ import { getCodebook } from "../src/api/codebook.js";
 import { getParticipants } from "../src/api/participants.js";
 import { getScores, getScoringSettings, saveGroupSettings, saveScoringScheme } from "../src/api/scores.js";
 import { invalidateScoring } from "../src/scoring.js";
+import { exportSurveyProvenance, getSurveyManifest, listSurveyVersions } from "../src/api/versions.js";
 
 /**
  * The backend, end to end against the emulators: real ID tokens from the Auth
@@ -508,6 +510,134 @@ describe("summaries", () => {
     const text = JSON.stringify(snap.docs.map((d) => d.data()));
     expect(text).not.toMatch(/"(Alex|Sam|Jordan|Riley|Casey|Morgan)"/);
     expect(text).not.toContain("HYPERLINK");
+  });
+});
+
+// Last, because it registers a new version: MySelf Studio's records, read from the survey's database.
+describe("survey versions from MySelf Studio", () => {
+  const SURVEY = "demo_survey";
+  const at = (iso: string) => Timestamp.fromDate(new Date(iso));
+  /** A version Studio published from 2.0.0, ending with MyStory: one the registry has never seen. */
+  const studioVersion = (version: string) => {
+    const { hash, ...body } = structuredClone(demoManifest("2.0.0")) as Record<string, any>;
+    void hash;
+    body["release"] = { ...body["release"], version, key: `demo_survey_r${version.replaceAll(".", "_")}`, publishedAt: "2026-09-20T09:00:00.000Z" };
+    body["composition"]["sections"].push({ key: "mystory", title: "MyStory", components: [{ kind: "narrative", protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }] });
+    return { ...body, hash: contentHash(body) } as Record<string, any>;
+  };
+  const v3 = studioVersion("3.0.0");
+  const v31 = studioVersion("3.1.0");
+  const tampered = studioVersion("3.0.1");
+  const v2 = demoManifest("2.0.0") as Record<string, any>;
+
+  const copy = (m: Record<string, any>, manifest = JSON.stringify(m)) => ({
+    surveyId: SURVEY, study: "demo", hash: m["hash"], version: m["release"]["version"], releaseKey: m["release"]["key"], engineVersion: m["release"]["engineVersion"], manifest, bytes: manifest.length, publishedAt: at(m["release"]["publishedAt"]),
+  });
+  const version = (m: Record<string, any>, more: Record<string, unknown>) => ({
+    surveyId: SURVEY, version: m["release"]["version"], hash: m["hash"], releaseKey: m["release"]["key"], engineVersion: m["release"]["engineVersion"], releaseNote: "Published from the repository before MySelf Studio", changeSummary: null, bump: null,
+    itemKeys: [], variables: [], source: "repository", draftRevision: null, basedOnVersion: null, authors: [], publishedAt: at(m["release"]["publishedAt"]), publishedBy: "repository", publishedByEmail: null, manifestPublishedAt: m["release"]["publishedAt"], ...more,
+  });
+  const auditRow = (iso: string, action: string, subject: string, detail: Record<string, unknown>) => ({ at: at(iso), actor: "uid-a", actorEmail: "a@brainpop.example", action, surveyId: SURVEY, subject, detail });
+
+  beforeAll(async () => {
+    const survey = getFirestore();
+    const base = "studies/demo";
+    const changed = structuredClone(tampered);
+    changed["composition"]["title"] = "Changed after publishing";
+    const writes: [string, Record<string, unknown>][] = [
+      [`${base}/surveys/${SURVEY}`, { surveyId: SURVEY, study: "demo", title: "Demo survey", createdAt: at("2026-09-01T09:00:00.000Z"), createdBy: "uid-a", active: null, latestVersion: "3.1.0", versionCount: 4, draftEditors: [] }],
+      [`${base}/surveys/${SURVEY}/versions/2.0.0`, version(v2, {})],
+      [`${base}/surveys/${SURVEY}/versions/3.0.0`, version(v3, { source: "studio", releaseNote: "=Adds MyStory at the end", changeSummary: { bump: "major", entries: [{ kind: "mystory.added", bump: "major", breaking: false, message: "MyStory added (np.phone_wellbeing@0.1.1)" }], counts: {} }, bump: "major", basedOnVersion: "2.0.0", authors: ["a@brainpop.example"], publishedBy: "uid-a", publishedByEmail: "a@brainpop.example", publishedAt: at("2026-09-20T09:00:00.000Z") })],
+      [`${base}/surveys/${SURVEY}/versions/3.0.1`, version(tampered, { source: "studio", publishedByEmail: "a@brainpop.example" })],
+      [`${base}/surveys/${SURVEY}/versions/3.1.0`, version(v31, { source: "studio", publishedByEmail: "a@brainpop.example" })],
+      [`${base}/publicReleases/${v2["hash"].slice(7)}`, copy(v2)],
+      [`${base}/publicReleases/${v3["hash"].slice(7)}`, copy(v3)],
+      [`${base}/publicReleases/${v31["hash"].slice(7)}`, copy(v31)],
+      [`${base}/publicReleases/${tampered["hash"].slice(7)}`, copy(tampered, JSON.stringify(changed))],
+      [`${base}/published/${SURVEY}`, { surveyId: SURVEY, study: "demo", hash: v2["hash"], version: "2.0.0", releaseKey: v2["release"]["key"], engineVersion: "0.1.0", generation: 3, publishedAt: at(v2["release"]["publishedAt"]) }],
+      [`${base}/studioAudit/a1`, auditRow("2026-09-01T09:00:00.000Z", "survey.imported", SURVEY, { imported: ["2.0.0"], active: "2.0.0", createdSurvey: true, createdDraft: true })],
+      [`${base}/studioAudit/a2`, auditRow("2026-09-20T09:00:00.000Z", "version.published", "3.0.0", { version: "3.0.0", hash: v3["hash"], releaseNote: "=Adds MyStory at the end", generation: 2 })],
+      [`${base}/studioAudit/a3`, auditRow("2026-09-21T09:00:00.000Z", "draft.edited", "x", {})],
+      [`${base}/studioAudit/a4`, auditRow("2026-09-22T09:00:00.000Z", "version.activated", "2.0.0", { version: "2.0.0", hash: v2["hash"], reason: "MyStory needs the newer app on every iPad first", generation: 3 })],
+    ];
+    for (const [path, data] of writes) await survey.doc(path).set(data);
+    resetStudioCache();
+  });
+
+  it("reads sittings under a version Studio published, once its copy proves to be that version", async () => {
+    const s = sittings[0]!;
+    const doc = { ...s.doc, sessionId: "ses_studio_v3", releaseHash: v3["hash"], releaseKey: v3["release"]["key"] };
+    const summary = await summariseSitting(doc.sessionId, doc as never);
+    expect(summary.releaseKnown).toBe(true);
+    expect(summary.releaseVersion).toBe("3.0.0");
+    const registered = (await dash().doc(`studies/demo/releases/${v3["hash"]}`).get()).data()!;
+    expect(registered["provenance"]).toMatchObject({ source: "studio", surveyId: SURVEY, version: "3.0.0" });
+    expect((await auditRows("release.registered")).filter((r) => r["target"]?.id === v3["hash"])).toHaveLength(1);
+    // A second sitting under it reads the registry; no second registration.
+    await summariseSitting("ses_studio_v3b", { ...doc, sessionId: "ses_studio_v3b" } as never);
+    expect((await auditRows("release.registered")).filter((r) => r["target"]?.id === v3["hash"])).toHaveLength(1);
+  });
+
+  it("refuses a copy that has changed since it was published, says so once, and reads nothing through it", async () => {
+    const doc = { ...sittings[1]!.doc, sessionId: "ses_studio_tampered", releaseHash: tampered["hash"], releaseKey: tampered["release"]["key"] };
+    const summary = await summariseSitting(doc.sessionId, doc as never);
+    expect(summary.releaseKnown).toBe(false);
+    expect(summary.counts.required).toBe(0);
+    await summariseSitting(doc.sessionId, doc as never);
+    expect((await dash().doc(`studies/demo/releases/${tampered["hash"]}`).get()).exists).toBe(false);
+    const refusals = (await auditRows("release.refused")).filter((r) => r["target"]?.id === tampered["hash"]);
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]!["outcome"]).toBe("failed");
+    expect(refusals[0]!["detail"]["reason"]).toMatch(/does not hash to it/);
+  });
+
+  it("lists Studio's history: the live version, who published what and when, MyStory, sittings and live periods", async () => {
+    resetStore();
+    const r = await run<SurveyVersionsResponse>(listSurveyVersions, reviewer, {});
+    expect(r.studioSetUp).toBe(true);
+    expect(r.live).toEqual([expect.objectContaining({ surveyId: SURVEY, version: "2.0.0", generation: 3, since: "2026-09-22T09:00:00.000Z" })]);
+    const byVersion = new Map(r.versions.map((v) => [v.version, v]));
+    expect(r.versions.map((v) => v.version)).toEqual(["3.1.0", "3.0.1", "3.0.0", "2.0.0", "1.1.0", "1.0.0"]);
+    expect(byVersion.get("3.0.0")).toMatchObject({
+      source: "studio", inStudio: true, registered: true, sittings: 2, publishedBy: "a@brainpop.example", authors: ["a@brainpop.example"], basedOn: "2.0.0",
+      changes: ["MyStory added (np.phone_wellbeing@0.1.1)"], myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }, live: false,
+      livePeriods: [{ from: "2026-09-20T09:00:00.000Z", to: "2026-09-22T09:00:00.000Z", how: "published", reason: null }],
+    });
+    expect(byVersion.get("2.0.0")).toMatchObject({ source: "repository", live: true, myStory: null });
+    expect(byVersion.get("2.0.0")!.livePeriods.map((p) => p.how)).toEqual(["set_up", "made_live_again"]);
+    expect(byVersion.get("3.0.1")).toMatchObject({ registered: false, sittings: 1 });
+    expect(byVersion.get("3.0.1")!.problem).toMatch(/does not hash to it/);
+    expect(byVersion.get("3.1.0")).toMatchObject({ registered: false, sittings: 0, problem: null });
+    // Only in the registry: from the repository.
+    expect(byVersion.get("1.0.0")).toMatchObject({ inStudio: false, source: "repository", surveyId: null });
+  });
+
+  it("serves a manifest from the registry or Studio's checked copy, never a changed one", async () => {
+    const fromStudio = await run<{ manifestJson: string }>(getSurveyManifest, reviewer, { hash: v31["hash"] });
+    expect(fromStudio.manifestJson).toBe(JSON.stringify(v31));
+    const fromRegistry = await run<{ manifestJson: string }>(getSurveyManifest, reviewer, { hash: v2["hash"] });
+    expect(JSON.parse(fromRegistry.manifestJson)["hash"]).toBe(v2["hash"]);
+    await expect(run(getSurveyManifest, reviewer, { hash: tampered["hash"] })).rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(run(getSurveyManifest, reviewer, { hash: "../../config/access" })).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(run(getSurveyManifest, reviewer, { hash: `sha256:${"0".repeat(64)}` })).rejects.toMatchObject({ code: "not-found" });
+  });
+
+  it("exports the provenance as spreadsheet-safe CSV and JSON, and audits it", async () => {
+    const out = await run<{ csv: string; json: string }>(exportSurveyProvenance, researcher, {});
+    const [header, ...lines] = out.csv.replace(/^﻿/, "").trim().split("\r\n");
+    expect(header).toContain("survey,version,release_key,hash,engine_version,status,source,in_studio,read_by_dashboard,authors,published_by,published_at");
+    expect(lines).toHaveLength(6);
+    const row = (v: string) => lines.find((l) => l.startsWith(`${SURVEY},${v},`));
+    expect(row("3.0.0")).toContain(",'=Adds MyStory at the end,");
+    expect(row("2.0.0")).toContain(",live,repository,");
+    expect(JSON.parse(out.json)).toMatchObject({ study: "demo", studioSetUp: true });
+    expect((await auditRows("survey.provenance_exported")).some((r) => r["actorEmail"] === researcher.email)).toBe(true);
+  });
+
+  it("is for dashboard members only", async () => {
+    await expect(run(listSurveyVersions, stranger, {})).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run(exportSurveyProvenance, device, {})).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run(getSurveyManifest, null, { hash: v2["hash"] })).rejects.toMatchObject({ code: "unauthenticated" });
   });
 });
 

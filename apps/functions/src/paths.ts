@@ -34,4 +34,15 @@ export const spaths = {
   corrections: (study = STUDY) => `studies/${study}/corrections`,
   assignments: (study = STUDY) => `studies/${study}/assignments`,
   narratives: (study = STUDY) => `studies/${study}/narratives`,
+  /**
+   * MySelf Studio's records (survey docs/16 §5.2), read and never written here:
+   * each survey, its immutable versions, the public live pointer the iPads
+   * follow, the immutable published manifests keyed by the hex part of their
+   * hash, and the audit trail.
+   */
+  studioSurveys: (study = STUDY) => `studies/${study}/surveys`,
+  studioVersions: (surveyId: string, study = STUDY) => `studies/${study}/surveys/${surveyId}/versions`,
+  publishedPointer: (surveyId: string, study = STUDY) => `studies/${study}/published/${surveyId}`,
+  publicRelease: (hashHex: string, study = STUDY) => `studies/${study}/publicReleases/${hashHex}`,
+  studioAudit: (study = STUDY) => `studies/${study}/studioAudit`,
 } as const;
