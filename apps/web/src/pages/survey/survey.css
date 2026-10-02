@@ -7,11 +7,34 @@
 .changes li {
   margin: 3px 0;
 }
+.periods {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.periods li + li {
+  margin-top: 6px;
+}
+.versions-table td {
+  vertical-align: top;
+}
+.versions-table td.what-changed {
+  min-width: 220px;
+  max-width: 360px;
+  overflow-wrap: anywhere;
+}
+.versions-table code {
+  font-size: 0.8125rem;
+}
 tr.row-current td {
   background: var(--accent-wash);
 }
 tr.row-detail td {
   background: var(--off-white, #f4f4f2);
+}
+tr.row-problem td {
+  background: var(--warn-wash);
+  font-size: 0.875rem;
 }
 td.row-actions {
   white-space: nowrap;

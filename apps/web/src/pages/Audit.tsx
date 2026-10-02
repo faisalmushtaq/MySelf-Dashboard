@@ -26,6 +26,8 @@ const ACTIONS: Record<string, string> = {
   "policy.changed": "Changed study settings",
   "summaries.rebuilt": "Rebuilt summaries",
   "release.registered": "Registered a survey version",
+  "release.refused": "Refused a survey version from Studio",
+  "survey.provenance_exported": "Exported the survey version history",
 };
 
 interface Row {

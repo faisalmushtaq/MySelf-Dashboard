@@ -316,7 +316,10 @@ function Admin() {
 
       <section className="card">
         <h2>Survey versions</h2>
-        <p className="hint">Each registered release is verified against its content hash; the dashboard reads every session through the version it was collected under.</p>
+        <p className="hint">
+          Each registered release is verified against its content hash; the dashboard reads every session through the version it was collected under. A
+          version published in MySelf Studio registers itself, checked the same way, when its first sitting arrives.
+        </p>
         <ul className="release-list">
           {data.releases.map((r) => (
             <li key={r.hash}>
