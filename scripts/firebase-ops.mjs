@@ -465,7 +465,7 @@ async function finish() {
   }
   if (!days.size) note("none", "no sittings started in the last seven days");
   for (const [day, e] of [...days].sort()) note(day, `${e.n} sittings, ${e.finished} finished — ${[...e.versions].map(([v, n]) => `${v}: ${n}`).join(", ")}`);
-  if (unregistered) bad("sittings under a survey version the dashboard does not know", `${unregistered}; register it (Settings → Survey versions, or releases/ and run setup again)`);
+  if (unregistered) bad("sittings under a survey version the dashboard does not know", `${unregistered}; Survey versions says whether MySelf Studio published it and why it was not read. If Studio's copy checks out, re-summarise (Settings → Data maintenance); otherwise register the manifest (Settings → Survey versions, or releases/ and run setup again)`);
 
   section("Smoke test");
   const url = `https://${SITE}.web.app/`;

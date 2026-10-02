@@ -102,7 +102,7 @@ const canonical = (v: unknown): string => {
   return JSON.stringify(v ?? null);
 };
 // Fields that pick WHICH thing is asked for: an answer about another session or another grouping is never a fair stand-in.
-const IDENTITY = ["sessionId", "key", "versionHash", "compareWith", "groupBy", "observation", "focus"];
+const IDENTITY = ["sessionId", "key", "hash", "versionHash", "compareWith", "groupBy", "observation", "focus"];
 
 async function replay(name: string, data: unknown, options: { exact?: (recorded: unknown) => boolean } = {}): Promise<unknown> {
   const mine = (await recorded()).filter((c) => c.name === name && c.status === 200);
