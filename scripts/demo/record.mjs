@@ -129,7 +129,7 @@ for (let p = 1, pages = 1; p <= pages; p += 1) {
 }
 for (const id of sessionIds) await call("getSessionDetail", { ...detail, sessionId: id });
 
-// Every version's manifest, for the survey editor's drafts.
+// Every version's manifest, to download from Survey versions.
 for (const v of (await call("listSurveyVersions", {}))?.versions ?? []) await call("getSurveyManifest", { hash: v.hash });
 
 // Scores, every way the page can group and count them, and each school in focus.

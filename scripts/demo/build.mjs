@@ -10,15 +10,11 @@
  *   pnpm demo:build
  *
  * The result is a static site: open dist-demo/demo/index.html from any web server.
- *
- * With --check-editor (`pnpm demo:check-editor`) it walks the survey editor end
- * to end instead of recording (editor-walk.mjs), and builds no demo.
  */
 import { spawn, spawnSync } from "node:child_process";
 import { rmSync, writeFileSync } from "node:fs";
 
 const ROOT = new URL("../../", import.meta.url).pathname;
-const CHECK_EDITOR = process.argv.includes("--check-editor");
 const PORTS = { auth: 9109, firestore: 8291, functions: 5111, web: 4273 };
 const run = (cmd, args, opts = {}) => {
   const r = spawnSync(cmd, args, { cwd: ROOT, stdio: "inherit", ...opts, env: { ...process.env, ...opts.env } });
@@ -45,7 +41,7 @@ writeFileSync(ENV_LOCAL, `MYSELF_STUDY=ybm\nDASHBOARD_ORIGINS=http://127.0.0.1:$
 
 const web = spawn("pnpm", ["--filter", "@myself-dashboard/web", "exec", "vite", "preview", "--outDir", "dist-record", "--port", String(PORTS.web), "--host", "127.0.0.1", "--strictPort"], { cwd: ROOT, stdio: "ignore" });
 try {
-  run("pnpm", ["exec", "firebase", "emulators:exec", "--only", "auth,firestore,functions,storage", "--project", "demo-myself-dashboard", "--config", "firebase.demo.json", `node scripts/demo/seed.mjs && node scripts/demo/${CHECK_EDITOR ? "editor-walk" : "record"}.mjs`], {
+  run("pnpm", ["exec", "firebase", "emulators:exec", "--only", "auth,firestore,functions,storage", "--project", "demo-myself-dashboard", "--config", "firebase.demo.json", "node scripts/demo/seed.mjs && node scripts/demo/record.mjs"], {
     env: { MYSELF_STUDY: "ybm", DEMO_WEB: `http://127.0.0.1:${PORTS.web}`, DEMO_FUNCTIONS: `127.0.0.1:${PORTS.functions}` },
   });
 } finally {
@@ -53,7 +49,6 @@ try {
   rmSync(ENV_LOCAL, { force: true });
 }
 
-if (CHECK_EDITOR) process.exit(0);
 run("node", ["scripts/demo/pack.mjs"]);
 run("pnpm", ["--filter", "@myself-dashboard/web", "exec", "vite", "build", "--config", "vite.demo.config.ts"]);
 console.log("\nThe demo is in apps/web/dist-demo — open demo/index.html from any web server.");

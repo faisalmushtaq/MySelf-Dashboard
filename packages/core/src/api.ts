@@ -462,3 +462,18 @@ export function codebookCsvRows(rows: readonly CodebookRow[]): { headers: string
     ]),
   };
 }
+
+/** One survey version, as the Survey versions page lists it (docs/11). */
+export interface SurveyVersionView {
+  hash: string;
+  version: string;
+  releaseKey: string;
+  publishedAt: string;
+  sittings: number;
+  firstSitting: string | null;
+  lastSitting: string | null;
+}
+
+export interface SurveyVersionsResponse {
+  versions: SurveyVersionView[];
+}

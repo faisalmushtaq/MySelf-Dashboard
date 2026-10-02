@@ -46,7 +46,6 @@ any web server (for example `python3 -m http.server` in that folder).
 | `scripts/demo/record.mjs` | Walks the dashboard and records it |
 | `scripts/demo/pack.mjs` | Splits the recording into small, lazily loaded files |
 | `scripts/demo/check.mjs` | Opens the built demo and fails on any error (`DEMO_URL=…`) |
-| `scripts/demo/editor-walk.mjs` | The survey editor end to end, from draft to publish to rollback: `pnpm demo:check-editor` (docs/11) |
 | `apps/web/vite.demo.config.ts` | Builds the web app with the stand-ins below |
 | `apps/web/demo/` | Stand-ins for `firebase/*` and the router (addresses go in the `#`), plus the demo's backend |
 

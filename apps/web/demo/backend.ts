@@ -151,7 +151,6 @@ const state = () =>
     };
   }));
 const notesAdded = new Map<string, NoteView[]>();
-const drafts = new Map<string, { id: string; name: string; baseHash: string; baseVersion: string; edits: unknown[]; rev: number; updatedAt: string }>();
 
 async function rows(now: Date) {
   const s = await state();
@@ -268,35 +267,6 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
     return { id: note.id, noteCount };
   },
 
-  // Survey editor drafts, kept in memory for as long as the tab is open.
-  async listSurveyDrafts() {
-    return { drafts: [...drafts.values()].map((d) => ({ id: d.id, name: d.name, baseHash: d.baseHash, baseVersion: d.baseVersion, edits: d.edits.length, status: "open", updatedAt: d.updatedAt, updatedBy: DEMO_USER.email, publishedVersion: null })) };
-  },
-  async getSurveyDraft(data) {
-    const d = drafts.get(String(data["id"] ?? ""));
-    if (!d) throw demoError("not-found", "No draft with that id.");
-    return { ...structuredClone(d), status: "open", updatedBy: DEMO_USER.email };
-  },
-  async saveSurveyDraft(data) {
-    const id = typeof data["id"] === "string" && data["id"] ? data["id"] : `demo${Date.now().toString(36)}`;
-    const versions = (await replay("listSurveyVersions", {})) as { versions: { hash: string; version: string }[] };
-    const rev = (drafts.get(id)?.rev ?? 0) + 1;
-    drafts.set(id, {
-      id,
-      name: String(data["name"] ?? ""),
-      baseHash: String(data["baseHash"] ?? ""),
-      baseVersion: versions.versions.find((v) => v.hash === data["baseHash"])?.version ?? "",
-      edits: structuredClone((data["edits"] as unknown[]) ?? []),
-      rev,
-      updatedAt: new Date().toISOString(),
-    });
-    return { id, rev };
-  },
-  async deleteSurveyDraft(data) {
-    drafts.delete(String(data["id"] ?? ""));
-    return { ok: true };
-  },
-
   async logChartDownload() {
     return { ok: true };
   },
@@ -315,9 +285,6 @@ const SWITCHED_OFF: Record<string, string> = {
   setDashboardRole: "Roles cannot be changed in this demo.",
   rebuildSummaries: "This demo has no server to rebuild.",
   registerReleaseManifest: "This demo has no server to register a version with.",
-  previewSurveyDraft: "The publish checks and the preview run on the dashboard's server, with the survey's own release builder; this demo has no server.",
-  publishSurveyVersion: "Publishing is switched off in this demo: it would change what every iPad runs.",
-  activateSurveyVersion: "Changing the active version is switched off in this demo.",
   exportSurveyProvenance: "Exports are switched off in this demo.",
 };
 
