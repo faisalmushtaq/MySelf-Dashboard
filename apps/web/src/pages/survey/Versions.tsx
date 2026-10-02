@@ -124,12 +124,13 @@ export default function Versions() {
                         <td>
                           <strong>v{v.version}</strong> {v.live ? <span className="tag tag-good">live</span> : null}
                           <div className="hint nowrap">{v.source === "studio" ? "Made in Studio" : "From the repository"}</div>
-                          {v.bump ? (
-                            <div className="hint nowrap">
-                              {v.bump.toUpperCase()}
+                          {v.chosenBump ? (
+                            <div className="hint nowrap" title={v.requiredBump && v.requiredBump !== v.chosenBump ? `The changes needed ${v.requiredBump.toUpperCase()}` : undefined}>
+                              {v.chosenBump.toUpperCase()}
                               {v.basedOn ? ` on v${v.basedOn}` : ""}
                             </div>
                           ) : null}
+                          {v.restoredFrom ? <div className="hint nowrap">restored from v{v.restoredFrom}</div> : null}
                           {!v.inStudio ? <div className="hint nowrap">not in Studio</div> : null}
                           <button type="button" className="btn-link nowrap" onClick={() => void download(v)} title={`Download the frozen manifest of v${v.version}`}>
                             <Icon name="download" size={14} /> Manifest
@@ -193,6 +194,12 @@ export default function Versions() {
                                   <span className="nowrap">{dateOnly(p.from)}</span> – <span className="nowrap">{p.to ? dateOnly(p.to) : "now"}</span>
                                   <div className="hint">
                                     {HOW[p.how]}
+                                    {p.by && p.how !== "set_up" ? (
+                                      <>
+                                        {" "}
+                                        by <Email address={p.by} />
+                                      </>
+                                    ) : null}
                                     {p.reason ? `: ${p.reason}` : ""}
                                   </div>
                                 </li>

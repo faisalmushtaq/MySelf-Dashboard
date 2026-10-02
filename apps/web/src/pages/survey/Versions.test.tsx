@@ -5,15 +5,15 @@ import type { SurveyVersionsResponse, SurveyVersionView } from "@myself-dashboar
 const H = (n: number) => `sha256:${String(n).repeat(64)}`;
 const version = (v: string, hash: string, more: Partial<SurveyVersionView> = {}): SurveyVersionView => ({
   surveyId: "ybm_nd2026_standard", version: v, releaseKey: `ybm_nd2026_standard_r${v.replaceAll(".", "_")}`, hash, engineVersion: "0.3.0", source: "studio", inStudio: true, registered: true,
-  authors: [], publishedBy: null, publishedAt: "2026-09-04T09:00:00.000Z", basedOn: null, releaseNote: null, changes: [], bump: null, myStory: null, live: false, livePeriods: [],
+  authors: [], publishedBy: null, publishedAt: "2026-09-04T09:00:00.000Z", basedOn: null, restoredFrom: null, releaseNote: null, changes: [], requiredBump: null, chosenBump: null, myStory: null, live: false, livePeriods: [],
   sittings: 0, complete: 0, partial: 0, firstSitting: null, lastSitting: null, problem: null, ...more,
 });
 const history: SurveyVersionsResponse = {
   studioSetUp: true,
   live: [{ surveyId: "ybm_nd2026_standard", title: "Your Brain Matters", version: "9.0.0", hash: H(2), releaseKey: "ybm_nd2026_standard_r9_0_0", generation: 4, since: "2026-09-23T09:00:00.000Z" }],
   versions: [
-    version("10.0.0", H(3), { releaseNote: "<img src=x onerror=alert(1)> MyStory at the end", myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }, changes: ["MyStory added (np.phone_wellbeing@0.1.1)"], problem: "Not read: it has changed since it was published." }),
-    version("9.0.0", H(2), { live: true, publishedBy: "a@brainpop.example", authors: ["a@brainpop.example"], sittings: 3, complete: 2, partial: 1, firstSitting: "2026-09-07T09:00:00.000Z", lastSitting: "2026-09-28T09:00:00.000Z", livePeriods: [{ from: "2026-09-23T09:00:00.000Z", to: null, how: "made_live_again", reason: "Back to the shorter survey" }] }),
+    version("10.0.0", H(3), { restoredFrom: "8.0.0", chosenBump: "major", basedOn: "9.0.0", releaseNote: "<img src=x onerror=alert(1)> MyStory at the end", myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }, changes: ["MyStory added (np.phone_wellbeing@0.1.1)"], problem: "Not read: it has changed since it was published." }),
+    version("9.0.0", H(2), { live: true, publishedBy: "a@brainpop.example", authors: ["a@brainpop.example"], sittings: 3, complete: 2, partial: 1, firstSitting: "2026-09-07T09:00:00.000Z", lastSitting: "2026-09-28T09:00:00.000Z", livePeriods: [{ from: "2026-09-23T09:00:00.000Z", to: null, how: "made_live_again", by: "b@brainpop.example", reason: "Back to the shorter survey" }] }),
     version("7.3.0", H(1), { source: "repository", inStudio: false, surveyId: null }),
   ],
   unknownSittings: 2,
@@ -56,8 +56,10 @@ describe("the Survey versions page", () => {
     expect(screen.getByText("by a@brainpop.example")).toBeInTheDocument();
     expect(screen.getByText("Written by a@brainpop.example")).toBeInTheDocument();
     expect(screen.getByText("2 complete · 1 partial", { exact: false })).toBeInTheDocument();
-    expect(screen.getByText(/made live again: Back to the shorter survey/)).toBeInTheDocument();
+    expect(screen.getByText(/made live again by b@brainpop.example: Back to the shorter survey/)).toBeInTheDocument();
     expect(screen.getByText("not in Studio")).toBeInTheDocument();
+    expect(screen.getByText("MAJOR on v9.0.0")).toBeInTheDocument();
+    expect(screen.getByText("restored from v8.0.0")).toBeInTheDocument();
     expect(screen.getByText(/it has changed since it was published/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "1 change" }));
     expect(screen.getByText("MyStory added (np.phone_wellbeing@0.1.1)")).toBeInTheDocument();

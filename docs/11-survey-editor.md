@@ -47,7 +47,7 @@ with the Admin SDK and never write to them. No browser reads them.
 | `surveys/{surveyId}/versions/{version}` | version, release key, hash, engine version, source (Studio or the repository), release note, change summary, bump, based on, authors, publisher, published at |
 | `published/{surveyId}` | the live version: hash, version, release key, generation |
 | `publicReleases/{hashHex}` | the manifest itself, as Studio froze it, for MyStory and for downloads |
-| `studioAudit/{id}` | only the rows that moved the live pointer: `survey.imported`, `version.published`, `version.activated` |
+| `studioAudit/{id}` | only the rows about versions: `survey.imported`, `version.published`, `version.activated` (which moved the live pointer) and `draft.restored` |
 
 Before an administrator presses **Set up from the live survey** in Studio these
 are empty, and every iPad runs the release bundled in the survey app. The page
@@ -64,8 +64,9 @@ is listed too, as from the repository and not in Studio.
   it from each iPad's next start screen; a sitting already under way finishes on
   the version it started with.
 - **History**, newest first. For each version:
-  - the version, whether it is live, where it was made, and the bump on the
-    version it was based on;
+  - the version, whether it is live, where it was made, the bump on the
+    version it was based on, and the version restored into its draft, if one
+    was;
   - when it was published and by whom; who wrote it (the draft's editors);
   - the release note, and Studio's change summary one line per change;
   - **MyStory**: whether the version ends with it, and which protocol. Read from
@@ -91,7 +92,8 @@ row:
   was live then. It was live before the trail began, so its earlier time is not
   in it;
 - **published**: a publish in Studio;
-- **made live again**: Studio's emergency rollback, with the reason given.
+- **made live again**: Studio's emergency rollback, with who did it and the
+  reason they gave.
 
 With no trail at all, the live pointer alone says which version is live, from
 the time it records.
@@ -129,27 +131,38 @@ unknown versions**. The page says so for any such version.
 - **Manifest**: the registry's copy, or else Studio's copy once it passes the
   checks above. A copy that fails them is not served.
 - **Version history (CSV)** and **JSON**: the provenance export, audited as
-  `survey.provenance_exported`. One row per version, newest first:
+  `survey.provenance_exported`. One row per version, newest first. The first
+  twenty columns are those of Studio's own provenance download (survey docs/16
+  §10.2), in its order and formats, so the two files read alike; the rest are
+  what only the dashboard knows.
 
 | Column | From |
 |---|---|
-| `survey` | Studio's survey ID (empty for a version only the registry knows) |
 | `version`, `release_key`, `hash`, `engine_version` | the version record, or the registry |
-| `status` | `live` or `not live`, from Studio's live pointer |
+| `status` | `live` or `previous`, from Studio's live pointer |
 | `source` | `studio` or `repository` |
+| `authors`, `publisher`, `published_at` | the version record (`publisher` is `repository` for a version from the repository) |
+| `based_on` | the version record |
+| `restored_from` | the last "Restore into draft" in the audit trail between the publish before it and its own |
+| `release_note`, `change_summary` | the version record; change lines separated by ` \| ` |
+| `required_bump`, `chosen_bump` | the change summary's bump, and the bump the version number took |
+| `mystory`, `mystory_protocol` | `on` or `off`, and `key@version`, from the manifest; empty when it could not be read |
+| `sittings_complete`, `sittings_partial` | the dashboard's summaries: reached the end or not, as Studio counts them |
+| `live_periods` | the audit trail, each "from to to (how)", with "now" for the one still live, separated by `; ` |
+| `survey` | Studio's survey ID; empty for a version only the registry knows |
 | `in_studio` | whether Studio has a record of it |
 | `read_by_dashboard` | whether it is in the registry, so its sittings are read |
-| `authors`, `published_by`, `published_at` | the version record |
-| `based_on`, `release_note`, `changes`, `bump` | the version record |
-| `mystory`, `mystory_protocol` | `on`/`off` and `key@version`, from the manifest |
-| `sittings`, `sittings_complete`, `sittings_partial`, `first_sitting`, `last_sitting` | the dashboard's summaries (counts and dates only) |
-| `live_periods` | the audit trail, as above |
+| `sittings`, `first_sitting`, `last_sitting` | the dashboard's summaries (counts and dates only) |
 | `problem` | why the dashboard cannot read it, if it cannot |
 
-"Complete" is a sitting that reached the end, as Studio counts them. The CSV is
-written with `toCsv`: a cell that starts with `=`, `+`, `-`, `@`, a tab or a
-carriage return is prefixed with `'`, so a spreadsheet shows it rather than
-runs it; quoting follows RFC 4180, with a byte-order mark.
+Times are ISO 8601 (UTC); authors are separated by `; `. A cell that could not
+be read is left empty, never guessed. The JSON is `{ format:
+"myself-dashboard-provenance", formatVersion: 1, study, exportedAt, notes,
+studioSetUp, live, versions, unknownSittings }`, each live period as `{ from,
+to, how, by, reason }`, so who made a version live again, and why, is kept
+there. The CSV is written with `toCsv`: a cell that starts with `=`, `+`, `-`,
+`@`, a tab or a carriage return is prefixed with `'`, so a spreadsheet shows it
+rather than runs it; quoting follows RFC 4180, with a byte-order mark.
 
 ## Functions and access
 

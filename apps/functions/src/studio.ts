@@ -16,6 +16,8 @@ import { spaths } from "./paths.js";
 
 /** The audit rows that move the live pointer, and how each one moved it. */
 const LIVE_ACTIONS = { "survey.imported": "set_up", "version.published": "published", "version.activated": "made_live_again" } as const;
+/** And "Restore into draft", for the version a later publish was restored from. */
+const TRAIL_ACTIONS = [...Object.keys(LIVE_ACTIONS), "draft.restored"];
 
 const iso = (v: unknown): string | null => (v instanceof Timestamp ? v.toDate().toISOString() : typeof v === "string" ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
@@ -25,7 +27,7 @@ function versionRecord(surveyId: string, d: Record<string, unknown>): StudioVers
   const version = str(d["version"]);
   const hash = str(d["hash"]);
   if (!version || !hash) return null;
-  const summary = d["changeSummary"] as { entries?: { message?: unknown }[] } | null | undefined;
+  const summary = d["changeSummary"] as { bump?: unknown; entries?: { message?: unknown }[] } | null | undefined;
   const source: VersionSource = d["source"] === "repository" ? "repository" : "studio";
   return {
     surveyId,
@@ -36,12 +38,13 @@ function versionRecord(surveyId: string, d: Record<string, unknown>): StudioVers
     source,
     releaseNote: str(d["releaseNote"]),
     changes: (summary?.entries ?? []).map((e) => str(e?.message)).filter((m): m is string => m !== null),
-    bump: str(d["bump"]),
+    requiredBump: str(summary?.bump),
+    chosenBump: str(d["bump"]),
     basedOn: str(d["basedOnVersion"]),
     authors: strings(d["authors"]),
     // An email is how the research team knows one another; a uid says nothing to them.
     publishedBy: str(d["publishedByEmail"]) ?? (d["publishedBy"] === "repository" ? "repository" : null),
-    publishedAt: iso(d["publishedAt"]),
+    publishedAt: iso(d["publishedAt"]) ?? str(d["manifestPublishedAt"]),
   };
 }
 
@@ -61,17 +64,32 @@ function liveEvent(d: Record<string, unknown>): (StudioLiveEvent & { surveyId: s
   if (how === "set_up" && detail["createdSurvey"] === false) return null;
   const version = how === "set_up" ? str(detail["active"]) : (str(detail["version"]) ?? str(d["subject"]));
   if (!version) return null;
-  return { surveyId: str(d["surveyId"]), at, how, version, hash: how === "set_up" ? null : str(detail["hash"]), reason: how === "made_live_again" ? str(detail["reason"]) : null };
+  return {
+    surveyId: str(d["surveyId"]),
+    at,
+    how,
+    version,
+    hash: how === "set_up" ? null : str(detail["hash"]),
+    by: str(d["actorEmail"]),
+    reason: how === "made_live_again" ? str(detail["reason"]) : null,
+  };
+}
+
+function restore(d: Record<string, unknown>): { surveyId: string | null; at: string; version: string } | null {
+  const at = iso(d["at"]);
+  const version = str(((d["detail"] ?? {}) as Record<string, unknown>)["version"]) ?? str(d["subject"]);
+  return d["action"] === "draft.restored" && at && version ? { surveyId: str(d["surveyId"]), at, version } : null;
 }
 
 export async function readStudio(study = STUDY): Promise<StudioSurveyRecord[]> {
   const db = research();
   const [surveys, trail] = await Promise.all([
     db.collection(spaths.studioSurveys(study)).get(),
-    // Only the few rows that moved the pointer: draft edits are most of the trail.
-    db.collection(spaths.studioAudit(study)).where("action", "in", Object.keys(LIVE_ACTIONS)).get(),
+    // Only the few rows about versions: draft edits are most of the trail.
+    db.collection(spaths.studioAudit(study)).where("action", "in", TRAIL_ACTIONS).get(),
   ]);
   const events = trail.docs.map((d) => liveEvent(d.data())).filter((e) => e !== null);
+  const restores = trail.docs.map((d) => restore(d.data())).filter((r) => r !== null);
   return Promise.all(
     surveys.docs.map(async (s) => {
       const [versions, pointer] = await Promise.all([db.collection(spaths.studioVersions(s.id, study)).get(), db.doc(spaths.publishedPointer(s.id, study)).get()]);
@@ -81,6 +99,7 @@ export async function readStudio(study = STUDY): Promise<StudioSurveyRecord[]> {
         pointer: pointerRecord(pointer.data()),
         versions: versions.docs.map((v) => versionRecord(s.id, v.data())).filter((v) => v !== null),
         events: events.filter((e) => e.surveyId === s.id),
+        restores: restores.filter((r) => r.surveyId === s.id),
       };
     }),
   );

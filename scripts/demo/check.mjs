@@ -57,7 +57,7 @@ try {
   const csv = await fetchDownload(page.getByRole("button", { name: /Version history \(CSV\)/ }));
   const json = await fetchDownload(page.getByRole("button", { name: "JSON", exact: true }));
   const lines = csv.text.replace(/^﻿/, "").trim().split("\r\n");
-  if (!csv.text.startsWith("﻿survey,version,release_key,hash")) problems.push("survey versions: the CSV does not start with its header");
+  if (!/^\uFEFFversion,release_key,hash,engine_version,status,source,authors,publisher,/.test(csv.text)) problems.push("survey versions: the CSV does not start with its header");
   if (lines.length !== versionRows + 1) problems.push(`survey versions: the CSV has ${lines.length - 1} rows for ${versionRows} versions`);
   const parsed = JSON.parse(json.text);
   console.log(

@@ -44,6 +44,8 @@ export interface LivePeriod {
    * again", or — with no trail to go on — the live pointer itself.
    */
   how: "set_up" | "published" | "made_live_again" | "pointer";
+  /** Who did it (their Studio list address), when the trail says. */
+  by: string | null;
   /** Why it was made live again, as the publisher wrote it. */
   reason: string | null;
 }
@@ -73,10 +75,15 @@ export interface SurveyVersionView extends SittingCounts {
   publishedBy: string | null;
   publishedAt: string | null;
   basedOn: string | null;
+  /** The version restored into the draft this one was published from, if one was. */
+  restoredFrom: string | null;
   releaseNote: string | null;
   /** Studio's change summary, one line per change. */
   changes: string[];
-  bump: string | null;
+  /** The smallest bump the changes needed, and the one the version number took. */
+  requiredBump: string | null;
+  chosenBump: string | null;
+  /** Null when it does not end with MyStory, or when its manifest could not be read (`problem`). */
   myStory: MyStoryFacts | null;
   live: boolean;
   livePeriods: LivePeriod[];
@@ -121,7 +128,8 @@ export interface StudioVersionRecord {
   source: VersionSource;
   releaseNote: string | null;
   changes: string[];
-  bump: string | null;
+  requiredBump: string | null;
+  chosenBump: string | null;
   basedOn: string | null;
   authors: string[];
   publishedBy: string | null;
@@ -144,6 +152,7 @@ export interface StudioLiveEvent {
   version: string;
   /** Null when the row names only the version (the set-up does). */
   hash: string | null;
+  by: string | null;
   reason: string | null;
 }
 
@@ -153,6 +162,8 @@ export interface StudioSurveyRecord {
   pointer: StudioPointer | null;
   versions: StudioVersionRecord[];
   events: StudioLiveEvent[];
+  /** Each "Restore into draft": which version, when. */
+  restores: { at: string; version: string }[];
 }
 
 /** A version in the dashboard's own registry. */
@@ -227,9 +238,24 @@ export function livePeriods(events: readonly StudioLiveEvent[], pointer: StudioP
     .map((e) => ({ ...e, hash: e.hash ?? hashOf(e.version) }))
     .filter((e): e is StudioLiveEvent & { hash: string } => e.hash !== null)
     .sort((a, b) => a.at.localeCompare(b.at));
-  ordered.forEach((e, i) => add(e.hash, { from: e.at, to: ordered[i + 1]?.at ?? null, how: e.how, reason: e.reason }));
-  if (ordered.length === 0 && pointer?.publishedAt) add(pointer.hash, { from: pointer.publishedAt, to: null, how: "pointer", reason: null });
+  ordered.forEach((e, i) => add(e.hash, { from: e.at, to: ordered[i + 1]?.at ?? null, how: e.how, by: e.by, reason: e.reason }));
+  if (ordered.length === 0 && pointer?.publishedAt) add(pointer.hash, { from: pointer.publishedAt, to: null, how: "pointer", by: null, reason: null });
   return out;
+}
+
+/**
+ * The version restored into the draft that `version` was published from: the
+ * last restore after the publish (or set-up) before it, if there was one — as
+ * Studio's own provenance reads it.
+ */
+export function restoredFrom(events: readonly StudioLiveEvent[], restores: readonly { at: string; version: string }[], version: string): string | null {
+  const published = events.find((e) => e.how === "published" && e.version === version);
+  if (!published) return null;
+  const since = events
+    .filter((e) => (e.how === "published" || e.how === "set_up") && e.at < published.at)
+    .reduce((latest, e) => (e.at > latest ? e.at : latest), "");
+  const restore = restores.filter((r) => r.at > since && r.at < published.at).sort((a, b) => a.at.localeCompare(b.at)).at(-1);
+  return restore?.version ?? null;
 }
 
 // ── The history ─────────────────────────────────────────────────────────────
@@ -269,9 +295,11 @@ export function versionHistory(input: VersionHistoryInput): SurveyVersionsRespon
         publishedBy: v.publishedBy,
         publishedAt: v.publishedAt,
         basedOn: v.basedOn,
+        restoredFrom: restoredFrom(survey.events, survey.restores, v.version),
         releaseNote: v.releaseNote,
         changes: v.changes,
-        bump: v.bump,
+        requiredBump: v.requiredBump,
+        chosenBump: v.chosenBump,
         myStory: f.myStory,
         live: survey.pointer?.hash === v.hash,
         livePeriods: periods.get(v.hash) ?? [],
@@ -298,9 +326,11 @@ export function versionHistory(input: VersionHistoryInput): SurveyVersionsRespon
       publishedBy: null,
       publishedAt: r.publishedAt,
       basedOn: null,
+      restoredFrom: null,
       releaseNote: null,
       changes: [],
-      bump: null,
+      requiredBump: null,
+      chosenBump: null,
       myStory: f.myStory,
       live: false,
       livePeriods: [],
@@ -317,77 +347,98 @@ export function versionHistory(input: VersionHistoryInput): SurveyVersionsRespon
 
 // ── The provenance export ───────────────────────────────────────────────────
 
+/** How a period began, in the words of Studio's own provenance export. */
 const HOW: Record<LivePeriod["how"], string> = {
-  set_up: "already live when Studio was set up",
+  set_up: "set up from the live survey",
   published: "published",
   made_live_again: "made live again",
-  pointer: "live pointer",
+  pointer: "the live pointer",
 };
 
-export const describePeriod = (p: LivePeriod): string =>
-  `${p.from} to ${p.to ?? "now"} (${HOW[p.how]}${p.reason ? `: ${p.reason}` : ""})`;
+export const describePeriod = (p: LivePeriod): string => `${p.from} to ${p.to ?? "now"} (${HOW[p.how]})`;
+
+/**
+ * The columns Studio's own provenance export writes (survey docs/16 §10.2), in
+ * its order and with its formats, so the two files read alike; then what only
+ * the dashboard knows.
+ */
+export const PROVENANCE_COLUMNS = [
+  "version",
+  "release_key",
+  "hash",
+  "engine_version",
+  "status",
+  "source",
+  "authors",
+  "publisher",
+  "published_at",
+  "based_on",
+  "restored_from",
+  "release_note",
+  "change_summary",
+  "required_bump",
+  "chosen_bump",
+  "mystory",
+  "mystory_protocol",
+  "sittings_complete",
+  "sittings_partial",
+  "live_periods",
+  "survey",
+  "in_studio",
+  "read_by_dashboard",
+  "sittings",
+  "first_sitting",
+  "last_sitting",
+  "problem",
+] as const;
 
 /**
  * Every version's provenance, in one table a researcher can keep with a
  * paper's supplementary material, newest first. Written with `toCsv`, so a
- * release note that starts with `=` is shown, not run.
+ * release note that starts with `=` is shown, not run. A cell that could not
+ * be read is left empty, never guessed.
  */
 export function provenanceCsv(versions: readonly SurveyVersionView[]): string {
-  const header = [
-    "survey",
-    "version",
-    "release_key",
-    "hash",
-    "engine_version",
-    "status",
-    "source",
-    "in_studio",
-    "read_by_dashboard",
-    "authors",
-    "published_by",
-    "published_at",
-    "based_on",
-    "release_note",
-    "changes",
-    "bump",
-    "mystory",
-    "mystory_protocol",
-    "sittings",
-    "sittings_complete",
-    "sittings_partial",
-    "first_sitting",
-    "last_sitting",
-    "live_periods",
-    "problem",
-  ];
   const rows = [...versions]
     .sort((a, b) => compareVersions(b.version, a.version))
-    .map((v) => [
-      v.surveyId,
-      v.version,
-      v.releaseKey,
-      v.hash,
-      v.engineVersion,
-      v.live ? "live" : "not live",
-      v.source,
-      v.inStudio ? "yes" : "no",
-      v.registered ? "yes" : "no",
-      v.authors.join("; "),
-      v.publishedBy,
-      v.publishedAt,
-      v.basedOn,
-      v.releaseNote,
-      v.changes.join("; "),
-      v.bump,
-      v.myStory ? "on" : "off",
-      myStoryLabel(v.myStory),
-      v.sittings,
-      v.complete,
-      v.partial,
-      v.firstSitting,
-      v.lastSitting,
-      v.livePeriods.map(describePeriod).join("; "),
-      v.problem,
-    ]);
-  return toCsv(header, rows);
+    .map((v) => {
+      const read = v.problem === null;
+      return [
+        v.version,
+        v.releaseKey,
+        v.hash,
+        v.engineVersion,
+        v.live ? "live" : "previous",
+        v.source,
+        v.authors.join("; "),
+        v.publishedBy,
+        v.publishedAt,
+        v.basedOn,
+        v.restoredFrom,
+        v.releaseNote,
+        v.changes.join(" | "),
+        v.requiredBump,
+        v.chosenBump,
+        read ? (v.myStory ? "on" : "off") : null,
+        myStoryLabel(v.myStory) || null,
+        v.complete,
+        v.partial,
+        v.livePeriods.map(describePeriod).join("; "),
+        v.surveyId,
+        v.inStudio ? "yes" : "no",
+        v.registered ? "yes" : "no",
+        v.sittings,
+        v.firstSitting,
+        v.lastSitting,
+        v.problem,
+      ];
+    });
+  return toCsv(PROVENANCE_COLUMNS, rows);
 }
+
+/** What the live periods and counts can and cannot say, carried in the JSON export. */
+export const PROVENANCE_NOTES = [
+  "Versions are edited and published in MySelf Studio; this is the dashboard's read-only record of them.",
+  "Live periods come from Studio's audit trail: each publish, each “make live again”, and the set-up from the live survey. A version that was live before Studio was set up was live before the trail began, so those earlier periods are not listed.",
+  "Sittings are counts of the sittings the dashboard has recorded under each version's hash; no participant data is included.",
+];

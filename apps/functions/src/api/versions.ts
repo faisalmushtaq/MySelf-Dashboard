@@ -1,5 +1,7 @@
 import {
+  ManifestError,
   manifestFacts,
+  PROVENANCE_NOTES,
   provenanceCsv,
   sittingsByRelease,
   versionHistory,
@@ -31,17 +33,17 @@ const HASH = /^sha256:[0-9a-f]{64}$/;
 const studioFacts = new Map<string, ManifestFacts>();
 
 async function factsFor(hash: string, registered: boolean): Promise<ManifestFacts | { problem: string }> {
-  if (registered) return (await registryFacts(hash)) ?? { problem: "The registry holds no manifest for this version." };
-  const hit = studioFacts.get(hash);
-  if (hit) return hit;
   try {
+    if (registered) return (await registryFacts(hash)) ?? { problem: "The registry holds no manifest for this version." };
+    const hit = studioFacts.get(hash);
+    if (hit) return hit;
     const found = await studioRelease(hash);
     if (!found) return { problem: "Studio holds no manifest for this version, so sittings under it cannot be read." };
     const facts = manifestFacts(found.manifest);
     studioFacts.set(hash, facts);
     return facts;
   } catch (error) {
-    if (error instanceof ReleaseRejected) return { problem: `Not read: ${error.message}.` };
+    if (error instanceof ReleaseRejected || error instanceof ManifestError) return { problem: `Not read: ${error.message}.` };
     throw error;
   }
 }
@@ -67,7 +69,9 @@ export const exportSurveyProvenance = onCall(options, async (request) => {
   const actor = await requireActor(request, "survey.versions");
   const h = await history();
   await audit({ action: "survey.provenance_exported", ...actorFields(actor), target: { type: "study", id: STUDY }, detail: { versions: h.versions.length } });
-  return { csv: provenanceCsv(h.versions), json: JSON.stringify({ study: STUDY, exportedAt: h.computedAt, ...h }, null, 2) };
+  const { computedAt, ...rest } = h;
+  const json = { format: "myself-dashboard-provenance", formatVersion: 1, study: STUDY, exportedAt: computedAt, notes: PROVENANCE_NOTES, ...rest };
+  return { csv: provenanceCsv(h.versions), json: JSON.stringify(json, null, 2) };
 });
 
 /** A version's manifest, to download: from the registry, or else Studio's checked copy. */

@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { beforeAll, describe, expect, it } from "vitest";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { DEFAULT_FILTERS, type AnalyticsResponse, type CodebookResponse, type ParticipantsResponse, type ResearcherViewResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse, type SurveyVersionsResponse } from "@myself-dashboard/core";
+import { DEFAULT_FILTERS, type AnalyticsResponse, type CodebookResponse, type ParticipantsResponse, type ResearcherViewResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse, type SurveyVersionsResponse, PROVENANCE_COLUMNS } from "@myself-dashboard/core";
 import { contentHash, demoManifest } from "@myself-dashboard/core/node";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
 import { pdfText } from "./pdfText.js";
@@ -557,6 +557,7 @@ describe("survey versions from MySelf Studio", () => {
       [`${base}/published/${SURVEY}`, { surveyId: SURVEY, study: "demo", hash: v2["hash"], version: "2.0.0", releaseKey: v2["release"]["key"], engineVersion: "0.1.0", generation: 3, publishedAt: at(v2["release"]["publishedAt"]) }],
       [`${base}/studioAudit/a1`, auditRow("2026-09-01T09:00:00.000Z", "survey.imported", SURVEY, { imported: ["2.0.0"], active: "2.0.0", createdSurvey: true, createdDraft: true })],
       [`${base}/studioAudit/a2`, auditRow("2026-09-20T09:00:00.000Z", "version.published", "3.0.0", { version: "3.0.0", hash: v3["hash"], releaseNote: "=Adds MyStory at the end", generation: 2 })],
+      [`${base}/studioAudit/a1b`, auditRow("2026-09-19T09:00:00.000Z", "draft.restored", "2.0.0", { version: "2.0.0", hash: v2["hash"], fromRevision: 3, revision: 4 })],
       [`${base}/studioAudit/a3`, auditRow("2026-09-21T09:00:00.000Z", "draft.edited", "x", {})],
       [`${base}/studioAudit/a4`, auditRow("2026-09-22T09:00:00.000Z", "version.activated", "2.0.0", { version: "2.0.0", hash: v2["hash"], reason: "MyStory needs the newer app on every iPad first", generation: 3 })],
     ];
@@ -599,9 +600,9 @@ describe("survey versions from MySelf Studio", () => {
     const byVersion = new Map(r.versions.map((v) => [v.version, v]));
     expect(r.versions.map((v) => v.version)).toEqual(["3.1.0", "3.0.1", "3.0.0", "2.0.0", "1.1.0", "1.0.0"]);
     expect(byVersion.get("3.0.0")).toMatchObject({
-      source: "studio", inStudio: true, registered: true, sittings: 2, publishedBy: "a@brainpop.example", authors: ["a@brainpop.example"], basedOn: "2.0.0",
+      source: "studio", inStudio: true, registered: true, sittings: 2, publishedBy: "a@brainpop.example", authors: ["a@brainpop.example"], basedOn: "2.0.0", restoredFrom: "2.0.0", requiredBump: "major", chosenBump: "major",
       changes: ["MyStory added (np.phone_wellbeing@0.1.1)"], myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }, live: false,
-      livePeriods: [{ from: "2026-09-20T09:00:00.000Z", to: "2026-09-22T09:00:00.000Z", how: "published", reason: null }],
+      livePeriods: [{ from: "2026-09-20T09:00:00.000Z", to: "2026-09-22T09:00:00.000Z", how: "published", by: "a@brainpop.example", reason: null }],
     });
     expect(byVersion.get("2.0.0")).toMatchObject({ source: "repository", live: true, myStory: null });
     expect(byVersion.get("2.0.0")!.livePeriods.map((p) => p.how)).toEqual(["set_up", "made_live_again"]);
@@ -625,12 +626,14 @@ describe("survey versions from MySelf Studio", () => {
   it("exports the provenance as spreadsheet-safe CSV and JSON, and audits it", async () => {
     const out = await run<{ csv: string; json: string }>(exportSurveyProvenance, researcher, {});
     const [header, ...lines] = out.csv.replace(/^﻿/, "").trim().split("\r\n");
-    expect(header).toContain("survey,version,release_key,hash,engine_version,status,source,in_studio,read_by_dashboard,authors,published_by,published_at");
+    expect(header).toBe(PROVENANCE_COLUMNS.join(","));
+    expect(header!.startsWith("version,release_key,hash,engine_version,status,source,authors,publisher,published_at,based_on,restored_from,")).toBe(true);
     expect(lines).toHaveLength(6);
-    const row = (v: string) => lines.find((l) => l.startsWith(`${SURVEY},${v},`));
+    const row = (v: string) => lines.find((l) => l.startsWith(`${v},`));
     expect(row("3.0.0")).toContain(",'=Adds MyStory at the end,");
+    expect(row("3.0.0")).toContain(",previous,studio,a@brainpop.example,a@brainpop.example,2026-09-20T09:00:00.000Z,2.0.0,2.0.0,");
     expect(row("2.0.0")).toContain(",live,repository,");
-    expect(JSON.parse(out.json)).toMatchObject({ study: "demo", studioSetUp: true });
+    expect(JSON.parse(out.json)).toMatchObject({ format: "myself-dashboard-provenance", formatVersion: 1, study: "demo", studioSetUp: true });
     expect((await auditRows("survey.provenance_exported")).some((r) => r["actorEmail"] === researcher.email)).toBe(true);
   });
 
