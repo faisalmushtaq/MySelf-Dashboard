@@ -21,8 +21,9 @@ MySelf-Dashboard (this repo — separate app, same Firebase project)
   Storage               dashboard-exports/** (client access denied by the existing
                         catch-all; downloads only through the authenticated function)
 
-Survey Studio (future)  publishes release manifests; the dashboard registry reads
-                        them from studies/{study}/releases/{hash} (see §2.6)
+MySelf Studio           the survey's one editor and publisher: versions, live
+                        pointer, manifests and audit in (default) studies/{study}/;
+                        the functions read them, never write (§2.6, docs/11)
 ```
 
 ### Why a separate **named** Firestore database
@@ -110,7 +111,8 @@ config/policy                         { abandonAfterHours, testCodePatterns[],
                                         timeZone, tooFastWarningCount }
 users/{uid}                           { email, role, lastSignInAt } (mirror, for admin UI)
 studies/{study}/
-  releases/{releaseHash}              { key, version, publishedAt, manifestJson, verified }
+  releases/{releaseHash}              { key, version, publishedAt, manifestJson, verified,
+                                        provenance? (a version registered from MySelf Studio) }
   sessionSummaries/{sessionId}        de-identified, derived; backend-only
   meta/freshness                      { lastSummaryAt, lastSessionReceivedAt, summaryCount,
                                         rulesVersion }
@@ -198,17 +200,27 @@ the next page rather than leaving a gap. The session report groups answers by se
 in the participant's own version's wording, highlights missing required answers, and
 sets the researcher review (flags, notes) apart from the answers.
 
-## 2.6 Survey versions and the future Survey Studio
+## 2.6 Survey versions and MySelf Studio
 
 The registry `studies/{study}/releases/{releaseHash}` holds every manifest the study
-has published. It is populated by `scripts/sync-releases.mjs`, which validates each
+has published. Releases from the repository reach it through
+`scripts/sync-releases.mjs` (or Settings → Survey versions), which validates each
 manifest, **recomputes its hash with the survey's canonicalisation and refuses a
-mismatch**, and uploads it. When a Survey Studio exists, publishing a release should
-write the same document (or call the same script) — that is the only integration point.
+mismatch**, and uploads it.
+
+Survey versions are edited and published in **MySelf Studio**, in the survey's
+researcher view (survey docs/16). Studio writes each version to the survey's own
+database; nothing has to copy it here. When a sitting arrives under a hash the
+registry does not hold, the summary trigger reads Studio's copy,
+`publicReleases/{hashHex}`, checks that it hashes to that hash with the survey's
+own canonical code, and registers it with its provenance. A copy that fails is
+refused and audited. The Survey versions page reads Studio's version records,
+live pointer and audit trail, read-only ([docs/11](11-survey-editor.md)). The
+dashboard writes nothing to the survey's database.
 
 The dashboard never reads a sitting through a manifest other than its own. A sitting
-whose `releaseHash` is not in the registry is shown with completeness **unavailable**
-(never through the "latest" manifest — audit F8).
+whose `releaseHash` is in neither the registry nor Studio is shown with completeness
+**unavailable** (never through the "latest" manifest — audit F8).
 
 ## 2.7 Technology choices
 
@@ -219,8 +231,10 @@ only where there was no equivalent: `react-router-dom` (URL state), `exceljs` (X
 server-side), `pdfkit` + `svg-to-pdfkit` (PDF, server-side). Charts are small hand-written SVG components
 so every chart has a proper accessible name, a data table twin and no third-party
 analytics or CDN. Visual language follows the survey's binding style guide
-(`docs/11-style-guide.md`, D-17): Newsreader, near-white canvas, black text, one
-accent `#067843`, category accents `#1e6091`, `#964f8c`, `--warn #A33B00`.
+(`docs/11-style-guide.md`, D-17) as the survey's researcher view applies it
+(`apps/researcher/src/styles.css`): Inter (self-hosted), near-white canvas, black
+text with a muted grey `#6b6b68` for labels and notes, hairline borders, one accent
+`#067843`, category accents `#1e6091`, `#964f8c`, `--warn #A33B00`.
 
 ## 2.8 Hosting
 

@@ -26,6 +26,8 @@ const ACTIONS: Record<string, string> = {
   "policy.changed": "Changed study settings",
   "summaries.rebuilt": "Rebuilt summaries",
   "release.registered": "Registered a survey version",
+  "release.refused": "Refused a survey version from Studio",
+  "survey.provenance_exported": "Exported the survey version history",
 };
 
 interface Row {
@@ -124,7 +126,7 @@ export default function Audit() {
       {!rows && !error ? <Loading /> : null}
       {rows && rows.length === 0 ? <EmptyState icon="audit" title="No activity recorded" /> : null}
       {rows && rows.length > 0 ? (
-        <div className="table-scroll">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Audit log">
           <table className="data">
             <caption className="sr-only">Audit log</caption>
             <thead>

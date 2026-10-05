@@ -19,6 +19,7 @@ import type {
   QuestionAnalyticsResponse,
   QuestionHistoryResponse,
   ReleaseMetaView,
+  ResearcherViewResponse,
   ReviewDoc,
   SessionDetailRequest,
   SessionDetailResponse,
@@ -26,6 +27,7 @@ import type {
   UpdateReviewRequest,
   WhoAmIResponse,
   Policy,
+  SurveyVersionsResponse,
 } from "@myself-dashboard/core";
 import { firebase } from "./firebase";
 
@@ -47,6 +49,7 @@ export const api = {
   querySessions: call<QuerySessionsRequest, QuerySessionsResponse>("querySessions"),
   getSessionDetail: call<SessionDetailRequest, SessionDetailResponse>("getSessionDetail"),
   getAnalytics: call<AnalyticsRequest, AnalyticsResponse>("getAnalytics"),
+  getResearcherView: call<AnalyticsRequest, ResearcherViewResponse>("getResearcherView", 130_000),
   getQuestionAnalytics: call<QuestionAnalyticsRequest, QuestionAnalyticsResponse>("getQuestionAnalytics"),
   getQuestionHistory: call<{ key: string }, QuestionHistoryResponse>("getQuestionHistory"),
   updateReview: call<UpdateReviewRequest, { review: ReviewDoc }>("updateReview"),
@@ -67,6 +70,10 @@ export const api = {
   saveScoringScheme: call<SaveSchemeRequest, { key: string; version: string }>("saveScoringScheme"),
   saveGroupSettings: call<{ settings: GroupSettings; reason: string }, { ok: true }>("saveGroupSettings"),
   logFigureExport: call<{ format: string; panels: string[]; width: string; colour: string; dpi: number | null }, { ok: boolean }>("logFigureExport"),
+  // The survey's version history (docs/11).
+  listSurveyVersions: call<Record<string, never>, SurveyVersionsResponse>("listSurveyVersions"),
+  exportSurveyProvenance: call<Record<string, never>, { csv: string; json: string }>("exportSurveyProvenance"),
+  getSurveyManifest: call<{ hash: string }, { manifestJson: string }>("getSurveyManifest"),
 };
 
 export interface ApiError {

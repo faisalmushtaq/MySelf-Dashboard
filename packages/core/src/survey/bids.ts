@@ -1,3 +1,4 @@
+import { neutraliseFormula } from "../csv.js";
 import type { ReleaseManifest } from "../vendor/myself/schema/index.js";
 import { buildBidsExport, type BidsFile } from "../vendor/myself/store/bids.js";
 import type { StoredNarrativeRun } from "../vendor/myself/store/narratives.js";
@@ -71,7 +72,17 @@ export interface BidsExportResult {
 }
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
-const cell = (v: unknown) => (v === null || v === undefined || v === "" ? "n/a" : String(v).replace(/[\t\r\n]+/g, " "));
+/**
+ * A TSV cell. Text is defused as in every CSV the dashboard writes: these files
+ * are opened in spreadsheets, and a participant's "=HYPERLINK(…)" must arrive as
+ * words, not as a live formula. Numbers pass through untouched.
+ */
+const cell = (v: unknown) =>
+  v === null || v === undefined || v === ""
+    ? "n/a"
+    : typeof v === "number"
+      ? String(v)
+      : neutraliseFormula(String(v).replace(/[\t\r\n]+/g, " "));
 const tsv = (columns: string[], rows: Record<string, unknown>[]) =>
   `${[columns.join("\t"), ...rows.map((r) => columns.map((c) => cell(r[c])).join("\t"))].join("\n")}\n`;
 const label = (raw: string) => raw.replace(/[^A-Za-z0-9]/g, "");

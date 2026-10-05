@@ -1,0 +1,77 @@
+name: Preview the dashboard
+
+# The web app from the working branch, published to a Firebase Hosting PREVIEW
+# CHANNEL of the dashboard site: its own URL, which expires, beside the live
+# dashboard rather than instead of it. Only the static web app goes out — the
+# functions, rules and database are the live ones, so the preview shows the
+# real study to the same signed-in, role-checked people and changes nothing.
+#
+# The functions accept calls from this site's preview channels only because
+# DASHBOARD_PREVIEW_SITE (apps/functions/.env.myself-research) names the site;
+# see previewOrigins() in apps/functions/src/env.ts. A web change that needs a
+# new or changed function asks for a functions deploy by bumping REQUEST in
+# .github/preview/functions.env, in the same push.
+
+on:
+  push:
+    branches: [claude/laughing-lovelace-9qt0j6]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @myself-dashboard/core build
+      - run: pnpm -r test
+      - name: Credentials
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$KEY" ]; then echo "::error::FIREBASE_SERVICE_ACCOUNT is not set (docs/06-handover.md)"; exit 1; fi
+          printf '%s' "$KEY" > "$RUNNER_TEMP/key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> "$GITHUB_ENV"
+      # The Hosting predeploy in firebase.json builds the web app, with this
+      # config in its environment.
+      - name: Publish to the preview channel
+        env:
+          VITE_FIREBASE_CONFIG: ${{ vars.DASHBOARD_FIREBASE_CONFIG }}
+        run: |
+          pnpm exec firebase hosting:channel:deploy dashboard-preview --only dashboard \
+            --expires 30d --project myself-research --non-interactive | tee channel.log
+          url=$(grep -oE 'https://[a-z0-9-]+--dashboard-preview-[a-z0-9]+\.web\.app' channel.log | head -1)
+          if [ -z "$url" ]; then echo "::error::Deployed, but no channel URL found in the output above."; exit 1; fi
+          echo "Dashboard preview: $url"
+          echo "### Dashboard preview: $url" >> "$GITHUB_STEP_SUMMARY"
+      # The live functions only when asked, by a change to .github/preview/functions.env
+      # in this push — never as a side effect of an ordinary push.
+      - name: Deploy the functions, if asked
+        run: |
+          before="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" = "push" ] && git cat-file -e "$before" 2>/dev/null \
+             && git diff --name-only "$before" "${{ github.sha }}" | grep -qx '.github/preview/functions.env'; then
+            pnpm exec firebase deploy --only functions:dashboard --project myself-research --non-interactive
+          else
+            echo "Functions not requested in this push; the preview uses the functions already deployed."
+          fi
+      - name: Remove credentials
+        if: always()
+        run: shred -u "$RUNNER_TEMP/key.json" 2>/dev/null || rm -f "$RUNNER_TEMP/key.json"

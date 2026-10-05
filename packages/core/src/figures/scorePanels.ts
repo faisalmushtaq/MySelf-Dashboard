@@ -24,7 +24,7 @@ import { decimalsFor, formatNumber, linear, niceTicks } from "./scale.js";
 import { el, type El } from "./svg.js";
 import { fitText, textWidth } from "./text.js";
 import type { Theme } from "./theme.js";
-import type { Box, FigureContext, PanelBuilder, PanelOf, PanelOutput } from "./types.js";
+import type { Box, FigureContext, PanelBuilder, PanelOutput } from "./types.js";
 
 /**
  * Score panels: a distribution over its threshold bands, group means against
@@ -82,10 +82,6 @@ function bandFill(set: ThresholdSet, i: number, theme: Theme, tint: boolean): st
 function methodNote(r: Resolved): string {
   const verified = r.scheme.verified ? "verified against its source" : "not yet verified against the licensed scoring documents";
   return `${r.scheme.abbreviation ?? r.scheme.name} scored with scheme ${r.scheme.key} v${r.scheme.version} (${verified}).`;
-}
-
-function whole(o: ScoreOutput): boolean {
-  return o.decimals === 0 && Number.isInteger(o.range[0]) && Number.isInteger(o.range[1]) && o.range[1] - o.range[0] <= 40;
 }
 
 // ── Distribution over threshold bands ─────────────────────────────────────────
@@ -359,5 +355,3 @@ const bands: PanelBuilder<"score_bands"> = {
 };
 
 export const SCORE_PANELS = { score_distribution: distribution, score_groups: groups, score_bands: bands } as const;
-
-export type ScorePanelSpec = PanelOf<"score_distribution"> | PanelOf<"score_groups"> | PanelOf<"score_bands">;

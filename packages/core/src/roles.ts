@@ -45,6 +45,8 @@ export const CAPABILITIES = [
   "settings.access",
   "settings.policy",
   "data.rebuild",
+  /** Read the survey's version history, as MySelf Studio published it (docs/11). */
+  "survey.versions",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -63,8 +65,9 @@ const MATRIX: Record<Role, ReadonlySet<Capability>> = {
     "export.freeText",
     "export.studyCode",
     "audit.readOwn",
+    "survey.versions",
   ]),
-  analyst: new Set<Capability>(["view.dashboard", "views.private", "export.aggregate", "audit.readOwn"]),
+  analyst: new Set<Capability>(["view.dashboard", "views.private", "export.aggregate", "audit.readOwn", "survey.versions"]),
 };
 
 export function isRole(value: unknown): value is Role {

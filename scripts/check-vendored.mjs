@@ -29,8 +29,9 @@ for (const [file, re] of pieces) {
     ok = false;
   }
 }
-// The data layer (schema, scoring, ingest, BIDS): every file, byte for byte
-// apart from its header and rewritten package imports.
+// The data layer (schema, scoring, ingest, BIDS, and the completeness and
+// counting rules both tools count by): every file, byte for byte apart from
+// its header and rewritten package imports.
 const { VENDORED, stripHeader, vendoredBody } = await import("./vendor-survey.mjs");
 for (const [pkg, names] of Object.entries(VENDORED)) {
   for (const n of names) {

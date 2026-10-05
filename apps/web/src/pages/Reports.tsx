@@ -130,7 +130,7 @@ export default function Reports() {
         {error ? <Notice tone="warn">{error}</Notice> : null}
         {jobs && jobs.length === 0 ? <EmptyState icon="reports" title="No exports yet" /> : null}
         {jobs && jobs.length > 0 ? (
-          <div className="table-scroll">
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Recent exports">
             <table className="data">
               <caption className="sr-only">Recent exports</caption>
               <thead>

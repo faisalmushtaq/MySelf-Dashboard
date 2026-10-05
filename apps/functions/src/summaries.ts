@@ -4,7 +4,7 @@ import * as logger from "firebase-functions/logger";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { dash, REGION, research, STUDY } from "./env.js";
 import { dpaths, spaths } from "./paths.js";
-import { releaseIndex } from "./releases.js";
+import { resolveRelease } from "./releases.js";
 import { assembleSitting } from "./sittings.js";
 import { studyPolicy } from "./settings.js";
 
@@ -28,7 +28,9 @@ export async function summariseSitting(
     studyPolicy(),
     dash().doc(dpaths.summary(sessionId)).get(),
   ]);
-  const release = await releaseIndex(sitting.releaseHash);
+  // A version the registry has not met yet may be one MySelf Studio published: resolveRelease
+  // checks Studio's copy against the sitting's hash and registers it (docs/11).
+  const release = await resolveRelease(sitting.releaseHash);
   const previous = previousSnap.exists && !previousSnap.data()?.["deleted"] ? (previousSnap.data() as SessionSummary) : null;
   const { summary } = buildSummary(sitting, release, policy, { now, previous, backfill: options.backfill === true && !previous });
   const db = dash();

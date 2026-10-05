@@ -17,6 +17,7 @@ import type { SchemeIssue } from "./scoring/check.js";
 import type { GroupSettings, YearGroupSource } from "./scoring/groups.js";
 import type { ScoringScheme } from "./scoring/scheme.js";
 import type { CodebookRow, QualityReport } from "./quality/types.js";
+import type { HeadlineFigures } from "./vendor/myself/store/counting.js";
 
 /**
  * The contract between the web app and the backend, defined once so both sides
@@ -220,6 +221,21 @@ export interface AnalyticsResponse {
   freshness: Freshness;
   releases: ReleaseMetaView[];
   activeReleaseHash: string | null;
+}
+
+/**
+ * The survey researcher view's Overview, for the sittings in the same filters.
+ *
+ * Computed on the server by the researcher view's own counting code (the survey's
+ * `counting.ts`, vendored) over the study the survey's own ingest links, so a researcher
+ * can hold the two tools side by side and see the same numbers. Aggregates only.
+ */
+export interface ResearcherViewResponse {
+  figures: HeadlineFigures;
+  /** Left out, here as in the researcher view: quarantined, or a log too torn to read. */
+  quarantined: number;
+  unreadable: number;
+  computedAt: string;
 }
 
 export interface QuestionAnalyticsRequest {

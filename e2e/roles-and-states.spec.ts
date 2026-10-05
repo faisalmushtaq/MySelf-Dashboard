@@ -31,6 +31,13 @@ test("a read-only reviewer sees data but cannot change reviews or export session
   const cells = await page.locator("table.participants th, table.participants td").allTextContents();
   expect(cells.length).toBeGreaterThan(0);
   expect(cells.filter((c) => /[A-Z]{2}[0-9]{3}[A-Z]{2}|\bP[0-9A-HJKMNP-TV-Z]{10}\b/.test(c))).toEqual([]);
+  // Survey versions: a record of what MySelf Studio published, never a way to change it.
+  await page.getByRole("link", { name: "Survey versions" }).click();
+  await expect(page.getByText("The version built into the app.")).toBeVisible();
+  await expect(page.locator(".versions-table tbody tr")).toHaveCount(3);
+  await expect(page.locator(".versions-table")).toContainText("From the repository");
+  await expect(page.getByRole("link", { name: /Edit in Studio/ })).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(page.getByRole("button", { name: /publish|make live|draft|roll ?back|restore/i })).toHaveCount(0);
 });
 
 test("a researcher follows participants across waves and sees what the linkage could not settle", async ({ page }) => {
@@ -77,7 +84,7 @@ test("an administrator sees the audit log, access settings and filter-empty stat
 test("the main screens have no serious accessibility violations (axe, WCAG 2.1 AA)", async ({ page }) => {
   await signIn(page, ADMIN);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await expect(page.getByText("Completion rate", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Key figures" }).getByText("All required answered", { exact: true })).toBeVisible();
   const check = async (label: string) => {
     const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     const serious = r.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
@@ -102,4 +109,7 @@ test("the main screens have no serious accessibility violations (axe, WCAG 2.1 A
   await expect(page.locator("tr.subrow")).toBeVisible();
   await page.getByText(/Held-back sittings/).click();
   await check("participants");
+  await page.getByRole("link", { name: "Survey versions" }).click();
+  await expect(page.locator(".versions-table")).toBeVisible();
+  await check("survey versions");
 });

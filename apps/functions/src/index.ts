@@ -7,7 +7,7 @@ export { onSessionWritten } from "./summaries.js";
 export { onOpsRequest } from "./ops.js";
 export { whoAmI } from "./api/access.js";
 export { querySessions, getSessionDetail } from "./api/sessions.js";
-export { getAnalytics, getQuestionAnalytics, getQuestionHistory } from "./api/analytics.js";
+export { getAnalytics, getResearcherView, getQuestionAnalytics, getQuestionHistory } from "./api/analytics.js";
 export { updateReview, addNote } from "./api/review.js";
 export {
   getSettings,
@@ -23,3 +23,4 @@ export { previewExport, createExport, downloadExport, cleanupExports } from "./a
 export { getParticipants } from "./api/participants.js";
 export { getScores, getScoringSettings, saveScoringScheme, saveGroupSettings } from "./api/scores.js";
 export { getCodebook } from "./api/codebook.js";
+export { listSurveyVersions, exportSurveyProvenance, getSurveyManifest } from "./api/versions.js";

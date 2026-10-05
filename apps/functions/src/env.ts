@@ -25,16 +25,29 @@ export const STUDY = process.env["MYSELF_STUDY"] ?? "ybm";
 export const DASHBOARD_DATABASE = process.env["DASHBOARD_DATABASE"] ?? "dashboard";
 
 /**
- * Browser origins allowed to call these functions. The Hosting site in
- * production; the Vite dev server and emulator-hosted app locally.
+ * The preview channels of one Hosting site: `https://<site>--<channel>-<hash>.web.app`.
+ * Only someone who can deploy to the project can create one, so allowing them
+ * lets a change be tried against the real functions without widening who can
+ * call them. Site names are lower-case letters, digits and hyphens.
  */
-export const ALLOWED_ORIGINS: (string | RegExp)[] = (
-  process.env["DASHBOARD_ORIGINS"] ?? "https://myself-research-dashboard.web.app,https://myself-research-dashboard.firebaseapp.com"
-)
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean)
-  .concat(process.env["FUNCTIONS_EMULATOR"] === "true" ? ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"] : []);
+export function previewOrigins(site: string | undefined): RegExp[] {
+  if (!site || !/^[a-z0-9-]+$/.test(site)) return [];
+  return [new RegExp(`^https://${site}--[a-z0-9-]+\\.web\\.app$`)];
+}
+
+/**
+ * Browser origins allowed to call these functions. The Hosting site in
+ * production, and its preview channels when DASHBOARD_PREVIEW_SITE names it;
+ * the Vite dev server and emulator-hosted app locally.
+ */
+export const ALLOWED_ORIGINS: (string | RegExp)[] = [
+  ...(process.env["DASHBOARD_ORIGINS"] ?? "https://myself-research-dashboard.web.app,https://myself-research-dashboard.firebaseapp.com")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  ...previewOrigins(process.env["DASHBOARD_PREVIEW_SITE"]),
+  ...(process.env["FUNCTIONS_EMULATOR"] === "true" ? ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"] : []),
+];
 
 /** The survey's database: raw sittings. Read-only from this codebase. */
 export const research = (): Firestore => getFirestore();

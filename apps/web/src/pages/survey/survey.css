@@ -1,0 +1,56 @@
+/* The Survey versions page (docs/11). Uses the dashboard's tokens only. */
+
+.changes {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+.changes li {
+  margin: 3px 0;
+}
+.periods {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.periods li + li {
+  margin-top: 6px;
+}
+.versions-table td {
+  vertical-align: top;
+}
+/* Wide enough that an email address or a date never breaks mid-word. */
+.versions-table td.published {
+  min-width: 200px;
+  overflow-wrap: break-word;
+}
+.versions-table td.what-changed {
+  min-width: 220px;
+  max-width: 300px;
+  overflow-wrap: break-word;
+}
+.versions-table td.mystory {
+  min-width: 140px;
+}
+.versions-table td.live-periods {
+  min-width: 170px;
+  max-width: 230px;
+}
+.versions-table code {
+  font-size: 0.8125rem;
+}
+.versions-table .nowrap {
+  white-space: nowrap;
+}
+tr.row-current td {
+  background: var(--accent-wash);
+}
+tr.row-detail td {
+  background: var(--off-white, #f4f4f2);
+}
+tr.row-problem td {
+  background: var(--warn-wash);
+  font-size: 0.875rem;
+}
+.versions-table .btn-link {
+  padding-left: 0;
+}

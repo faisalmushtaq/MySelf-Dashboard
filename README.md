@@ -59,6 +59,8 @@ Screenshots (emulator seed, synthetic sittings only):
 7. [Publication figures: panels, house style, files, privacy](docs/07-figures.md)
 8. [Scores, benchmarks and school reports](docs/08-scoring.md)
 9. [Codebook and data-quality review](docs/09-data-quality.md)
+10. [**Maintainers' guide**: repository map, data flow, recipes, tests, deploys](docs/10-maintainers-guide.md)
+11. [Survey versions: MySelf Studio's history, read-only, and the sittings under each version](docs/11-survey-editor.md)
 
 ## Quick start (local, synthetic data)
 
@@ -77,14 +79,19 @@ Sign in on the emulator page as `brainpopresearch@gmail.com` (Administrator),
 ## Tests
 
 ```bash
-pnpm -r test            # 176 unit tests (core, functions, web)
-pnpm test:rules         # 28 Firestore rules tests (emulator)
-pnpm test:integration   # 25 backend tests against the emulators
-pnpm test:e2e           # Playwright: the research journey, figures, roles, a11y (after pnpm e2e:build)
+pnpm -r test            # 309 unit tests (core 274, functions 27, web 8)
+pnpm test:rules         # 29 Firestore rules tests (emulator)
+pnpm test:integration   # 37 backend tests against the emulators
+pnpm test:e2e           # 10 Playwright tests: the research journey, figures, roles, a11y (after pnpm e2e:build)
 ```
+
+Port 4173 taken (the survey's own preview uses it too)? `E2E_PORT=4183 pnpm test:e2e`.
+More in the [maintainers' guide](docs/10-maintainers-guide.md#105-tests).
 
 ## Layout
 
 `packages/core` (domain logic and the completeness engine) · `apps/functions`
 (backend) · `apps/web` (React app) · `firestore/` (rules, indexes, rules tests) ·
-`e2e/` · `scripts/` · `docs/`.
+`releases/` (survey release manifests) · `e2e/` · `scripts/` · `docs/`. The
+[maintainers' guide](docs/10-maintainers-guide.md) maps each of them and has the
+recipes for common changes.

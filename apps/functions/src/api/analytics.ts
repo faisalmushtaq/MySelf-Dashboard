@@ -10,7 +10,9 @@ import {
   type AnalyticsResponse,
   type QuestionAnalyticsResponse,
   type QuestionHistoryResponse,
+  type ResearcherViewResponse,
 } from "@myself-dashboard/core";
+import { researcherViewFigures, unknownToStudy } from "@myself-dashboard/core/survey";
 import { Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { requireActor } from "../authz.js";
@@ -18,6 +20,7 @@ import { dash } from "../env.js";
 import { dpaths } from "../paths.js";
 import { allReleaseIndexes, releaseIndex, releaseList } from "../releases.js";
 import { currentRows } from "../store.js";
+import { loadStudyDataset } from "../studyData.js";
 import { callableOptions, releaseView, requireString } from "./common.js";
 
 /** Overview, completeness and version analytics for the current filters. */
@@ -46,6 +49,26 @@ export const getAnalytics = onCall({ ...callableOptions, memory: "1GiB" }, async
     releases: metas.map(releaseView),
     activeReleaseHash: actor.policy.activeReleaseHash ?? newest?.hash ?? null,
   };
+});
+
+/**
+ * The survey researcher view's Overview figures, for the same filters: computed by its
+ * own counting code over the study as the survey links it, so the two tools can be
+ * checked against each other. A separate call from getAnalytics because it reads every
+ * raw sitting (cached for a few minutes by loadStudyDataset), and the Overview should
+ * not wait for that. Aggregates only, like getAnalytics, so nothing is audited.
+ */
+export const getResearcherView = onCall({ ...callableOptions, memory: "1GiB", timeoutSeconds: 120 }, async (request): Promise<ResearcherViewResponse> => {
+  const actor = await requireActor(request);
+  const filters = sanitiseFilters((request.data as Record<string, unknown> | undefined)?.["filters"]);
+  const now = new Date();
+  const ctx = { now, timeZone: actor.policy.timeZone };
+  const [{ study: cached }, { rows }] = await Promise.all([loadStudyDataset(), currentRows(now)]);
+  const filtered = rows.filter(makePredicate(filters, ctx));
+  // A sitting that arrived since the cached study was built would otherwise count as
+  // "not linked to a participant"; reading the study again costs less than that error.
+  const study = unknownToStudy(cached, filtered) > 0 ? (await loadStudyDataset({ fresh: true })).study : cached;
+  return researcherViewFigures(study, filtered, now);
 });
 
 /** Question-level analysis for ONE version, optionally compared with another. */

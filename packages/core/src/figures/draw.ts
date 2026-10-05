@@ -241,9 +241,3 @@ export function hbar(x0: number, x1: number, cy: number, thickness: number, fill
   if (!(w > 0.01)) return null;
   return el("rect", { x: x0, y: cy - thickness / 2, width: w, height: thickness, fill });
 }
-
-export function vbar(cx: number, y0: number, y1: number, thickness: number, fill: string): El | null {
-  const h = y0 - y1;
-  if (!(h > 0.01)) return null;
-  return el("rect", { x: cx - thickness / 2, y: y1, width: thickness, height: h, fill });
-}

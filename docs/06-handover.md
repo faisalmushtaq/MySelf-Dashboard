@@ -2,7 +2,11 @@
 
 Everything needed to run, deploy, operate and roll back the MySelf Research
 Dashboard. Read [02-architecture.md](02-architecture.md) and
-[03-completeness.md](03-completeness.md) first for the why.
+[03-completeness.md](03-completeness.md) first for the why. For working on the
+code itself — where things are, how data flows through them, and step-by-step
+recipes (a new page, callable, codebook name, survey release, scoring scheme,
+re-vendoring the survey) — see the
+[maintainers' guide](10-maintainers-guide.md).
 
 **Status at handover (2026-09-28).** Built and tested end to end against the
 Firebase Emulator Suite with synthetic data. **Not yet deployed**: this work had
@@ -40,8 +44,9 @@ decision for its owners. §5 is the deployment procedure.
 packages/core/        domain logic, no Firebase: manifest index, replay, completeness@1,
                       statuses, filters/query, analytics, questions & versions, CSV,
                       export shaping, API contract, roles. src/node: hashing and the
-                      synthetic data generator. src/vendor/engine.ts: the survey's
-                      evaluate(), copied verbatim. test-fixtures/ybm: real manifests.
+                      synthetic data generator. src/survey: BIDS and linkage on the
+                      survey's data layer. src/vendor/: the survey's evaluate() and
+                      data layer, copied verbatim. test-fixtures/ybm: real manifests.
 apps/functions/       Firebase Functions (codebase "dashboard"): src/api/* callables,
                       summaries.ts (trigger + rebuild), store.ts (in-memory mirror),
                       authz.ts, audit.ts, exporters/ (XLSX, PDF), build-deploy.mjs.
@@ -49,17 +54,19 @@ apps/functions/       Firebase Functions (codebase "dashboard"): src/api/* calla
 apps/web/             React + Vite SPA: app/ (auth, shell, filters), pages/,
                       components/, charts/, lib/ (Firebase client, API, hooks).
 firestore/            dashboard.rules, dashboard.indexes.json, rules tests.
+releases/             the survey's release manifests, registered by the setup workflow.
 e2e/                  Playwright end-to-end tests.
-scripts/              emulator-setup, sync-releases, bootstrap-admin, check-privacy,
-                      check-vendored.
+scripts/              emulator-setup, sync-releases, bootstrap-admin, firebase-ops,
+                      vendor-survey, check-vendored, check-privacy.
 docs/                 01 audit · 02 architecture · 03 completeness · 04 risks · 05 plan · 06 this
+                      · 07 figures · 08 scoring · 09 data quality · 10 maintainers' guide
 firebase.json         deploy config: ONLY the dashboard DB, codebase and Hosting site
 firebase.emulators.json  local emulator config
 ```
 
 ## 3. Local setup
 
-Requirements: Node 22, pnpm 10, Java 17+ (for the emulators).
+Requirements: Node 22, pnpm 10, Java 21 (for the emulators; firebase-tools 14 warns below 21).
 
 ```bash
 pnpm install
@@ -335,12 +342,12 @@ end in a catch-all deny. If those rules are ever loosened, add an explicit
 
 | Suite | Command | What |
 |---|---|---|
-| Unit | `pnpm -r test` | 248 core (completeness, statuses, filters, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, 20k-session performance, real YBM manifests, figures, scoring schemes and engine, benchmarks, school reports, the codebook and the quality review against every real survey version) + 24 functions (access decisions, release verification, encoders, PDF reports) + 8 web components |
+| Unit | `pnpm -r test` | 274 core (completeness, statuses, filters, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, 20k-session performance, real YBM manifests, figures, scoring schemes and engine, benchmarks, school reports, the codebook and the quality review against every real survey version) + 27 functions (access decisions, allowed origins, release verification, encoders, PDF reports) + 8 web components |
 | Rules | `pnpm test:rules` | 29 emulator tests (Firestore emulator) |
 | Integration | `pnpm test:integration` | 37 backend tests against Auth/Firestore/Storage emulators with real Google-provider ID tokens |
-| End to end | `pnpm e2e:build && pnpm test:e2e` | 10 Playwright tests: the brief's research journey, publication figures in every format, reviewer restrictions, participants, administrator screens and empty states, scores and school reports, scoring changes, the codebook and quality review, axe WCAG 2.1 AA on the main screens |
+| End to end | `pnpm e2e:build && pnpm test:e2e` (`E2E_PORT=4183` if 4173 is taken) | 10 Playwright tests: the brief's research journey, publication figures in every format, reviewer restrictions, participants, administrator screens and empty states, scores and school reports, scoring changes, the codebook and quality review, axe WCAG 2.1 AA on the main screens |
 | Privacy lint | `pnpm lint:privacy` | no console logging or analytics in the web app |
-| Drift | `pnpm check:vendored ../MySelf` | the vendored evaluator still matches the survey |
+| Drift | `pnpm check:vendored ../MySelf` | the vendored evaluator and data layer still match the survey |
 
 CI (`.github/workflows/ci.yml`) runs all of these on every push.
 
@@ -419,8 +426,9 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
    abandonment window, reviewer free text, Workspace domain).
 2. Survey-side changes S1–S5 ([04-risks.md §4.2](04-risks.md)), S1 first.
 3. Enable App Check for the web app, then `DASHBOARD_ENFORCE_APP_CHECK=true`.
-4. Add the release-sync step to the survey's publishing workflow (or Survey
-   Studio) so new versions register themselves.
+4. Versions published in MySelf Studio register themselves (docs/11). Releases
+   committed to the survey's `releases/` outside Studio still need the sync
+   script or Settings → Survey versions.
 5. Add WebKit to the e2e matrix; add a physical-tablet accessibility pass
    (VoiceOver), as the survey does for iPads.
 6. Consider email digests of sessions needing review during fieldwork.

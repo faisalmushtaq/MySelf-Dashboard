@@ -52,6 +52,7 @@ const PATHS: Record<string, string> = {
   menu: "M4 7h16M4 12h16M4 17h16",
   skipNext: "M5 5l9 7-9 7zM18 5v14",
   note: "M5 4h14v12l-4 4H5zM15 20v-4h4",
+  external: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
 };
 
 export type IconName = keyof typeof PATHS;

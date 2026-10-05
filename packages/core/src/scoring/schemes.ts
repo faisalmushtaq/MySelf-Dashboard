@@ -2,7 +2,8 @@ import { scoringScheme, type ScoringScheme, type ScoringSchemeInput, type Thresh
 
 /**
  * The dashboard's default scoring schemes for the instruments the MySelf
- * survey administers (item keys as in releases r1.0.0–r8.0.0).
+ * survey administers (item keys as in the survey's releases; scoring.test.ts
+ * checks them against every manifest in releases/).
  *
  * Every cut-point and reference value here is transcribed from the source it
  * names and ships with `verified: false`: the Scoring settings page shows that,

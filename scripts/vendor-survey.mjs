@@ -5,19 +5,30 @@
  *
  *   node scripts/vendor-survey.mjs [path-to-MySelf-checkout]   (default ../MySelf)
  *
- * Run it when the survey changes its schema, scoring, ingest or BIDS builder,
- * then run the tests: scripts/check-vendored.mjs fails CI until you do.
+ * Run it when the survey changes its schema, its release hashing, scoring,
+ * ingest, BIDS builder, or the completeness and counting rules the two tools
+ * share, then run the tests: scripts/check-vendored.mjs fails CI until you do.
+ *
+ * `@myself/engine` resolves to the dashboard's hand-copied evaluator
+ * (vendor/engine.ts), which check-vendored.mjs compares with the survey's.
  */
 import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export const VENDORED = {
-  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "index"],
+  // `canonical` is the survey's one release-hash implementation: the dashboard
+  // verifies a version MySelf Studio published with it before reading any
+  // sitting under that version (docs/11).
+  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "canonical", "index"],
   scoring: ["executor", "definitions", "references", "index"],
-  store: ["dataset", "identity", "ingest", "bids", "narratives", "zip"],
+  store: ["dataset", "identity", "ingest", "bids", "narratives", "zip", "summary", "completeness", "counting"],
 };
-const REWRITES = { "@myself/schema": "../schema/index.js", "@myself/scoring": "../scoring/index.js" };
+const REWRITES = {
+  "@myself/schema": "../schema/index.js",
+  "@myself/scoring": "../scoring/index.js",
+  "@myself/engine": "../../engine.js",
+};
 
 export function vendoredBody(source) {
   let out = source;

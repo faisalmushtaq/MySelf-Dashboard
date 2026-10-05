@@ -25,6 +25,11 @@ describe("role matrix", () => {
     expect(can("analyst", "views.share")).toBe(false);
   });
 
+  it("every role reads the survey's version history; nobody changes it here", () => {
+    for (const r of ["owner", "researcher", "analyst"] as const) expect(can(r, "survey.versions")).toBe(true);
+    expect((CAPABILITIES as readonly string[]).filter((c) => c.startsWith("survey."))).toEqual(["survey.versions"]);
+  });
+
   it("free text for reviewers is a policy switch", () => {
     expect(can("analyst", "view.freeText")).toBe(false);
     expect(can("analyst", "view.freeText", { reviewerCanViewFreeText: true })).toBe(true);

@@ -187,7 +187,7 @@ export default function Codebook() {
               ) : null}
               <span className="muted-note">{plural(rows.length, "question")}</span>
             </div>
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label={`Questions in survey version ${data.release.version}`}>
               <table className="data codebook">
                 <caption className="sr-only">Questions in survey version {data.release.version}, with their readable names, answers and scoring</caption>
                 <thead>

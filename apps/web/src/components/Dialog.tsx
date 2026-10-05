@@ -47,12 +47,3 @@ export function Dialog({
     </dialog>
   );
 }
-
-/** A panel sliding in from the right (help, notifications). */
-export function Drawer({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
-  return (
-    <Dialog open={open} onClose={onClose} title={title}>
-      {children}
-    </Dialog>
-  );
-}

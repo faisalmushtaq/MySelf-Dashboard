@@ -1,97 +1,22 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import {
-  FLAG_REASONS,
-  PAGE_SIZES,
-  REVIEW_STATUS_LABELS,
-  WARNING_LABELS,
-  type QuerySessionsResponse,
-  type SessionListItem,
-  type SortKey,
-} from "@myself-dashboard/core";
+import { PAGE_SIZES, type QuerySessionsResponse } from "@myself-dashboard/core";
 import { api } from "../lib/api";
 import { useDebounced, useLoad, usePreference, useSessionState } from "../lib/hooks";
-import { dateTime, duration, int, pct, shortId } from "../lib/format";
-import { firebase, STUDY } from "../lib/firebase";
+import { int } from "../lib/format";
 import { useFilters } from "../app/filters";
 import { FilterBar } from "../app/FilterControls";
 import { useAuth } from "../app/auth";
 import { useAnnounce } from "../app/announcer";
 import { useStudyData } from "../app/data";
 import { PageHeader } from "../components/Metric";
-import { StatusBadge } from "../components/Status";
 import { Icon } from "../components/Icon";
 import { Popover } from "../components/Popover";
 import { EmptyState, ErrorState, Notice, Skeleton } from "../components/States";
 import { ExportDialog } from "../components/ExportDialog";
-import { Dialog } from "../components/Dialog";
 import { SessionDetail } from "../components/SessionDetail";
-
-interface Column {
-  id: string;
-  label: string;
-  sort?: SortKey;
-  numeric?: boolean;
-  render: (s: SessionListItem, ctx: { versionLabel: (h: string) => string }) => ReactNode;
-}
-
-const COLUMNS: Column[] = [
-  { id: "session", label: "Session ID", sort: "sessionId", render: (s) => <code title={s.sessionId}>{shortId(s.sessionId)}</code> },
-  { id: "code", label: "Study code", sort: "studyCode", render: (s) => (s.studyCode ? <span title={s.studyCodeMasked ? "Partly hidden for your role" : undefined}>{s.studyCode}</span> : "—") },
-  { id: "started", label: "Started", sort: "startedAt", render: (s) => dateTime(s.startedAt) },
-  { id: "last", label: "Last activity", sort: "lastActivityAt", render: (s) => dateTime(s.lastActivityAt) },
-  { id: "completed", label: "Completed", sort: "completedAt", render: (s) => (s.completedAt ? dateTime(s.completedAt) : "—") },
-  { id: "version", label: "Version", sort: "version", render: (s, c) => (s.releaseKnown && s.releaseHash ? c.versionLabel(s.releaseHash) : <span title={s.releaseHash ?? ""}>Unknown</span>) },
-  {
-    id: "completion",
-    label: "Completion",
-    sort: "completion",
-    numeric: true,
-    render: (s) =>
-      s.requiredCompletion === null ? (
-        <span className="muted">n/a</span>
-      ) : (
-        <span className="completion-cell" title={s.estimated ? "Estimated" : undefined}>
-          <span className="mini-bar" aria-hidden="true">
-            <span style={{ width: `${Math.round(s.requiredCompletion * 100)}%` }} />
-          </span>
-          {pct(s.requiredCompletion, s.estimated)}
-        </span>
-      ),
-  },
-  { id: "section", label: "Current / final section", sort: "section", render: (s) => s.finalSectionTitle ?? s.finalSectionKey ?? "—" },
-  { id: "status", label: "Status", sort: "status", render: (s) => <StatusBadge status={s.status} /> },
-  { id: "missing", label: "Missing required", sort: "missingRequired", numeric: true, render: (s) => (s.requiredMissing === null ? "—" : int(s.requiredMissing)) },
-  {
-    id: "signals",
-    label: "Validation warnings",
-    sort: "warnings",
-    render: (s) => {
-      const important = s.status.signals.filter((w) => !["imported", "backfilled", "resumed", "no_presentation_events"].includes(w));
-      return important.length ? <span title={important.map((w) => WARNING_LABELS[w] ?? w).join("\n")}>{important.length} <Icon name="alert" size={13} /></span> : "—";
-    },
-  },
-  {
-    id: "flags",
-    label: "Review flags",
-    sort: "flags",
-    render: (s) =>
-      s.status.openFlags ? (
-        <span title={s.flagReasons.map((r) => FLAG_REASONS.find((f) => f.id === r)?.label ?? r).join(", ")}>
-          <Icon name="flag" size={13} /> {s.status.openFlags}
-        </span>
-      ) : (
-        "—"
-      ),
-  },
-  { id: "review", label: "Review status", sort: "reviewStatus", render: (s) => REVIEW_STATUS_LABELS[s.reviewStatus] },
-  { id: "reviewed", label: "Last reviewed", sort: "lastReviewedAt", render: (s) => dateTime(s.lastReviewedAt) },
-  { id: "duration", label: "Duration", sort: "duration", numeric: true, render: (s) => duration(s.durationMs ?? s.wallClockMs) },
-  { id: "received", label: "Last received", sort: "receivedAt", render: (s) => dateTime(s.receivedAt) },
-];
-
-const DEFAULT_COLS = ["session", "code", "started", "version", "completion", "section", "status", "missing", "signals", "flags", "review"];
+import { COLUMNS, DEFAULT_COLS, type Column } from "./sessions/columns";
+import { SaveViewDialog } from "./sessions/SaveViewDialog";
 
 export default function Sessions() {
   const { filters, sort, params, setParams, setSort, setPage } = useFilters();
@@ -438,90 +363,5 @@ export default function Sessions() {
       />
       <SaveViewDialog open={saveOpen} onClose={() => setSaveOpen(false)} canShare={can("views.share")} uid={me?.uid ?? ""} email={me?.email ?? ""} state={{ path: "/sessions", params }} />
     </div>
-  );
-}
-
-/** Save the current filters, sort and columns as a named view (never the search text). */
-export function SaveViewDialog({
-  open,
-  onClose,
-  canShare,
-  uid,
-  email,
-  state,
-}: {
-  open: boolean;
-  onClose: () => void;
-  canShare: boolean;
-  uid: string;
-  email: string;
-  state: { path: string; params: URLSearchParams };
-}) {
-  const announce = useAnnounce();
-  const { filters, sort } = useFilters();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [shared, setShared] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const save = async () => {
-    setErr(null);
-    try {
-      const p = state.params;
-      await addDoc(collection(firebase().db, `studies/${STUDY}/savedViews`), {
-        name: name.trim(),
-        ...(description.trim() ? { description: description.trim() } : {}),
-        ownerUid: uid,
-        ownerEmail: email.toLowerCase(),
-        shared: canShare && shared,
-        state: {
-          path: state.path,
-          filters: JSON.parse(JSON.stringify(filters)),
-          sort,
-          ...(p.get("cols") ? { columns: p.get("cols")!.split(",") } : {}),
-          ...(p.get("dens") ? { density: p.get("dens") } : {}),
-          ...(p.get("size") ? { pageSize: Number(p.get("size")) } : {}),
-        },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      announce(`View “${name.trim()}” saved.`, "success");
-      setName("");
-      setDescription("");
-      onClose();
-    } catch {
-      setErr("The view could not be saved. Check the name (1–80 characters) and try again.");
-    }
-  };
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="Save this view"
-      footer={
-        <>
-          <button type="button" className="btn btn-primary" disabled={!name.trim()} onClick={() => void save()}>
-            Save view
-          </button>
-          <button type="button" className="btn btn-quiet" onClick={onClose}>
-            Cancel
-          </button>
-        </>
-      }
-    >
-      <p className="hint">Saves the filters, sort order, columns and page size. Search text is never saved.</p>
-      {err ? <Notice tone="warn">{err}</Notice> : null}
-      <label>
-        Name
-        <input type="text" maxLength={80} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Incomplete sessions, last 30 days" />
-      </label>
-      <label>
-        Description (optional)
-        <input type="text" maxLength={280} value={description} onChange={(e) => setDescription(e.target.value)} />
-      </label>
-      <label className="check">
-        <input type="checkbox" checked={shared} disabled={!canShare} onChange={(e) => setShared(e.target.checked)} />
-        Share with all dashboard members {canShare ? "" : "(researchers and administrators only)"}
-      </label>
-    </Dialog>
   );
 }

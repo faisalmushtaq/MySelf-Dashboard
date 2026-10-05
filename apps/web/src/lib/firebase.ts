@@ -23,6 +23,13 @@ export const STUDY: string = (import.meta.env.VITE_STUDY as string | undefined) 
 export const REGION = "europe-west2";
 export const DATABASE = "dashboard";
 
+/** Emulator ports: the defaults in firebase.emulators.json, or others where two suites run side by side. */
+const PORTS = {
+  auth: Number(import.meta.env.VITE_AUTH_EMULATOR_PORT ?? 9099),
+  firestore: Number(import.meta.env.VITE_FIRESTORE_EMULATOR_PORT ?? 8181),
+  functions: Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT ?? 5001),
+};
+
 const EMULATOR_CONFIG = { apiKey: "fake-api-key", authDomain: "127.0.0.1", projectId: "demo-myself-dashboard", storageBucket: "demo-myself-dashboard.appspot.com" };
 
 function readConfig(): Record<string, string> | null {
@@ -54,9 +61,9 @@ export function firebase(): { app: FirebaseApp; auth: Auth; db: Firestore; fns: 
     db = getFirestore(app, DATABASE);
     fns = getFunctions(app, REGION);
     if (USE_EMULATORS) {
-      connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-      connectFirestoreEmulator(db, "127.0.0.1", 8181);
-      connectFunctionsEmulator(fns, "127.0.0.1", 5001);
+      connectAuthEmulator(auth, `http://127.0.0.1:${PORTS.auth}`, { disableWarnings: true });
+      connectFirestoreEmulator(db, "127.0.0.1", PORTS.firestore);
+      connectFunctionsEmulator(fns, "127.0.0.1", PORTS.functions);
     }
   }
   return { app, auth: auth ?? getAuth(app), db: db!, fns: fns! };
@@ -72,7 +79,7 @@ export function googleProvider(): GoogleAuthProvider {
 export function downloadUrl(jobId: string): string {
   const project = config?.["projectId"] ?? "";
   const base = USE_EMULATORS
-    ? `http://127.0.0.1:5001/${project}/${REGION}/downloadExport`
+    ? `http://127.0.0.1:${PORTS.functions}/${project}/${REGION}/downloadExport`
     : ((import.meta.env.VITE_DOWNLOAD_URL as string | undefined) ?? `https://${REGION}-${project}.cloudfunctions.net/downloadExport`);
   return `${base}?job=${encodeURIComponent(jobId)}`;
 }
