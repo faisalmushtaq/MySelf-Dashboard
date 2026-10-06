@@ -287,9 +287,12 @@ only into the dashboard's own resources: the `dashboard` database, the
 | **By hand** | `pnpm deploy:rules`, `pnpm deploy:functions`, `pnpm deploy:hosting` (package.json), with credentials for the project. | The same three parts. `firebase.json` predeploys build core, then the functions bundle (`functions-bundle/`) or the web app (`apps/web/dist`). |
 
 - All three workflows use the GitHub environment `production`: the secret
-  `FIREBASE_SERVICE_ACCOUNT` (a service-account JSON key) and the variable
-  `DASHBOARD_FIREBASE_CONFIG` (the public web-app config, built into the web
-  app as `VITE_FIREBASE_CONFIG`).
+  `FIREBASE_SERVICE_ACCOUNT` (a service-account JSON key) and, optionally, the
+  variable `DASHBOARD_FIREBASE_CONFIG` (the public web-app config, built into
+  the web app as `VITE_FIREBASE_CONFIG`). When the variable is not set, the
+  workflows read the config of the registered web app from the project
+  (`node scripts/firebase-ops.mjs webconfig`), and they refuse to publish a
+  build without one: such a build shows "Not configured" to everyone.
 - Functions configuration is `apps/functions/.env.myself-research` (committed;
   nothing in it is secret): study, database, allowed origins, and
   `DASHBOARD_PREVIEW_SITE`, which lets the site's preview channels call the
