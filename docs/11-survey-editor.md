@@ -1,13 +1,39 @@
 # 11. Survey versions
 
-**Survey → Survey versions** is a read-only record of every version of the
-survey: who wrote and published it, what changed, whether it ends with MyStory,
-when it was the version the iPads ran, and how many sittings the dashboard has
-recorded under it. Its history exports as CSV or JSON.
+**Survey → Survey versions** is a read-only record of every version of every
+survey in the study on screen, one section per survey: who wrote and published
+it, what changed, whether it ends with MyStory, when it was the version the iPads
+ran, and how many sittings the dashboard has recorded under it; and, for each
+survey with a live version, its participant link. Its history exports as CSV or
+JSON.
 
 Versions are edited, previewed and published in **MySelf Studio**, in the
-survey's researcher view (survey docs/16). The page says so and links there.
-Nothing on it changes what the iPads run.
+survey's researcher view (survey docs/16). The page says so and links each
+survey there. Nothing on it changes what the iPads run.
+
+## Studies and surveys (D-56)
+
+The survey runs several study spaces in one project, and several surveys in a
+study, each with its own live participant link (survey docs/16 §11; the
+dashboard's [docs/12](12-studies-and-surveys.md)). This page is per study — the
+study chosen in the header — and per survey within it:
+
+- **A section per survey**, titled by its release's `composition.title`, with
+  its Studio survey id. A version Studio holds is placed under Studio's survey;
+  a version only the registry knows, under the survey its manifest names
+  (`release.assessment`).
+- **The participant link** of each survey with a live version, built with the
+  survey's own code (`participantLink`, vendored from its
+  `packages/schema/src/link.ts`), exactly as the Studio builds it:
+  `https://faisalmushtaq.github.io/MySelf/?study=<study>&survey=<surveyId>`,
+  both parameters always, nothing about anybody. A copy button beside it. The
+  address it starts from is `VITE_PARTICIPANT_URL`.
+- **Edit in Studio**, on the survey's own versions page in its own study:
+  `#/surveys/<surveyId>/versions` for the default study and
+  `#/study/<study>/surveys/<surveyId>/versions` for any other, as Studio's
+  router writes its addresses.
+- Everything below is read in the study's own records: Studio's
+  `studies/{study}/…`, the study's registry, its summaries.
 
 ## Why the dashboard no longer edits the survey
 
@@ -110,8 +136,9 @@ summary is written (`summaries.ts`) and the registry does not hold that hash,
      `packages/schema/src/canonical.ts`, vendored), to the hash it is filed
      under, and states that hash;
    - the document agrees with its manifest about hash, version, release key and
-     study, and the study is this one;
-3. registers it in the dashboard's registry with
+     study, and the study is the sitting's own (a release is never looked up,
+     or registered, in another study);
+3. registers it in the study's registry with
    `provenance: { source: "studio", surveyId, version, from }`, once, in a
    transaction, with a `release.registered` audit row;
 4. summarises the sitting through it. From then on its sittings are read and
@@ -130,8 +157,10 @@ unknown versions**. The page says so for any such version.
 
 - **Manifest**: the registry's copy, or else Studio's copy once it passes the
   checks above. A copy that fails them is not served.
-- **Version history (CSV)** and **JSON**: the provenance export, audited as
-  `survey.provenance_exported`. One row per version, newest first. The first
+- **Version history (CSV)** and **JSON**: the provenance export of the study
+  on screen (`<study>_survey_versions.csv`), audited as
+  `survey.provenance_exported` in that study's log; `exportSurveyProvenance`
+  takes an optional `survey` for one survey's. One row per version, newest first. The first
   twenty columns are those of Studio's own provenance download (survey docs/16
   §10.2), in its order and formats, so the two files read alike; the rest are
   what only the dashboard knows.
@@ -149,7 +178,7 @@ unknown versions**. The page says so for any such version.
 | `mystory`, `mystory_protocol` | `on` or `off`, and `key@version`, from the manifest; empty when it could not be read |
 | `sittings_complete`, `sittings_partial` | the dashboard's summaries: reached the end or not, as Studio counts them |
 | `live_periods` | the audit trail, each "from to to (how)", with "now" for the one still live, separated by `; ` |
-| `survey` | Studio's survey ID; empty for a version only the registry knows |
+| `survey` | Studio's survey ID; empty for a version only the registry knows (the page places that one under its manifest's survey) |
 | `in_studio` | whether Studio has a record of it |
 | `read_by_dashboard` | whether it is in the registry, so its sittings are read |
 | `sittings`, `first_sitting`, `last_sitting` | the dashboard's summaries (counts and dates only) |
@@ -157,8 +186,8 @@ unknown versions**. The page says so for any such version.
 
 Times are ISO 8601 (UTC); authors are separated by `; `. A cell that could not
 be read is left empty, never guessed. The JSON is `{ format:
-"myself-dashboard-provenance", formatVersion: 1, study, exportedAt, notes,
-studioSetUp, live, versions, unknownSittings }`, each live period as `{ from,
+"myself-dashboard-provenance", formatVersion: 1, study, survey?, exportedAt, notes,
+studioSetUp, live, versions, unknownSittings }`, each version with its `survey`, each live period as `{ from,
 to, how, by, reason }`, so who made a version live again, and why, is kept
 there. The CSV is written with `toCsv`: a cell that starts with `=`, `+`, `-`,
 `@`, a tab or a carriage return is prefixed with `'`, so a spreadsheet shows it
@@ -168,20 +197,22 @@ rather than runs it; quoting follows RFC 4180, with a byte-order mark.
 
 | Callable | Capability | Does |
 |---|---|---|
-| `listSurveyVersions` | `survey.versions` | the live version and the history |
-| `getSurveyManifest` | `survey.versions` | one version's manifest, by hash |
+| `listSurveyVersions` | `survey.versions` | the study's live versions and history |
+| `getSurveyManifest` | `survey.versions` | one version's manifest, by hash, in the study |
 | `exportSurveyProvenance` | `survey.versions` | the history as CSV and JSON, audited |
 
-All three go through `requireActor`, like every callable: a verified Google
-account on the access list with a dashboard role. Studio's own roles play no
-part here. The web app's link to Studio is `VITE_STUDIO_URL`, by default
-`https://faisalmushtaq.github.io/MySelf/researcher/#/surveys`, opened in a new
-tab with `rel="noopener noreferrer"`.
+All three go through `requireStudyActor`, like every callable that reads a
+study: a verified Google account on the access list with a dashboard role, in a
+registered study they may see (docs/12 §12.4). Studio's own roles play no part
+here. The web app's link to Studio starts from `VITE_STUDIO_URL`, by default
+`https://faisalmushtaq.github.io/MySelf/researcher/#/surveys`, and is opened in
+a new tab with `rel="noopener noreferrer"`.
 
 ## Code
 
-- `packages/core/src/versions.ts`: the merge, live periods, MyStory and the CSV
-  (pure, unit-tested).
+- `packages/core/src/versions.ts`: the merge, live periods, MyStory, each
+  version's survey and the CSV (pure, unit-tested); `studies.ts`: the
+  participant link (vendored) and the Studio link.
 - `apps/functions/src/studio.ts`: reads Studio's records.
 - `apps/functions/src/releases.ts`: `checkStudioRelease`, `studioRelease`,
   `resolveRelease`.
@@ -193,15 +224,17 @@ tab with `rel="noopener noreferrer"`.
 - **Unit:** `packages/core/src/versions.test.ts` (merge, live periods, MyStory,
   CSV); `apps/functions/src/releases.test.ts` (Studio's copy accepted, and
   refused when changed, misfiled, inconsistent, not JSON or another study's);
-  `apps/web/src/pages/survey/Versions.test.tsx` (the link, no editing controls,
-  text not markup, downloads).
+  `apps/web/src/pages/survey/Versions.test.tsx` (a section per survey, each
+  survey's participant link and Studio link in its own study, no editing
+  controls, text not markup, downloads).
 - **Emulators:** `apps/functions/test/api.integration.test.ts`, "survey
   versions from MySelf Studio": a sitting under a Studio version is read and its
   version registered once; a changed copy is refused once and nothing is read;
   the history, manifests, export and who may call them.
 - **Offline demo:** `scripts/demo/studio.mjs` seeds an invented Studio history
-  (set-up, a version with MyStory, a rollback) and `scripts/demo/check.mjs`
-  checks the page and its downloads (scripts/demo/README.md).
+  (set-up, a version with MyStory, a rollback, a second survey, a second study
+  space) and `scripts/demo/check.mjs` checks the page, its links and its
+  downloads in both studies (scripts/demo/README.md).
 
 ## Known limitations
 
@@ -213,4 +246,6 @@ tab with `rel="noopener noreferrer"`.
 - Live periods before Studio's set-up are not known.
 - The dashboard's own "active version" (Settings → Study settings, else the
   newest registered) does not follow Studio's live pointer. After a rollback
-  the newest registered version may not be the live one.
+  the newest registered version may not be the live one. It is one per study;
+  with a survey chosen, the dashboard uses it when it is that survey's, and the
+  survey's newest registered version otherwise.

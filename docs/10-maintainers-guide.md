@@ -3,8 +3,9 @@
 For whoever looks after this code next: where things are, how data moves
 through them, and the recipes for the changes that come up again and again.
 The why is in [02-architecture.md](02-architecture.md); running and deploying
-the live system is in [06-handover.md](06-handover.md). Every path and command
-below was checked against the repository on 2026-09-30.
+the live system is in [06-handover.md](06-handover.md); several studies and
+surveys in [12-studies-and-surveys.md](12-studies-and-surveys.md). Every path and
+command below was checked against the repository on 2026-10-06.
 
 ---
 
@@ -12,9 +13,9 @@ below was checked against the repository on 2026-09-30.
 
 | Path | What it is |
 |---|---|
-| `packages/core/` | All domain logic, no Firebase: release manifests and their index (`manifest.ts`), log replay and the completeness engine (`replay.ts`, `completeness.ts`, `summary.ts`, `status.ts` — the rules themselves are the survey's, vendored, and shared with its researcher view: [03-completeness.md](03-completeness.md) §3.8), filters, sorting and paging (`filters.ts`, `query.ts`), analytics and question statistics, exports, roles (`roles.ts`), and **the API contract** (`api.ts`). Sub-folders: `figures/` (publication figures), `scoring/` (schemes, engine, benchmarks, school reports), `codebook/` (readable names), `quality/` (the automated quality review), `survey/` (BIDS and participant linkage on the survey's own data layer; server only), `node/` (hashing and the synthetic demo data; Node only), `vendor/` (copied verbatim from the survey — never edit by hand). Built to `dist/`, which the web app and functions import. |
-| `apps/functions/` | The backend, Firebase Functions codebase `dashboard` in europe-west2. `src/index.ts` lists everything deployed; `src/api/*.ts` are the callables; `summaries.ts` is the trigger that summarises each sitting; `studio.ts` reads MySelf Studio's version records, read-only; `store.ts` the in-memory mirror behind lists and metrics; `authz.ts` access decisions; `audit.ts` the audit log; `exporters/` Excel and PDF; `test/` integration tests against the emulators; `build-deploy.mjs` bundles everything into `functions-bundle/` for deployment. |
-| `apps/web/` | The React + Vite single-page app. `src/App.tsx` (sign-in gate and routes), `src/app/` (shell and navigation, auth, study data, filters), `src/pages/` (one file per page; a page too big for one file keeps its parts in a sibling folder named after it, e.g. `pages/scoring-settings/`), `src/components/`, `src/charts/`, `src/lib/` (Firebase client, typed API client, hooks, formatting, figure files), `src/styles.css` (all styles). |
+| `packages/core/` | All domain logic, no Firebase: release manifests and their index (`manifest.ts`), log replay and the completeness engine (`replay.ts`, `completeness.ts`, `summary.ts`, `status.ts` — the rules themselves are the survey's, vendored, and shared with its researcher view: [03-completeness.md](03-completeness.md) §3.8), filters, sorting and paging (`filters.ts`, `query.ts`), analytics and question statistics, exports, roles (`roles.ts`), and **the API contract** (`api.ts`). `studies.ts` is study spaces: the survey's id patterns and participant link (vendored), `decideStudyAccess`, access lists and the public-mail-domain refusal, the Studio link. Sub-folders: `figures/` (publication figures), `scoring/` (schemes, engine, benchmarks, school reports), `codebook/` (readable names), `quality/` (the automated quality review), `survey/` (BIDS and participant linkage on the survey's own data layer; server only), `node/` (hashing and the synthetic demo data; Node only), `vendor/` (copied verbatim from the survey — never edit by hand). Built to `dist/`, which the web app and functions import. |
+| `apps/functions/` | The backend, Firebase Functions codebase `dashboard` in europe-west2. `src/index.ts` lists everything deployed; `src/api/*.ts` are the callables; `summaries.ts` is the trigger that summarises each sitting, in any registered study; `studies.ts` reads the survey's study registry and each study's surveys; `paths.ts` every path, built from a study; `studio.ts` reads MySelf Studio's version records, read-only; `store.ts` the in-memory mirror behind lists and metrics, per study; `authz.ts` access decisions (`requireStudyActor` for everything a study holds); `audit.ts` the audit log; `exporters/` Excel and PDF; `test/` integration tests against the emulators; `build-deploy.mjs` bundles everything into `functions-bundle/` for deployment. |
+| `apps/web/` | The React + Vite single-page app. `src/App.tsx` (sign-in gate and routes), `src/app/` (shell and navigation with the study switcher, auth, study data, filters), `src/lib/study.ts` (the study on screen, named in every call and read), `src/pages/` (one file per page; a page too big for one file keeps its parts in a sibling folder named after it, e.g. `pages/scoring-settings/`), `src/components/`, `src/charts/`, `src/lib/` (Firebase client, typed API client, hooks, formatting, figure files), `src/styles.css` (all styles). |
 | `firestore/` | `dashboard.rules` (security rules for the `dashboard` database), `dashboard.indexes.json`, `storage.emulator.rules`, and `test/rules.test.ts`. |
 | `scripts/` | `emulator-setup.mjs` (seed the emulators with synthetic data), `sync-releases.mjs` (register release manifests), `vendor-survey.mjs` and `check-vendored.mjs` (copy the survey's code and check it has not drifted), `check-privacy.mjs` (no console logging or analytics in the web app), `bootstrap-admin.mjs` (first administrator, by hand), `firebase-ops.mjs` (first-time setup, run by the setup workflow). |
 | `releases/` | The survey's published release manifests, copied from the survey repository with their content hashes; `releases/README.md` says from which commit. Never edit a manifest. |
@@ -27,18 +28,22 @@ below was checked against the repository on 2026-09-30.
 
 ```
  survey device ──saveSitting (survey repo)──► Firestore (default)
+                                                studies/{study}            (the registry; ybm needs none)
                                                 studies/{study}/sessions/{id}   (+ chunks/ for long logs)
                                                           │
                           onSessionWritten (apps/functions/src/summaries.ts)
-                          assembleSitting (sittings.ts) → resolveRelease (releases.ts:
-                          the registry, else MySelf Studio's checked copy, registered)
+                          onSitting: a registered study (studies.ts lookupStudy), the
+                          sitting names no other → assembleSitting (sittings.ts)
+                          → resolveRelease (releases.ts: the study's registry, else
+                          MySelf Studio's checked copy in that study, registered there)
                           → buildSummary (packages/core/src/summary.ts)
                                                           ▼
                                              Firestore "dashboard"
                                                 studies/{study}/sessionSummaries/{id}, meta/freshness
                                                           │
-            callables in apps/functions/src/api/*.ts ◄────┘  (store.ts mirrors summaries and reviews in memory)
-            requireActor (authz.ts) on every call, audit (audit.ts) for every view, change and export
+            callables in apps/functions/src/api/*.ts ◄────┘  (store.ts mirrors each study's summaries and reviews)
+            requireStudyActor (authz.ts) on every call: the request's study, registered,
+            and the caller may see it; audit (audit.ts) in that study's log
                                                           │
             apps/web/src/lib/api.ts (typed with packages/core/src/api.ts) ──► pages
 ```
@@ -54,20 +59,26 @@ below was checked against the repository on 2026-09-30.
    progress, data-quality signals — to the dashboard's own database. A deleted
    sitting leaves a tombstone. `rebuildSummaries` (Settings → Data maintenance)
    does the same for every sitting.
-3. **Callables.** Every browser request is a callable: `requireActor` checks the
-   allowlist (`config/access`) and the role claim, the handler reads the
-   in-memory mirror (`store.ts`) and computes with `packages/core`, and the
-   response is one of the shapes in `packages/core/src/api.ts`. Participants,
+3. **Callables.** Every browser request is a callable naming its study
+   (`lib/api.ts` adds it): `requireStudyActor` checks the allowlist
+   (`config/access`) and the role claim, then that the study is a registered
+   study and the caller may see it (administrators every study, everyone the
+   default, anyone else a study whose `studies/{study}/config/access` names
+   them), the handler reads that study's in-memory mirror (`store.ts`) and
+   computes with `packages/core`, and the response is one of the shapes in
+   `packages/core/src/api.ts`. Every path is built from `actor.study`, never
+   from the request. A request with no study means the default study. Participants,
    scores, exports and the Overview's "As the survey's researcher view counts
    them" (`getResearcherView`) need the survey's own linkage (codes, waves,
    corrections), so `studyData.ts` reads raw sittings server-side through the
    vendored data layer in `packages/core/src/survey/`.
 4. **Direct reads.** The web app also reads a few collections of the
-   `dashboard` database directly, under `firestore/dashboard.rules`: the
-   release list and `meta/freshness` (`app/data.tsx`), the person's own
-   `exportJobs`, `savedViews` (their own, which they may change, and shared
-   ones) and `auditLog` (their own; everyone's for administrators). Nothing in
-   the browser reads `(default)`.
+   study on screen in the `dashboard` database directly, under
+   `firestore/dashboard.rules` (`studyMember(study)` on each): the release list
+   and `meta/freshness` (`app/data.tsx`), the person's own `exportJobs`,
+   `savedViews` (their own, which they may change, and shared ones) and
+   `auditLog` (their own; everyone's for administrators). Nothing in the
+   browser reads `(default)`.
 5. **Exports** are built by the `createExport` callable into Storage
    (`dashboard-exports/`), downloaded through the authenticated
    `downloadExport` endpoint, audited, and deleted after 24 hours.
@@ -115,16 +126,22 @@ a time.
 
 ### Add a callable
 
+Anything that reads or changes what a study holds goes through
+`requireStudyActor` and builds every path from `actor.study`; only what
+concerns the dashboard as a whole (its access list, roles) uses `requireActor`.
+The web client names the study for you (`lib/api.ts`).
+
 1. **Contract.** Add the request and response types to
    `packages/core/src/api.ts` (exported through `packages/core/src/index.ts`)
    and rebuild core.
 2. **Handler.** In `apps/functions/src/api/<area>.ts`:
    `export const myCall = onCall({ ...callableOptions }, async (request): Promise<MyResponse> => { … })`.
-   Start with `const actor = await requireActor(request, "<capability>")`
+   Start with `const actor = await requireStudyActor(request, "<capability>")`
    (capabilities and which role has them: `packages/core/src/roles.ts`),
    validate every input (helpers in `api/common.ts`), and record anything a
-   person viewed, changed or exported with `audit()` — add the action to
-   `AuditAction` in `apps/functions/src/audit.ts`. Audit details carry ids and
+   person viewed, changed or exported with `audit({ ..., ...actorFields(actor) })`
+   — `actorFields` carries the study, so the row lands in that study's log; add
+   the action to `AuditAction` in `apps/functions/src/audit.ts`. Audit details carry ids and
    counts, never answers or names.
 3. **Export** it from `apps/functions/src/index.ts`: only what `index.ts`
    exports is deployed.
@@ -133,7 +150,9 @@ a time.
    the timeout for slow calls).
 5. **Test** it in `apps/functions/test/api.integration.test.ts`, which calls
    each handler exactly as the Functions runtime does (`run(handler, person, data)`),
-   with real ID tokens from the Auth emulator.
+   with real ID tokens from the Auth emulator. Add it to the `handlers` list in
+   "study spaces and surveys", which holds every study-scoped callable to
+   refusing a study the caller may not see.
 6. **Deploy the functions** before the web app that uses them (§10.6).
 
 ### Name a new survey question in the codebook
@@ -192,13 +211,23 @@ before that. The steps are for a release made in the survey repository.
    settings), the newest registered release counts as the one the survey is
    serving — register a release once the survey serves it.
 
+### A new study, or someone in one
+
+Nothing in this repository: a project owner creates the study space in MySelf
+Studio (survey docs/16 §11.4), and its sittings are summarised as they arrive.
+An administrator gives people the study in Settings → Study access
+([06 §6](06-handover.md)). To backfill a study's sittings, rebuild its summaries
+in Settings → Data maintenance while it is the study on screen, or send the setup
+workflow's `ops/` request with `study` (without one it rebuilds every study).
+
 ### Re-vendor the survey
 
 The dashboard judges "would this question have been shown?", judges
 completeness, counts sittings and builds its BIDS export with the survey's own
 code, copied verbatim into `packages/core/src/vendor/`:
 
-- `vendor/myself/{schema,scoring,store}/*.ts` — the data layer, written by
+- `vendor/myself/{schema,scoring,store}/*.ts` — the data layer (and
+  `schema/link.ts`, the study and survey ids and the participant link), written by
   `node scripts/vendor-survey.mjs ../MySelf` (path to a survey checkout;
   run from the repository root). `vendor/myself/index.ts` is the dashboard's
   own list of what it uses. `store/completeness.ts` and `store/counting.ts`
@@ -243,11 +272,11 @@ counting rule belongs in the survey, not here; update
 
 | Suite | Command | Needs | Now |
 |---|---|---|---|
-| Unit | `pnpm -r test` | core built | 357: core 322, functions 27, web 8 |
+| Unit | `pnpm -r test` | core built | 399: core 348, functions 34, web 17 |
 | Typecheck | `pnpm -r typecheck` | core built | all packages |
-| Rules | `pnpm test:rules` | Java (Firestore emulator) | 29 |
-| Functions integration | `pnpm test:integration` | Java, core built | 38 |
-| End to end | `pnpm e2e:build` then `pnpm test:e2e` | Java, a Chromium | 10 |
+| Rules | `pnpm test:rules` | Java (Firestore emulator) | 36 |
+| Functions integration | `pnpm test:integration` | Java, core built | 55 |
+| End to end | `pnpm e2e:build` then `pnpm test:e2e` | Java, a Chromium | 13 |
 | Privacy lint | `pnpm lint:privacy` | — | no console logging or analytics in `apps/web` |
 | Vendored drift | `pnpm check:vendored ../MySelf` | a survey checkout | engine and data layer match |
 
@@ -309,6 +338,11 @@ only into the dashboard's own resources: the `dashboard` database, the
   Firebase; functions and pages stay thin.
 - **The API contract is `packages/core/src/api.ts`.** Change a shape there and
   both sides must compile against it.
+- **A study is checked, then trusted; a request never is.** Every callable
+  that touches a study takes it through `requireStudyActor`; every path is built
+  from the checked study (`paths.ts` takes it as the first argument); the rules
+  ask `studyMember(study)` under `studies/{study}/`. A sitting's survey is its
+  release's `release.assessment`, resolved in its own study, never its release key.
 - **Never write to `(default)`** — the survey's database. Nothing in this
   repository does; the dashboard reads it only on the server, and its rules
   belong to the survey repository.
