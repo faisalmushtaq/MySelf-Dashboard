@@ -14,6 +14,14 @@ rules_version = '2';
  *     reviewer) — claims are set only by the Admin SDK, never by a client;
  *   - email on the access policy in `config/access` (allowlist or Workspace domain).
  *
+ * Who may see a study (docs/12 §12.4) — everything under `studies/{study}/`:
+ *   - a member who is an administrator: every study;
+ *   - any member: the default study, whose access list is `config/access` itself;
+ *   - any other member: a study whose own list, `studies/{study}/config/access`,
+ *     names their email or its domain. A study with no list is administrators'.
+ * The default study's id is `config/access.defaultStudy`, written by the backend;
+ * a document without it (production's, before this change) means `ybm`.
+ *
  * What clients may do directly is deliberately narrow. Everything that changes
  * research state — reviews, notes, exports, roles, settings — goes through the
  * backend, which checks the role and writes an audit row in the same transaction.
@@ -66,8 +74,28 @@ service cloud.firestore {
       return member() && role() == 'owner';
     }
 
-    function mayShare() {
-      return member() && role() in ['owner', 'researcher'];
+    function defaultStudy() {
+      return accessPolicy().get('defaultStudy', 'ybm');
+    }
+
+    function studyAccessPath(study) {
+      return /databases/$(database)/documents/studies/$(study)/config/access;
+    }
+
+    // On a study's own list, by email or by Workspace domain.
+    function studyListed(study) {
+      return exists(studyAccessPath(study))
+        && (email() in get(studyAccessPath(study)).data.get('emails', [])
+            || email().split('@')[1] in get(studyAccessPath(study)).data.get('domains', []));
+    }
+
+    // A member who may see this study: the test every rule below `studies/{study}` makes.
+    function studyMember(study) {
+      return member() && (role() == 'owner' || study == defaultStudy() || studyListed(study));
+    }
+
+    function mayShareIn(study) {
+      return studyMember(study) && role() in ['owner', 'researcher'];
     }
 
     // ── Configuration ────────────────────────────────────────────────────
@@ -85,11 +113,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // A study's records. Every read below asks whether the caller may see THIS
+    // study: a role in one study is nothing in another (docs/12 §12.4).
     match /studies/{study} {
+
+      // Who else may see the study, and its own settings: written only by the
+      // backend (updateStudyAccess, updatePolicy), read by administrators.
+      match /config/{doc} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
 
       // Survey version metadata: question counts, version, publication date.
       match /releases/{hash} {
-        allow read: if member();
+        allow read: if studyMember(study);
         allow write: if false;
       }
 
@@ -107,7 +144,7 @@ service cloud.firestore {
 
       // Data freshness for the header indicator.
       match /meta/{doc} {
-        allow read: if member();
+        allow read: if studyMember(study);
         allow write: if false;
       }
 
@@ -115,11 +152,11 @@ service cloud.firestore {
       // through updateReview / addNote, which audit in the same transaction.
       // A read-only reviewer therefore cannot change a flag by any route.
       match /reviews/{sessionId} {
-        allow read: if member();
+        allow read: if studyMember(study);
         allow write: if false;
 
         match /notes/{noteId} {
-          allow read: if member();
+          allow read: if studyMember(study);
           allow write: if false;
         }
       }
@@ -140,25 +177,25 @@ service cloud.firestore {
             && (!('ownerEmail' in d) || d.ownerEmail == email());
         }
 
-        allow read: if member()
+        allow read: if studyMember(study)
           && (resource.data.ownerUid == request.auth.uid || resource.data.shared == true);
 
-        allow create: if member()
+        allow create: if studyMember(study)
           && validView(request.resource.data)
           && request.resource.data.ownerUid == request.auth.uid
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
-          && (request.resource.data.shared == false || mayShare());
+          && (request.resource.data.shared == false || mayShareIn(study));
 
-        allow update: if member()
+        allow update: if studyMember(study)
           && resource.data.ownerUid == request.auth.uid
           && validView(request.resource.data)
           && request.resource.data.ownerUid == resource.data.ownerUid
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time
-          && (request.resource.data.shared == false || mayShare());
+          && (request.resource.data.shared == false || mayShareIn(study));
 
-        allow delete: if member()
+        allow delete: if studyMember(study)
           && (resource.data.ownerUid == request.auth.uid || isAdmin());
       }
 
@@ -166,7 +203,7 @@ service cloud.firestore {
       // permissions on the server. The requester (or an administrator) may watch
       // progress; nobody else learns an export exists.
       match /exportJobs/{jobId} {
-        allow read: if member()
+        allow read: if studyMember(study)
           && (resource.data.requestedBy == request.auth.uid || isAdmin());
         allow write: if false;
       }
@@ -176,7 +213,7 @@ service cloud.firestore {
       // including the person it describes, can edit or delete an entry.
       match /auditLog/{entryId} {
         allow read: if isAdmin()
-          || (member() && resource.data.actorUid == request.auth.uid);
+          || (studyMember(study) && resource.data.actorUid == request.auth.uid);
         allow write: if false;
       }
     }

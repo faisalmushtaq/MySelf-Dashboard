@@ -64,6 +64,10 @@ const UNVERIFIED = google("u_unver", "brainpopresearch@gmail.com", "owner", { em
 const DEVICE = { sub: "dev1", user_id: "dev1", firebase: { sign_in_provider: "anonymous" } };
 const DEVICE_CLAIM = google("dev2", "brainpopresearch@gmail.com", "owner", { device: true });
 const PASSWORD = { ...google("u_pw", "brainpopresearch@gmail.com", "owner"), firebase: { sign_in_provider: "password" } };
+/** On the dashboard's list by address, and on study "future"'s list by domain. */
+const FELLOW = google("u_fellow", "fellow@uni.example", "researcher");
+/** Another study, with its own list, beside the default study "demo". */
+const F = "studies/future";
 
 let n = 0;
 function db(who: Who): Firestore {
@@ -110,7 +114,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await clear();
   const batch = admin.batch();
-  batch.set(admin.doc("config/access"), { emails: ["brainpopresearch@gmail.com"], domains: ["brainpop.example"] });
+  batch.set(admin.doc("config/access"), { emails: ["brainpopresearch@gmail.com", "fellow@uni.example"], domains: ["brainpop.example"], defaultStudy: "demo" });
   batch.set(admin.doc("config/policy"), { abandonAfterHours: 24 });
   batch.set(admin.doc(`${S}/releases/sha256:abc`), { version: "1.0.0" });
   batch.set(admin.doc(`${S}/releaseManifests/sha256:abc`), { manifestJson: "{}" });
@@ -124,6 +128,21 @@ beforeEach(async () => {
   batch.set(admin.doc(`${S}/savedViews/v_private`), { name: "Mine", ownerUid: "u_res", shared: false, state: {}, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   batch.set(admin.doc(`${S}/savedViews/v_shared`), { name: "Team", ownerUid: "u_res", shared: true, state: {}, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
   batch.set(admin.doc("users/u_res"), { email: "researcher@brainpop.example", role: "researcher" });
+  // Study "future": the reviewer by address and uni.example by domain may see it; the researcher may not.
+  batch.set(admin.doc(`${F}/config/access`), { emails: ["reviewer@brainpop.example"], domains: ["uni.example"] });
+  batch.set(admin.doc(`${F}/config/policy`), { abandonAfterHours: 48 });
+  batch.set(admin.doc(`${F}/releases/sha256:fut`), { version: "1.0.0" });
+  batch.set(admin.doc(`${F}/releaseManifests/sha256:fut`), { manifestJson: "{}" });
+  batch.set(admin.doc(`${F}/sessionSummaries/f1`), { sessionId: "f1", studyCode: "FUT0001" });
+  batch.set(admin.doc(`${F}/meta/freshness`), { lastSummaryAt: FieldValue.serverTimestamp() });
+  batch.set(admin.doc(`${F}/reviews/f1`), { sessionId: "f1", status: "unreviewed", flags: [], rev: 0 });
+  batch.set(admin.doc(`${F}/reviews/f1/notes/n1`), { text: "checked", authorUid: "u_rev" });
+  batch.set(admin.doc(`${F}/exportJobs/j_res`), { requestedBy: "u_res", status: "ready", createdAt: FieldValue.serverTimestamp() });
+  batch.set(admin.doc(`${F}/auditLog/a_res`), { actorUid: "u_res", action: "session.viewed", at: FieldValue.serverTimestamp() });
+  batch.set(admin.doc(`${F}/savedViews/v_shared`), { name: "Team", ownerUid: "u_rev", shared: true, state: {}, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  // Study "stage": nobody has been added to it yet.
+  batch.set(admin.doc("studies/stage/releases/sha256:stg"), { version: "1.0.0" });
+  batch.set(admin.doc("studies/stage/reviews/s1"), { sessionId: "s1", status: "unreviewed", flags: [], rev: 0 });
   await batch.commit();
 });
 
@@ -301,6 +320,94 @@ describe("saved views", () => {
     const demoted = google("u_res", "researcher@brainpop.example", "analyst");
     await denied(updateDoc(doc(db(demoted), `${S}/savedViews/v_shared`), { name: "Still sharing", updatedAt: serverTimestamp() }));
     await allowed(updateDoc(doc(db(demoted), `${S}/savedViews/v_shared`), { shared: false, updatedAt: serverTimestamp() }));
+  });
+});
+
+describe("study spaces: a role in one study is nothing in another (docs/12 §12.4)", () => {
+  /** Everything a member could read of a study, one way or another. */
+  const everything = (fs: Firestore, base: string, own: { job?: string; audit?: string } = {}) => [
+    getDoc(doc(fs, `${base}/releases/sha256:fut`)),
+    getDocs(collection(fs, `${base}/releases`)),
+    getDoc(doc(fs, `${base}/meta/freshness`)),
+    getDoc(doc(fs, `${base}/reviews/f1`)),
+    getDocs(collection(fs, `${base}/reviews`)),
+    getDoc(doc(fs, `${base}/reviews/f1/notes/n1`)),
+    getDoc(doc(fs, `${base}/savedViews/v_shared`)),
+    getDocs(query(collection(fs, `${base}/savedViews`), where("shared", "==", true))),
+    ...(own.job ? [getDoc(doc(fs, `${base}/exportJobs/${own.job}`))] : []),
+    ...(own.audit ? [getDoc(doc(fs, `${base}/auditLog/${own.audit}`))] : []),
+  ];
+
+  it("a researcher of the default study reads nothing of another study — not even their own export or audit row there", async () => {
+    const fs = db(RESEARCHER);
+    for (const read of everything(fs, F, { job: "j_res", audit: "a_res" })) await denied(read);
+    await denied(getDocs(query(collection(fs, `${F}/exportJobs`), where("requestedBy", "==", "u_res"), orderBy("createdAt", "desc"), limit(10))));
+    await denied(getDocs(query(collection(fs, `${F}/auditLog`), where("actorUid", "==", "u_res"))));
+    // …while the default study is theirs, as it always was.
+    await allowed(getDoc(doc(fs, `${S}/releases/sha256:abc`)));
+    await allowed(getDoc(doc(fs, `${S}/reviews/s1`)));
+  });
+
+  it("someone on a study's list, by address or by domain, reads it as any member of it would", async () => {
+    for (const who of [REVIEWER, FELLOW]) {
+      const fs = db(who);
+      for (const read of everything(fs, F)) await allowed(read);
+    }
+    // A list grants a study, not a role: the reviewer still writes nothing there.
+    await denied(updateDoc(doc(db(REVIEWER), `${F}/reviews/f1`), { status: "reviewed" }));
+    // And summaries and manifests stay backend-only in every study.
+    await denied(getDoc(doc(db(FELLOW), `${F}/sessionSummaries/f1`)));
+    await denied(getDoc(doc(db(FELLOW), `${F}/releaseManifests/sha256:fut`)));
+  });
+
+  it("a study nobody has been added to is the administrators' alone", async () => {
+    for (const who of [RESEARCHER, REVIEWER, FELLOW]) {
+      await denied(getDoc(doc(db(who), "studies/stage/releases/sha256:stg")));
+      await denied(getDocs(collection(db(who), "studies/stage/reviews")));
+    }
+    await allowed(getDoc(doc(db(ADMIN), "studies/stage/releases/sha256:stg")));
+    for (const read of everything(db(ADMIN), F, { job: "j_res", audit: "a_res" })) await allowed(read);
+  });
+
+  it("a list never stands in for the dashboard's own: off it, or without a role, nothing", async () => {
+    // On future's list by domain, but neither on the dashboard's list nor holding a role.
+    const outsider = google("u_out", "visitor@uni.example", "researcher");
+    const noRole = google("u_fellow2", "fellow@uni.example");
+    for (const who of [outsider, noRole, STRANGER, DEVICE]) {
+      await denied(getDoc(doc(db(who), `${F}/releases/sha256:fut`)));
+      await denied(getDoc(doc(db(who), `${F}/reviews/f1`)));
+    }
+  });
+
+  it("saved views are written only in a study one may see, and shared only by researchers and administrators", async () => {
+    const view = (ownerUid: string, shared: boolean) => ({ name: "Mine", ownerUid, shared, state: { path: "/sessions" }, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await denied(setDoc(doc(db(RESEARCHER), `${F}/savedViews/v_r`), view("u_res", false)));
+    await allowed(setDoc(doc(db(REVIEWER), `${F}/savedViews/v_rev`), view("u_rev", false)));
+    await denied(setDoc(doc(db(REVIEWER), `${F}/savedViews/v_rev2`), view("u_rev", true)));
+    await allowed(setDoc(doc(db(FELLOW), `${F}/savedViews/v_f`), view("u_fellow", true)));
+  });
+
+  it("a study's list and settings are read by administrators and written by nobody", async () => {
+    await allowed(getDoc(doc(db(ADMIN), `${F}/config/access`)));
+    await allowed(getDoc(doc(db(ADMIN), `${F}/config/policy`)));
+    for (const who of [RESEARCHER, REVIEWER, FELLOW]) {
+      await denied(getDoc(doc(db(who), `${F}/config/access`)));
+      await denied(getDoc(doc(db(who), `${F}/config/policy`)));
+    }
+    // Nobody adds themselves to a study, not even an administrator from a browser.
+    await denied(setDoc(doc(db(RESEARCHER), `${F}/config/access`), { emails: ["researcher@brainpop.example"], domains: [] }));
+    await denied(updateDoc(doc(db(REVIEWER), `${F}/config/access`), { domains: ["brainpop.example"] }));
+    await denied(setDoc(doc(db(ADMIN), "studies/stage/config/access"), { emails: ["researcher@brainpop.example"] }));
+    await denied(updateDoc(doc(db(ADMIN), "config/access"), { defaultStudy: "future" }));
+  });
+
+  it("read ybm as the default study when the access list does not name one, as production's did", async () => {
+    await admin.doc("config/access").update({ defaultStudy: FieldValue.delete() });
+    await admin.doc("studies/ybm/releases/sha256:ybm").set({ version: "9.0.0" });
+    await allowed(getDoc(doc(db(RESEARCHER), "studies/ybm/releases/sha256:ybm")));
+    // "demo" is then a study like any other: the researcher is on no list of it.
+    await denied(getDoc(doc(db(RESEARCHER), `${S}/releases/sha256:abc`)));
+    await allowed(getDoc(doc(db(ADMIN), `${S}/releases/sha256:abc`)));
   });
 });
 
