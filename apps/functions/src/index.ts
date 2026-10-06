@@ -24,3 +24,4 @@ export { getParticipants } from "./api/participants.js";
 export { getScores, getScoringSettings, saveScoringScheme, saveGroupSettings } from "./api/scores.js";
 export { getCodebook } from "./api/codebook.js";
 export { listSurveyVersions, exportSurveyProvenance, getSurveyManifest } from "./api/versions.js";
+export { getSurveys, getStudyAccess, updateStudyAccess } from "./api/studies.js";

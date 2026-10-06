@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { firebase, STUDY } from "../../lib/firebase";
+import { firebase } from "../../lib/firebase";
+import { studyPath } from "../../lib/study";
 import { useFilters } from "../../app/filters";
 import { useAnnounce } from "../../app/announcer";
 import { Dialog } from "../../components/Dialog";
@@ -32,7 +33,7 @@ export function SaveViewDialog({
     setErr(null);
     try {
       const p = state.params;
-      await addDoc(collection(firebase().db, `studies/${STUDY}/savedViews`), {
+      await addDoc(collection(firebase().db, studyPath("savedViews")), {
         name: name.trim(),
         ...(description.trim() ? { description: description.trim() } : {}),
         ownerUid: uid,

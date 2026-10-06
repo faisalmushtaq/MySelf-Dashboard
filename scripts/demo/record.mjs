@@ -4,9 +4,10 @@
  * offline demo build (scripts/demo/README.md).
  *
  *   1. Walk every page in a browser as the demo owner, recording each call to a
- *      dashboard function (name, data sent, answer returned).
+ *      dashboard function (name, data sent, answer returned): in the YBM study,
+ *      with each of its surveys chosen, and in the second study space (docs/12).
  *   2. Sweep the calls a visitor could make that the walk did not: every
- *      session's detail, every question's analytics and history.
+ *      session's detail, every question's analytics and history, in each study.
  *   3. Copy the few collections the web app reads from Firestore directly.
  *
  * Writes apps/web/demo/recording.json. Needs the emulators (firebase.demo.json)
@@ -16,6 +17,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "@playwright/test";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { FOLLOW_UP, FUTURE } from "./studio.mjs";
 
 const BASE = process.env.DEMO_WEB ?? "http://127.0.0.1:4273";
 const PROJECT = process.env.GCLOUD_PROJECT ?? "demo-myself-dashboard";
@@ -78,25 +80,45 @@ const routes = [
   "/completeness", "/questions", "/codebook", "/figures", "/scores", "/participants", "/reports", "/views", "/audit",
   "/settings", "/settings/scoring", "/help", "/survey",
 ];
-for (const r of routes) {
+// The pages that follow the survey filter, walked with each of the YBM study's surveys chosen.
+const surveyed = ["/overview", "/sessions", "/completeness", "/questions", "/codebook", "/figures", "/scores", "/participants", "/survey"];
+const visit = async (r, prefix = "") => {
   await page.goto(BASE + r);
-  await settle(r.replace(/[/?=&]+/g, "_"));
+  await settle(`${prefix}${r.replace(/[/?=&]+/g, "_")}`);
+};
+
+// Open the first session from the list, so its page is recorded as the app asks for it,
+// and what an export would contain (the demo never makes one).
+async function sessionAndExport(prefix) {
+  await visit("/sessions", `${prefix}again`);
+  await page.locator("tbody tr[data-row]").first().click();
+  await settle(`${prefix}session`);
+  await visit("/sessions", `${prefix}for-export`);
+  const exportButton = page.getByRole("button", { name: /^Export/ }).first();
+  if (await exportButton.count()) {
+    await exportButton.click();
+    await settle(`${prefix}export-dialog`);
+    await page.keyboard.press("Escape");
+  }
 }
 
-// Open the first session from the list, so its page is recorded as the app asks for it.
-await page.goto(BASE + "/sessions");
-await settle("sessions-again");
-await page.locator("tbody tr[data-row]").first().click();
-await settle("session");
-// What an export would contain (the demo never makes one).
-await page.goto(BASE + "/sessions");
-await settle("sessions-for-export");
-const exportButton = page.getByRole("button", { name: /^Export/ }).first();
-if (await exportButton.count()) {
-  await exportButton.click();
-  await settle("export-dialog");
-  await page.keyboard.press("Escape");
-}
+for (const r of routes) await visit(r);
+for (const survey of [FOLLOW_UP, "ybm_nd2026_standard"]) for (const r of surveyed) await visit(`${r}?sv=${survey}`, `${survey}-`);
+await sessionAndExport("");
+
+// The second study space, chosen in the header as a visitor would (the server remembers
+// it, so the pages below open in it); then back to YBM, which the demo opens on.
+const studySwitcher = page.getByRole("combobox", { name: "Study", exact: true });
+await visit("/overview");
+await studySwitcher.selectOption({ label: FUTURE.title });
+await page.locator(".study-tag", { hasText: FUTURE.title }).waitFor({ timeout: 30_000 });
+await settle("future-overview");
+for (const r of routes) await visit(r, "future-");
+await sessionAndExport("future-");
+await studySwitcher.selectOption({ index: 0 });
+await page.locator(".study-tag", { hasNotText: FUTURE.title }).waitFor({ timeout: 30_000 });
+await settle("back-to-ybm");
+await visit("/overview", "ybm-again-");
 
 // ── 2. The sweep ────────────────────────────────────────────────────────────
 // Sign in to the Auth emulator directly for a token, and call the functions as the web app does.
@@ -117,33 +139,41 @@ async function call(name, data) {
 }
 const seen = (name) => calls.filter((c) => c.name === name && c.status === 200);
 
-// Every session's detail, in the shape the web app asked for one.
-const detail = seen("getSessionDetail")[0]?.data ?? {};
-const list = seen("querySessions")[0]?.data ?? { filters: {}, sort: {}, search: "", page: 1, pageSize: 50 };
+// Each study in turn: every call names its study, as the web app's do (lib/api.ts).
 const sessionIds = new Set();
-for (let p = 1, pages = 1; p <= pages; p += 1) {
-  // Every sitting, test sittings included.
-  const r = await call("querySessions", { ...list, filters: { ...list.filters, dataset: "all" }, page: p, pageSize: 200 });
-  pages = r?.pageCount ?? 1;
-  for (const row of r?.items ?? []) sessionIds.add(row.sessionId);
+for (const study of [STUDY, FUTURE.study]) {
+  const inStudy = (name) => seen(name).find((c) => c.data?.study === study)?.data;
+  // Every session's detail, in the shape the web app asked for one.
+  const detail = inStudy("getSessionDetail") ?? { study };
+  const list = inStudy("querySessions") ?? { study, filters: {}, sort: {}, search: "", page: 1, pageSize: 50 };
+  for (let p = 1, pages = 1; p <= pages; p += 1) {
+    // Every sitting, test sittings included.
+    const r = await call("querySessions", { ...list, filters: { ...list.filters, dataset: "all" }, page: p, pageSize: 200 });
+    pages = r?.pageCount ?? 1;
+    for (const row of r?.items ?? []) {
+      sessionIds.add(row.sessionId);
+      await call("getSessionDetail", { ...detail, sessionId: row.sessionId });
+    }
+  }
+
+  // Survey versions: every version's manifest, to download, and the provenance export.
+  for (const v of (await call("listSurveyVersions", { study }))?.versions ?? []) await call("getSurveyManifest", { study, hash: v.hash });
+  await call("exportSurveyProvenance", { study });
+
+  // Scores, every way the page can group and count them, and each school in focus.
+  const scores = inStudy("getScores") ?? { study };
+  const ybm = study === STUDY;
+  for (const observation of ybm ? ["latest", "first", "all", "wave_1", "wave_2", "wave_3"] : ["latest"])
+    for (const groupBy of ["school", "yearGroup", "schoolYear", "gender", "wave", "none"]) await call("getScores", { ...scores, observation, groupBy });
+  for (const school of ybm ? ["NTH", "STH", "WST"] : ["EST", "CTY"]) await call("getScores", { ...scores, focus: { school } });
+  for (const yearGroup of [7, 8, 9, 10, 11, 12, 13]) await call("getScores", { ...scores, focus: { yearGroup } });
+  // The survey researcher view's figures for each dataset choice, and in YBM each survey's. They are
+  // computed from the raw sittings, which the demo does not carry, so only recorded filters play back.
+  const researcher = inStudy("getResearcherView") ?? { study, filters: {} };
+  for (const surveys of ybm ? [[], [FOLLOW_UP], ["ybm_nd2026_standard"]] : [[]])
+    for (const dataset of ["production", "all", "test"]) await call("getResearcherView", { ...researcher, filters: { ...researcher.filters, dataset, surveys } });
 }
-for (const id of sessionIds) await call("getSessionDetail", { ...detail, sessionId: id });
-
-// Survey versions: every version's manifest, to download, and the provenance export.
-for (const v of (await call("listSurveyVersions", {}))?.versions ?? []) await call("getSurveyManifest", { hash: v.hash });
-await call("exportSurveyProvenance", {});
-
-// Scores, every way the page can group and count them, and each school in focus.
-const scores = seen("getScores")[0]?.data ?? {};
-for (const observation of ["latest", "first", "all", "wave_1", "wave_2", "wave_3"])
-  for (const groupBy of ["school", "yearGroup", "schoolYear", "gender", "wave", "none"]) await call("getScores", { ...scores, observation, groupBy });
-for (const school of ["NTH", "STH", "WST"]) await call("getScores", { ...scores, focus: { school } });
-for (const yearGroup of [7, 8, 9, 10, 11, 12, 13]) await call("getScores", { ...scores, focus: { yearGroup } });
-// The survey researcher view's figures for each dataset choice. They are computed from
-// the raw sittings, which the demo does not carry, so only recorded filters play back.
-const researcher = seen("getResearcherView")[0]?.data ?? { filters: {} };
-for (const dataset of ["all", "test"]) await call("getResearcherView", { ...researcher, filters: { ...researcher.filters, dataset } });
-console.log(`walked ${routes.length + 2} pages; swept ${sessionIds.size} sessions; ${calls.length} calls in all`);
+console.log(`walked ${routes.length * 2 + surveyed.length * 2 + 6} pages; swept ${sessionIds.size} sessions; ${calls.length} calls in all`);
 
 // ── 3. What the web app reads from Firestore directly ───────────────────────
 process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8291";
@@ -156,11 +186,17 @@ const plain = (v) => {
 };
 const firestore = {};
 // The first four the web app reads itself; the rest feed the lists and charts the demo computes in the browser.
-for (const col of ["releases", "exportJobs", "auditLog", "savedViews", "sessionSummaries", "reviews", "releaseManifests"]) {
-  const snap = await dash.collection(`studies/${STUDY}/${col}`).get();
-  for (const d of snap.docs) firestore[d.ref.path] = plain(d.data());
+for (const study of [STUDY, FUTURE.study]) {
+  for (const col of ["releases", "exportJobs", "auditLog", "savedViews", "sessionSummaries", "reviews", "releaseManifests"]) {
+    const snap = await dash.collection(`studies/${study}/${col}`).get();
+    for (const d of snap.docs) firestore[d.ref.path] = plain(d.data());
+  }
+  for (const path of [`studies/${study}/meta/freshness`, `studies/${study}/config/policy`]) {
+    const d = await dash.doc(path).get();
+    if (d.exists) firestore[path] = plain(d.data());
+  }
 }
-for (const path of [`studies/${STUDY}/meta/freshness`, "config/policy", "config/groups"]) {
+for (const path of ["config/policy", "config/groups"]) {
   const d = await dash.doc(path).get();
   if (d.exists) firestore[path] = plain(d.data());
 }

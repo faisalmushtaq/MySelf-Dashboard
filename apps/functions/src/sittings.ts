@@ -35,11 +35,23 @@ export function normaliseDoc(id: string, data: Record<string, unknown>): Sitting
   };
 }
 
-export async function assembleSitting(id: string, data: Record<string, unknown>): Promise<Sitting> {
+/**
+ * Why a sitting found under `studies/{study}/sessions` is not that study's, or
+ * null when it is. Its own `study` field, when it has one, must be the path's
+ * (survey docs/16 §11.6): a sitting that names another study is malformed and
+ * is never read as either's.
+ */
+export function sittingStudyProblem(study: string, data: Record<string, unknown>): string | null {
+  const own = data["study"];
+  if (own === undefined || own === null || own === study) return null;
+  return typeof own === "string" ? "names another study" : "names its study in a form no study id takes";
+}
+
+export async function assembleSitting(study: string, id: string, data: Record<string, unknown>): Promise<Sitting> {
   const doc = normaliseDoc(id, data);
   const chunkCount = doc.chunkCount ?? 0;
   if (chunkCount === 0) return { ...doc, events: doc.events ?? [] };
-  const chunks = await research().collection(spaths.chunks(doc.sessionId)).get();
+  const chunks = await research().collection(spaths.chunks(study, doc.sessionId)).get();
   const byIndex = new Map<number, SittingEvent[]>();
   for (const c of chunks.docs) {
     const d = c.data() as { index?: number; events?: SittingEvent[] };
@@ -52,23 +64,28 @@ export async function assembleSitting(id: string, data: Record<string, unknown>)
   return { ...doc, events };
 }
 
-export async function readSitting(id: string): Promise<Sitting | null> {
-  const snap = await research().doc(spaths.session(id)).get();
+/** One of `study`'s sittings; null when it has none by that id, or the one it has names another study. */
+export async function readSitting(study: string, id: string): Promise<Sitting | null> {
+  const snap = await research().doc(spaths.session(study, id)).get();
   if (!snap.exists) return null;
-  return assembleSitting(id, snap.data() as Record<string, unknown>);
+  const data = snap.data() as Record<string, unknown>;
+  if (sittingStudyProblem(study, data)) return null;
+  return assembleSitting(study, id, data);
 }
 
-/** Many sittings, in batches, for exports. */
-export async function readSittings(ids: readonly string[]): Promise<Map<string, Sitting>> {
+/** Many of `study`'s sittings, in batches, for exports. */
+export async function readSittings(study: string, ids: readonly string[]): Promise<Map<string, Sitting>> {
   const out = new Map<string, Sitting>();
   const db = research();
   for (let i = 0; i < ids.length; i += 100) {
-    const refs = ids.slice(i, i + 100).map((id) => db.doc(spaths.session(id)));
+    const refs = ids.slice(i, i + 100).map((id) => db.doc(spaths.session(study, id)));
     if (refs.length === 0) continue;
     const snaps = await db.getAll(...refs);
     for (const s of snaps) {
       if (!s.exists) continue;
-      out.set(s.id, await assembleSitting(s.id, s.data() as Record<string, unknown>));
+      const data = s.data() as Record<string, unknown>;
+      if (sittingStudyProblem(study, data)) continue;
+      out.set(s.id, await assembleSitting(study, s.id, data));
     }
   }
   return out;

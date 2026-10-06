@@ -3,9 +3,12 @@
  * Seed a running Emulator Suite with the made-up YBM study (./ybm-study.mjs):
  * the real r8.0.0 and r9.0.0 releases, invented children, a few reviews and
  * notes, and MySelf Studio's records of the survey's versions (./studio.mjs),
- * among them r10.0.0, which only Studio holds. The dashboard's own trigger
- * summarises the sittings, as in production, registering r10.0.0 from Studio's
- * copy when it meets the first sitting under it. Nothing here is participant data.
+ * among them r10.0.0, which only Studio holds; a second survey of the YBM
+ * study, a follow-up some of the same children sat; and a second study space,
+ * "Perspectives of the future", with its own survey and children (docs/12).
+ * The dashboard's own trigger summarises the sittings, as in production,
+ * registering each version from Studio's copy in its own study when it meets
+ * the first sitting under it. Nothing here is participant data.
  *
  * Emulator hosts come from FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST
  * (set by `firebase emulators:exec`); the study from MYSELF_STUDY (default ybm).
@@ -16,8 +19,8 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { indexRelease } from "@myself-dashboard/core";
 import { verifyManifestHash } from "@myself-dashboard/core/node";
-import { mystoryRelease, MYSTORY_DAY, studioDocuments } from "./studio.mjs";
-import { generateYbmStudy, SCHOOLS } from "./ybm-study.mjs";
+import { FOLLOW_UP_DAY, followUpRelease, FUTURE, FUTURE_DAYS, futureRelease, futureStudyDocuments, mystoryRelease, MYSTORY_DAY, studioDocuments } from "./studio.mjs";
+import { generateSittings, generateYbmStudy, SCHOOLS } from "./ybm-study.mjs";
 
 const PROJECT = process.env.GCLOUD_PROJECT ?? "demo-myself-dashboard";
 const STUDY = process.env.MYSELF_STUDY ?? "ybm";
@@ -62,11 +65,22 @@ for (const db of ["(default)", "dashboard"]) await fetch(`http://${FS}/emulator/
 await putRules("dashboard", readFileSync(new URL("../../firestore/dashboard.rules", import.meta.url), "utf8"));
 await putRules("(default)", "rules_version = '2';\nservice cloud.firestore { match /databases/{database}/documents { match /{d=**} { allow read, write: if false; } } }\n");
 
-// r10.0.0, published in Studio on 1 October, is not registered here: the dashboard meets it in its sittings.
+// r10.0.0, published in Studio on 1 October, and the follow-up survey, published on the 3rd, are
+// not registered here: the dashboard meets them in their sittings. Twelve children sit the follow-up.
 const mystory = mystoryRelease(OWNER.email);
-const { sittings, releases } = generateYbmStudy({ study: STUDY, later: [{ manifest: mystory, day: MYSTORY_DAY, count: 3 }] });
+const followUp = followUpRelease(OWNER.email);
+const future = futureRelease(OWNER.email);
+const { sittings, releases } = generateYbmStudy({
+  study: STUDY,
+  later: [
+    { manifest: mystory, day: MYSTORY_DAY, count: 3 },
+    { manifest: followUp, day: FOLLOW_UP_DAY, count: 12, reuse: true },
+  ],
+});
+const futureSittings = generateSittings({ study: FUTURE.study, manifest: future, ...FUTURE_DAYS, count: 14, seed: 20261004, sites: ["EST", "CTY"] });
 const r9 = indexRelease(releases.at(-1));
-await dash.doc("config/access").set({ emails: [OWNER.email], domains: ["brainpop.example"] });
+// defaultStudy: the security rules learn the default study from here (docs/12 §12.4).
+await dash.doc("config/access").set({ emails: [OWNER.email], domains: ["brainpop.example"], defaultStudy: STUDY });
 await dash.doc("config/policy").set({ abandonAfterHours: 24, testCodePatterns: ["^TST", "^ZZZ"], requiredLevels: ["hard", "soft"], reviewerCanViewFreeText: false, exportRetentionHours: 24, timeZone: "Europe/London", tooFastWarningCount: 10, activeReleaseHash: r9.hash });
 await dash.doc("config/groups").set({ schools: SCHOOLS, minCell: 5, updatedAt: FieldValue.serverTimestamp(), updatedBy: "demo-seed" }, { merge: true });
 for (const m of releases) {
@@ -85,27 +99,34 @@ const colleague = await googleUser(COLLEAGUE.email);
 await getAuth(app).setCustomUserClaims(colleague, { role: COLLEAGUE.role });
 
 // Studio's records first: a sitting under r10.0.0 is read through Studio's copy of it.
-for (const [path, data] of studioDocuments({ study: STUDY, owner: { uid: owner, email: OWNER.email }, colleague: { uid: colleague, email: COLLEAGUE.email }, mystory })) {
+for (const [path, data] of studioDocuments({ study: STUDY, owner: { uid: owner, email: OWNER.email }, colleague: { uid: colleague, email: COLLEAGUE.email }, mystory, followUp })) {
   await research.doc(path).set(data);
 }
+// The second study space, as the Studio leaves it, and who else may see it in the dashboard: the colleague.
+for (const [path, data] of futureStudyDocuments({ owner: { uid: owner, email: OWNER.email }, release: future })) await research.doc(path).set(data);
+await dash.doc(`studies/${FUTURE.study}/config/access`).set({ emails: [COLLEAGUE.email], domains: [], updatedAt: FieldValue.serverTimestamp(), updatedBy: owner, updatedByEmail: OWNER.email });
 
-for (let i = 0; i < sittings.length; i += 10) {
+// Each sitting in its own study's sessions, as saveSitting files it.
+const everyone = [...sittings, ...futureSittings];
+for (let i = 0; i < everyone.length; i += 10) {
   const batch = research.batch();
-  for (const s of sittings.slice(i, i + 10)) batch.set(research.doc(`studies/${STUDY}/sessions/${s.sessionId}`), s);
+  for (const s of everyone.slice(i, i + 10)) batch.set(research.doc(`studies/${s.study}/sessions/${s.sessionId}`), s);
   await batch.commit();
   process.stdout.write(".");
 }
 
-const deadline = Date.now() + 180_000;
-let n = 0;
-while (Date.now() < deadline) {
-  n = (await dash.collection(`studies/${STUDY}/sessionSummaries`).count().get()).data().count;
-  if (n >= sittings.length) break;
-  await new Promise((r) => setTimeout(r, 1000));
-}
-if (n < sittings.length) {
-  console.error(`only ${n} of ${sittings.length} sittings were summarised — is the Functions emulator running?`);
-  process.exit(1);
+for (const [study, expected] of [[STUDY, sittings.length], [FUTURE.study, futureSittings.length]]) {
+  const deadline = Date.now() + 180_000;
+  let n = 0;
+  while (Date.now() < deadline) {
+    n = (await dash.collection(`studies/${study}/sessionSummaries`).count().get()).data().count;
+    if (n >= expected) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (n < expected) {
+    console.error(`only ${n} of ${expected} sittings in ${study} were summarised — is the Functions emulator running?`);
+    process.exit(1);
+  }
 }
 
 // Two sittings a colleague has already looked at, with a note each, in the shape updateReview/addNote write.
@@ -131,10 +152,14 @@ for (const [s, reason, note] of flagged) {
   }
 }
 
-const adopted = await dash.doc(`studies/${STUDY}/releases/${mystory.hash}`).get();
-if (adopted.get("provenance.source") !== "studio") {
-  console.error("r10.0.0 was not registered from MySelf Studio's copy — is the Functions emulator running this build?");
-  process.exit(1);
+for (const [study, m] of [[STUDY, mystory], [STUDY, followUp], [FUTURE.study, future]]) {
+  const adopted = await dash.doc(`studies/${study}/releases/${m.hash}`).get();
+  if (adopted.get("provenance.source") !== "studio") {
+    console.error(`${m.release.key} was not registered in ${study} from MySelf Studio's copy — is the Functions emulator running this build?`);
+    process.exit(1);
+  }
 }
-console.log(`seeded ${sittings.length} made-up sittings (${[...releases, mystory].map((r) => indexRelease(r).version).join(", ")}; 10.0.0 registered from Studio) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+console.log(
+  `seeded ${sittings.length} made-up sittings in ${STUDY} (${[...releases, mystory].map((r) => indexRelease(r).version).join(", ")}, and the follow-up 1.0.0) and ${futureSittings.length} in ${FUTURE.study}; Studio's versions registered in their own studies; ${((Date.now() - t0) / 1000).toFixed(1)} s`,
+);
 process.exit(0);

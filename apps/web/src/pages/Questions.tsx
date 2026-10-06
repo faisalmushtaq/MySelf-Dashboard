@@ -14,7 +14,7 @@ import { useLoad } from "../lib/hooks";
 import { int, pct } from "../lib/format";
 import { useFilters, sessionsLink } from "../app/filters";
 import { FilterBar } from "../app/FilterControls";
-import { useStudyData } from "../app/data";
+import { useStudyData, useSurveyReleases } from "../app/data";
 import { PageHeader } from "../components/Metric";
 import { EmptyState, ErrorState, Loading, Notice, Skeleton } from "../components/States";
 import { Icon } from "../components/Icon";
@@ -45,7 +45,9 @@ function CompatBadge({ c }: { c: Compatibility }) {
  */
 export default function Questions() {
   const { filters, params, setParams } = useFilters();
-  const { byNewest, activeRelease, releasesLoaded } = useStudyData();
+  const { releasesLoaded } = useStudyData();
+  // The versions of the chosen survey: a question is followed within its own survey.
+  const { byNewest, activeRelease } = useSurveyReleases();
   const chosen = params.get("qv") ?? (filters.versions.length === 1 && filters.versions[0] !== "unknown" ? filters.versions[0]! : activeRelease?.hash ?? "");
   const idx = byNewest.findIndex((r) => r.hash === chosen);
   const defaultCompare = idx >= 0 ? byNewest[idx + 1]?.hash ?? "" : "";
@@ -313,6 +315,7 @@ function QuestionDetail({ stat: s, link, onHistory, changeDetails }: { stat: Que
 }
 
 function HistoryDialog({ questionKey, onClose }: { questionKey: string | null; onClose: () => void }) {
+  const { filters } = useFilters();
   const [data, setData] = useState<QuestionHistoryResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -321,13 +324,14 @@ function HistoryDialog({ questionKey, onClose }: { questionKey: string | null; o
     setData(null);
     setErr(null);
     api
-      .getQuestionHistory({ key: questionKey })
+      .getQuestionHistory({ key: questionKey, filters })
       .then((d) => !cancelled && setData(d))
       .catch((e) => !cancelled && setErr(explain(e).message));
     return () => {
       cancelled = true;
     };
-  }, [questionKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionKey, filters.surveys.join()]);
   const entries = data ? [...data.entries].sort((a, b) => compareVersions(b.version, a.version)) : [];
   return (
     <Dialog open={questionKey !== null} onClose={onClose} title={`History of ${questionKey ?? ""}`} wide>

@@ -56,6 +56,7 @@ const SESSION_HEADERS = [
   "study_code",
   "device_id",
   "site",
+  "survey",
   "release_version",
   "release_key",
   "release_hash",
@@ -95,6 +96,7 @@ function sessionCells(rec: SessionRecord, spec: ExportSpec, tz: string): Record<
     study_code: spec.includeStudyCode ? s.studyCode : null,
     device_id: spec.deidentified ? null : s.deviceId,
     site: s.site,
+    survey: r.survey ?? null,
     release_version: s.releaseVersion,
     release_key: s.releaseKey,
     release_hash: s.releaseHash,
@@ -181,7 +183,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
 
   const releases = [...new Map(records.filter((r) => r.release).map((r) => [r.release!.hash, r.release!])).values()];
   if (spec.layout === "long") {
-    const longHeaders = ["session_id", spec.deidentified ? "participant_label" : "participant_code", "wave", ...(spec.includeStudyCode ? ["study_code"] : []), "release_version", "question_key", "name", "question_label", "variable", "section", "required", "outcome", "value", "label", "responded_at", "changed", "too_fast"];
+    const longHeaders = ["session_id", spec.deidentified ? "participant_label" : "participant_code", "wave", ...(spec.includeStudyCode ? ["study_code"] : []), "survey", "release_version", "question_key", "name", "question_label", "variable", "section", "required", "outcome", "value", "label", "responded_at", "changed", "too_fast"];
     const rows: CsvValue[][] = [];
     for (const rec of records) {
       if (!rec.assessment || !rec.release) continue;
@@ -195,6 +197,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
           rec.participant ?? null,
           rec.wave ?? null,
           ...(spec.includeStudyCode ? [rec.row.summary.studyCode] : []),
+          rec.row.survey ?? rec.release.survey,
           rec.release.version,
           o.key,
           q.name,

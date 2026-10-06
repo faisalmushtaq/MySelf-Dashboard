@@ -21,7 +21,7 @@ import {
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { actorFields, audit, auditIn } from "../audit.js";
-import { requireActor } from "../authz.js";
+import { requireStudyActor } from "../authz.js";
 import { dash } from "../env.js";
 import { dpaths } from "../paths.js";
 import { effectiveSchemes, invalidateScoring, savedSchemes, schemeChecks, scoredSessions, studyGroupSettings } from "../scoring.js";
@@ -45,7 +45,7 @@ function focusArg(raw: unknown): ScoreFocus | null {
 const pickOne = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => (typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback);
 
 export const getScores = onCall({ ...callableOptions, memory: "2GiB", timeoutSeconds: 300 }, async (request): Promise<ScoresView> => {
-  const actor = await requireActor(request);
+  const actor = await requireStudyActor(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const filters = sanitiseFilters(data["filters"]);
   const observation = pickOne<Observation>(data["observation"], OBSERVATIONS, "latest");
@@ -61,7 +61,7 @@ export const getScores = onCall({ ...callableOptions, memory: "2GiB", timeoutSec
   }
 
   const now = new Date();
-  const [{ sessions, schemes, settings, releases }, { rows }] = await Promise.all([scoredSessions(draft ? { schemes: [draft] } : {}), currentRows(now)]);
+  const [{ sessions, schemes, settings, releases }, { rows }] = await Promise.all([scoredSessions(actor.study, draft ? { schemes: [draft] } : {}), currentRows(actor.study, now)]);
   const allowed = new Set(rows.filter(makePredicate(filters, { now, timeZone: actor.policy.timeZone })).map((r) => r.summary.sessionId));
   return buildScoresView(
     sessions.filter((s) => allowed.has(s.sessionId)),
@@ -70,13 +70,13 @@ export const getScores = onCall({ ...callableOptions, memory: "2GiB", timeoutSec
 });
 
 export const getScoringSettings = onCall({ ...callableOptions, memory: "1GiB" }, async (request): Promise<ScoringSettingsView> => {
-  const actor = await requireActor(request);
-  const [saved, schemes, { sessions, settings, releases }] = await Promise.all([savedSchemes(true), effectiveSchemes(true), scoredSessions({ fresh: true })]);
+  const actor = await requireStudyActor(request);
+  const [saved, schemes, { sessions, settings, releases }] = await Promise.all([savedSchemes(actor.study, true), effectiveSchemes(actor.study, true), scoredSessions(actor.study, { fresh: true })]);
   const checks = schemeChecks(schemes, releases);
   const histories = await Promise.all(
     schemes.map(async (s) => {
       if (!saved.has(s.key)) return [];
-      const snap = await dash().collection(dpaths.scoringSchemeVersions(s.key)).get();
+      const snap = await dash().collection(dpaths.scoringSchemeVersions(actor.study, s.key)).get();
       return snap.docs
         .map((d) => {
           const x = d.data();
@@ -131,13 +131,13 @@ const reasonArg = (raw: unknown) => {
 
 /** Save a new version of a scheme. Every version is kept; nothing is overwritten. */
 export const saveScoringScheme = onCall(callableOptions, async (request): Promise<{ key: string; version: string }> => {
-  const actor = await requireActor(request, "settings.policy");
+  const actor = await requireStudyActor(request, "settings.policy");
   const data = (request.data ?? {}) as Partial<SaveSchemeRequest>;
   const reason = reasonArg(data.reason);
   const parsed = parseScheme(data.scheme);
   if ("errors" in parsed) throw new HttpsError("invalid-argument", parsed.errors.slice(0, 8).join("\n"));
   const next = parsed.scheme;
-  const current = (await effectiveSchemes(true)).find((s) => s.key === next.key) ?? null;
+  const current = (await effectiveSchemes(actor.study, true)).find((s) => s.key === next.key) ?? null;
   if (current && compareVersions(next.version, current.version) <= 0) {
     throw new HttpsError("failed-precondition", `Version ${next.version} is not newer than the current ${current.version}. Give the change a higher version.`);
   }
@@ -153,10 +153,10 @@ export const saveScoringScheme = onCall(callableOptions, async (request): Promis
   const doc = { schemeJson: JSON.stringify(scheme), version: scheme.version, savedAt: FieldValue.serverTimestamp(), savedBy: actor.email, reason };
   const db = dash();
   await db.runTransaction(async (tx) => {
-    const versionRef = db.doc(`${dpaths.scoringSchemeVersions(scheme.key)}/${scheme.version}`);
+    const versionRef = db.doc(`${dpaths.scoringSchemeVersions(actor.study, scheme.key)}/${scheme.version}`);
     if ((await tx.get(versionRef)).exists) throw new HttpsError("already-exists", `Version ${scheme.version} of ${scheme.key} already exists.`);
     tx.create(versionRef, doc);
-    tx.set(db.doc(dpaths.scoringScheme(scheme.key)), doc);
+    tx.set(db.doc(dpaths.scoringScheme(actor.study, scheme.key)), doc);
     auditIn(tx, {
       action: "scoring.changed",
       ...actorFields(actor),
@@ -169,13 +169,13 @@ export const saveScoringScheme = onCall(callableOptions, async (request): Promis
 });
 
 export const saveGroupSettings = onCall(callableOptions, async (request): Promise<{ ok: true }> => {
-  const actor = await requireActor(request, "settings.policy");
+  const actor = await requireStudyActor(request, "settings.policy");
   const data = (request.data ?? {}) as Record<string, unknown>;
   const reason = reasonArg(data["reason"]);
   const parsed = groupSettings.safeParse(data["settings"]);
   if (!parsed.success) throw new HttpsError("invalid-argument", parsed.error.issues.slice(0, 8).map((i) => `${i.path.join(".")}: ${i.message}`).join("\n"));
-  const before = await studyGroupSettings(true);
-  await dash().doc(dpaths.groupsConfig()).set({ ...parsed.data, updatedAt: FieldValue.serverTimestamp(), updatedBy: actor.email });
+  const before = await studyGroupSettings(actor.study, true);
+  await dash().doc(dpaths.groupsConfig(actor.study)).set({ ...parsed.data, updatedAt: FieldValue.serverTimestamp(), updatedBy: actor.email });
   await audit({
     action: "groups.changed",
     ...actorFields(actor),
@@ -189,6 +189,6 @@ export const saveGroupSettings = onCall(callableOptions, async (request): Promis
       minCell: { before: before.minCell, after: parsed.data.minCell },
     },
   });
-  invalidateScoring({ dataset: before.yearGroup.startMonth !== parsed.data.yearGroup.startMonth });
+  invalidateScoring({ dataset: before.yearGroup.startMonth !== parsed.data.yearGroup.startMonth, study: actor.study });
   return { ok: true };
 });

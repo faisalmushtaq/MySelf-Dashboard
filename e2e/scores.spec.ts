@@ -34,7 +34,7 @@ test("a researcher reads scores against thresholds and benchmarks, and makes a s
   await dialog.getByRole("button", { name: "Generate export" }).click();
   await expect(dialog.getByText(/is ready/)).toBeVisible({ timeout: 60_000 });
   const [pdf] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Download" }).click()]);
-  expect(pdf.suggestedFilename()).toMatch(/^myself_school-report-ndc_.*\.pdf$/);
+  expect(pdf.suggestedFilename()).toMatch(/^myself_demo_school-report-ndc_.*\.pdf$/);
   expect(readFileSync((await pdf.path())!).subarray(0, 5).toString()).toBe("%PDF-");
 });
 

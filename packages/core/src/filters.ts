@@ -4,6 +4,7 @@ import { REVIEW_STATUSES, type ReviewStatus } from "./review.js";
 import { DISPLAY_STATUSES, matchesStatus, type DerivedStatus, type DisplayStatus } from "./status.js";
 import { outcomeOf, type SessionSummary } from "./summary.js";
 import type { ReviewDoc } from "./review.js";
+import { isSurveyId } from "./vendor/myself/schema/link.js";
 
 /**
  * The global filter model: one shape for the URL, saved views, the backend
@@ -45,6 +46,12 @@ export interface FilterState {
   statuses: DisplayStatus[];
   completionMin?: number;
   completionMax?: number;
+  /**
+   * Surveys of the study (Studio survey ids). A sitting's survey is its release's
+   * `release.assessment` (docs/12 §12.6); a sitting whose version is not
+   * registered belongs to none, so a survey filter leaves it out.
+   */
+  surveys: string[];
   /** Release hashes; `unknown` matches sittings whose version is not in the registry. */
   versions: string[];
   sites: string[];
@@ -71,6 +78,7 @@ export const DEFAULT_FILTERS: FilterState = {
   datePreset: "all",
   dateBasis: "started",
   statuses: [],
+  surveys: [],
   versions: [],
   sites: [],
   sources: [],
@@ -109,6 +117,8 @@ export interface SessionRow {
   summary: SessionSummary;
   review: ReviewDoc | null;
   status: DerivedStatus;
+  /** The survey the sitting's release belongs to, when its release is registered (`buildRows`). */
+  survey?: string | null;
 }
 
 const list = (v: string | null): string[] => (v ? v.split(",").map((s) => decodeURIComponent(s)).filter(Boolean) : []);
@@ -137,6 +147,7 @@ export function filtersToParams(f: FilterState, params = new URLSearchParams()):
   if (f.statuses.length) params.set("st", joinList(f.statuses));
   if (f.completionMin !== undefined) params.set("cmin", String(f.completionMin));
   if (f.completionMax !== undefined) params.set("cmax", String(f.completionMax));
+  if (f.surveys.length) params.set("sv", joinList(f.surveys));
   if (f.versions.length) params.set("v", joinList(f.versions));
   if (f.sites.length) params.set("site", joinList(f.sites));
   if (f.sources.length) params.set("src", joinList(f.sources));
@@ -160,6 +171,7 @@ export function filtersFromParams(p: URLSearchParams): FilterState {
     datePreset: oneOf(p.get("d"), DATE_PRESETS, DEFAULT_FILTERS.datePreset),
     dateBasis: oneOf(p.get("basis"), DATE_BASES, DEFAULT_FILTERS.dateBasis),
     statuses: someOf(p.get("st"), DISPLAY_STATUSES),
+    surveys: list(p.get("sv")).filter(isSurveyId),
     versions: list(p.get("v")).filter((v) => v === UNKNOWN_VERSION || /^sha256:[0-9a-f]{64}$/.test(v)),
     sites: list(p.get("site")).filter((s) => /^[A-Za-z]{1,10}$/.test(s)).map((s) => s.toUpperCase()),
     sources: list(p.get("src")).filter((s) => /^[a-z_]{1,20}$/.test(s)),
@@ -223,6 +235,7 @@ export function sanitiseFilters(raw: unknown): FilterState {
   put("st", r["statuses"]);
   put("cmin", r["completionMin"]);
   put("cmax", r["completionMax"]);
+  put("sv", r["surveys"]);
   put("v", r["versions"]);
   put("site", r["sites"]);
   put("src", r["sources"]);
@@ -278,6 +291,7 @@ export function rangeFor(f: FilterState, ctx: FilterContext): ResolvedRange {
  */
 export function makePredicate(f: FilterState, ctx: FilterContext, options: { ignoreDate?: boolean } = {}): (row: SessionRow) => boolean {
   const range = rangeFor(f, ctx);
+  const surveys = new Set(f.surveys);
   const versions = new Set(f.versions);
   const sites = new Set(f.sites);
   const sources = new Set(f.sources);
@@ -299,6 +313,7 @@ export function makePredicate(f: FilterState, ctx: FilterContext, options: { ign
       const pct = s.requiredCompletion * 100;
       if (pct < cmin - 1e-9 || pct > cmax + 1e-9) return false;
     }
+    if (surveys.size && !(row.survey && surveys.has(row.survey))) return false;
     if (versions.size) {
       const v = s.releaseKnown && s.releaseHash ? s.releaseHash : UNKNOWN_VERSION;
       if (!versions.has(v)) return false;
@@ -330,7 +345,7 @@ export function makePredicate(f: FilterState, ctx: FilterContext, options: { ign
 /** Human-readable list of active filters, for chips, export previews and audit rows. */
 export function describeFilters(
   f: FilterState,
-  labels: { version?: (hash: string) => string; question?: (key: string) => string; section?: (key: string) => string } = {},
+  labels: { version?: (hash: string) => string; survey?: (id: string) => string; question?: (key: string) => string; section?: (key: string) => string } = {},
 ): { key: keyof FilterState | "date"; label: string }[] {
   const out: { key: keyof FilterState | "date"; label: string }[] = [];
   if (f.datePreset !== "all") {
@@ -341,6 +356,7 @@ export function describeFilters(
   if (f.completionMin !== undefined || f.completionMax !== undefined) {
     out.push({ key: "completionMin", label: `Completion ${f.completionMin ?? 0}–${f.completionMax ?? 100}%` });
   }
+  if (f.surveys.length) out.push({ key: "surveys", label: `Survey: ${f.surveys.map((v) => labels.survey?.(v) ?? v).join(", ")}` });
   if (f.versions.length) out.push({ key: "versions", label: `Version: ${f.versions.map((v) => labels.version?.(v) ?? v.slice(7, 19)).join(", ")}` });
   if (f.sites.length) out.push({ key: "sites", label: `Site: ${f.sites.join(", ")}` });
   if (f.sources.length) out.push({ key: "sources", label: `Source: ${f.sources.join(", ")}` });

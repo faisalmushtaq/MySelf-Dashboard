@@ -72,6 +72,10 @@ directly gets exactly what the rules tests say, and no more.
   `authDomain` is set to the dashboard's own Hosting domain so the auth handler is
   same-origin (third-party-cookie safe; the reason is the same one `docs/13` §5.2 gives
   for the lab).
+- **Which studies** a dashboard user sees: every study for an Administrator; the
+  default study for everyone; another study when its own list names them. Checked
+  by the backend on every call and by the rules on every read under
+  `studies/{study}/` ([12 §12.4](12-studies-and-surveys.md)).
 - **Who is a dashboard user:** a Google account that (1) has a verified email,
   (2) signed in with the `google.com` provider, (3) carries a `role` custom claim, and
   (4) whose email is on the **access policy** — an explicit allowlist
@@ -101,16 +105,19 @@ directly gets exactly what the rules tests say, and no more.
 
 ## 2.3 Data model in the `dashboard` database
 
-All study data is nested under `studies/{study}` (the survey is one study per project,
-`ybm`); configuration is global.
+All study data is nested under `studies/{study}`, one space per study the survey
+runs in the project (`ybm`, and any study space created in MySelf Studio;
+[12-studies-and-surveys.md](12-studies-and-surveys.md)); the dashboard's access list
+is global, and the default study's settings stay in `config/`.
 
 ```
-config/access                         { emails[], domains[], updatedAt, updatedBy }
+config/access                         { emails[], domains[], defaultStudy, updatedAt, updatedBy }
 config/policy                         { abandonAfterHours, testCodePatterns[],
                                         reviewerCanViewFreeText, exportRetentionHours,
                                         timeZone, tooFastWarningCount }
 users/{uid}                           { email, role, lastSignInAt } (mirror, for admin UI)
 studies/{study}/
+  config/access, policy, groups       another study's own access list and settings (docs/12 §12.3)
   releases/{releaseHash}              { key, version, publishedAt, manifestJson, verified,
                                         provenance? (a version registered from MySelf Studio) }
   sessionSummaries/{sessionId}        de-identified, derived; backend-only

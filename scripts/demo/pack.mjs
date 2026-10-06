@@ -17,10 +17,11 @@ rmSync(DATA, { recursive: true, force: true });
 mkdirSync(new URL("calls/", DATA), { recursive: true });
 
 const study = recording.study;
-const webReads = [`studies/${study}/releases/`, `studies/${study}/exportJobs/`, `studies/${study}/auditLog/`, `studies/${study}/savedViews/`, `studies/${study}/meta/`];
+// What the web app reads itself, in every study (docs/12).
+const webReads = /^studies\/[a-z][a-z0-9_]*\/(releases|exportJobs|auditLog|savedViews|meta)\//;
 const firestore = {};
 const live = {};
-for (const [path, value] of Object.entries(recording.firestore)) (webReads.some((p) => path.startsWith(p)) ? firestore : live)[path] = value;
+for (const [path, value] of Object.entries(recording.firestore)) (webReads.test(path) ? firestore : live)[path] = value;
 writeFileSync(new URL("firestore.json", DATA), JSON.stringify({ study, uid: recording.uid, email: recording.email, documents: firestore }));
 writeFileSync(new URL("live.json", DATA), JSON.stringify({ documents: live }));
 

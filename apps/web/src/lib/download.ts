@@ -1,15 +1,19 @@
 import { downloadUrl, firebase } from "./firebase";
+import { currentStudy } from "./study";
 
 /**
  * Fetch an export through the authenticated endpoint and hand it to the browser
  * as a file. The file never has a public URL: the request carries the current ID
- * token and the server checks it, the caller's role and the export's owner.
+ * token and the server checks it, the caller's role, their access to the study
+ * the export was made in (the one on screen) and the export's owner.
  */
 export async function downloadExport(jobId: string, fileName: string): Promise<void> {
   const user = firebase().auth.currentUser;
   if (!user) throw new Error("Sign in again to download this export.");
   const token = await user.getIdToken();
-  const res = await fetch(downloadUrl(jobId), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", referrerPolicy: "no-referrer" });
+  const study = currentStudy();
+  if (!study) throw new Error("Choose a study first.");
+  const res = await fetch(downloadUrl(jobId, study), { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", referrerPolicy: "no-referrer" });
   if (!res.ok) {
     let message = `The download was refused (${res.status}).`;
     try {

@@ -17,11 +17,14 @@ export function buildRows(
   reviews: ReadonlyMap<string, ReviewDoc>,
   policy: Policy,
   now: Date,
+  options: { surveyOf?: (releaseHash: string) => string | null | undefined } = {},
 ): SessionRow[] {
   const rows: SessionRow[] = [];
   for (const summary of summaries) {
     const review = reviews.get(summary.sessionId) ?? null;
-    rows.push({ summary, review, status: deriveStatus(summary, review, policy, now) });
+    // A sitting's survey is its release's, so a sitting under an unregistered version has none (docs/12 §12.6).
+    const survey = summary.releaseKnown && summary.releaseHash ? (options.surveyOf?.(summary.releaseHash) ?? null) : null;
+    rows.push({ summary, review, status: deriveStatus(summary, review, policy, now), survey });
   }
   return rows;
 }

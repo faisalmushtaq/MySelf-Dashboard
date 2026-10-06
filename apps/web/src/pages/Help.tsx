@@ -17,6 +17,15 @@ export function HelpContent() {
   return (
     <div className="help">
       <section>
+        <h3>Studies and surveys</h3>
+        <p>
+          A <strong>study</strong> is a study space in MySelf Studio, with its own sittings, access and records; the one you are working in is chosen at the
+          top of the screen, and everything you see, save, export and review is that study&apos;s. A <strong>survey</strong> is one of a study&apos;s Studio
+          surveys, each with its own participant link and versions. &ldquo;All surveys&rdquo; is the default; choosing one counts only its sittings, by the same
+          rules the survey&apos;s researcher view counts them, and participants stay linked across the whole study.
+        </p>
+      </section>
+      <section>
         <h3>Completeness</h3>
         <p>
           Every session is judged against the survey version the participant actually received. A question counts as <strong>required</strong> when its

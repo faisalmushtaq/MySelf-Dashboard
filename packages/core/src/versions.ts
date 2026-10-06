@@ -31,6 +31,8 @@ export interface MyStoryFacts {
 export interface ManifestFacts {
   engineVersion: string | null;
   myStory: MyStoryFacts | null;
+  /** The survey it is a version of: `release.assessment`. */
+  survey: string | null;
 }
 
 /** One stretch of time a version was the one the iPads were sent to. */
@@ -62,6 +64,8 @@ export interface SittingCounts {
 export interface SurveyVersionView extends SittingCounts {
   /** Studio's survey, or null for a version only the dashboard's registry knows. */
   surveyId: string | null;
+  /** The survey it is a version of: Studio's, or else the one its manifest names (docs/12 §12.8). */
+  survey: string | null;
   version: string;
   releaseKey: string;
   hash: string;
@@ -197,8 +201,12 @@ export function myStoryOf(raw: unknown): MyStoryFacts | null {
 }
 
 export function manifestFacts(raw: unknown): ManifestFacts {
-  const release = (raw as { release?: { engineVersion?: unknown } } | null)?.release;
-  return { engineVersion: typeof release?.engineVersion === "string" ? release.engineVersion : null, myStory: myStoryOf(raw) };
+  const release = (raw as { release?: { engineVersion?: unknown; assessment?: unknown } } | null)?.release;
+  return {
+    engineVersion: typeof release?.engineVersion === "string" ? release.engineVersion : null,
+    myStory: myStoryOf(raw),
+    survey: typeof release?.assessment === "string" && release.assessment ? release.assessment : null,
+  };
 }
 
 export const myStoryLabel = (m: MyStoryFacts | null): string => (m ? `${m.protocol}${m.protocolVersion ? `@${m.protocolVersion}` : ""}` : "");
@@ -269,7 +277,9 @@ export function versionHistory(input: VersionHistoryInput): SurveyVersionsRespon
   const seen = new Set<string>();
   const factsOf = (hash: string) => {
     const f = input.facts.get(hash);
-    return f && "problem" in f ? { engineVersion: null, myStory: null, problem: f.problem } : { engineVersion: f?.engineVersion ?? null, myStory: f?.myStory ?? null, problem: null };
+    return f && "problem" in f
+      ? { engineVersion: null, myStory: null, survey: null, problem: f.problem }
+      : { engineVersion: f?.engineVersion ?? null, myStory: f?.myStory ?? null, survey: f?.survey ?? null, problem: null };
   };
 
   for (const survey of input.studio) {
@@ -284,6 +294,7 @@ export function versionHistory(input: VersionHistoryInput): SurveyVersionsRespon
       const f = factsOf(v.hash);
       versions.push({
         surveyId: survey.surveyId,
+        survey: survey.surveyId,
         version: v.version,
         releaseKey: v.releaseKey,
         hash: v.hash,
@@ -315,6 +326,7 @@ export function versionHistory(input: VersionHistoryInput): SurveyVersionsRespon
     const f = factsOf(r.hash);
     versions.push({
       surveyId: null,
+      survey: f.survey,
       version: r.version,
       releaseKey: r.releaseKey,
       hash: r.hash,

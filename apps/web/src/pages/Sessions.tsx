@@ -24,7 +24,7 @@ export default function Sessions() {
   const announce = useAnnounce();
   const navigate = useNavigate();
   const location = useLocation();
-  const { versionLabel, byNewest } = useStudyData();
+  const { versionLabel, byNewest, surveyTitle } = useStudyData();
   const [search, setSearch] = useSessionState("sessions.search", "");
   const debounced = useDebounced(search, 300);
   const [prefCols, setPrefCols] = usePreference<string[]>("sessions.columns", DEFAULT_COLS);
@@ -283,7 +283,7 @@ export default function Sessions() {
                   </td>
                   {visible.map((c) => (
                     <td key={c.id} className={c.numeric ? "num" : undefined}>
-                      {c.render(s, { versionLabel })}
+                      {c.render(s, { versionLabel, surveyTitle })}
                     </td>
                   ))}
                   <td>

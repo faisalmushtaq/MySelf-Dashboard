@@ -9,7 +9,10 @@
  *   4. create Google-provider accounts for each role (and one stranger);
  *   5. write synthetic sittings into the survey database — the dashboard's
  *      `onSessionWritten` trigger (running in the Functions emulator) summarises
- *      them, exactly as it would in production — and wait for it to finish.
+ *      them, exactly as it would in production — and wait for it to finish;
+ *   6. a second study space, "pilot" (docs/12): registered as the Studio would,
+ *      with two Studio-published surveys and a few sittings under each, which
+ *      the researcher may see and the reviewer may not.
  *
  * Run by `pnpm test:e2e` inside `firebase emulators:exec`, or by hand after
  * `pnpm dev:emulators`.
@@ -18,7 +21,7 @@ import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import { demoManifest, DEMO_VERSIONS, generateDemoSittings, verifyManifestHash } from "@myself-dashboard/core/node";
+import { contentHash, demoManifest, DEMO_VERSIONS, generateDemoSittings, verifyManifestHash } from "@myself-dashboard/core/node";
 import { indexRelease } from "@myself-dashboard/core";
 
 const PROJECT = "demo-myself-dashboard";
@@ -71,7 +74,8 @@ for (const db of ["(default)", "dashboard"]) await fetch(`http://${FS}/emulator/
 await putRules("dashboard", readFileSync(new URL("../firestore/dashboard.rules", import.meta.url), "utf8"));
 await putRules("(default)", "rules_version = '2';\nservice cloud.firestore { match /databases/{database}/documents { match /{d=**} { allow read, write: if false; } } }\n");
 
-await dash.doc("config/access").set({ emails: [PEOPLE.admin.email], domains: ["brainpop.example"] });
+// defaultStudy: the security rules learn the default study from here (docs/12 §12.4).
+await dash.doc("config/access").set({ emails: [PEOPLE.admin.email], domains: ["brainpop.example"], defaultStudy: STUDY });
 await dash.doc("config/policy").set({ abandonAfterHours: 24, testCodePatterns: ["^TST", "^ZZZ"], requiredLevels: ["hard", "soft"], reviewerCanViewFreeText: false, exportRetentionHours: 24, timeZone: "Europe/London", tooFastWarningCount: 10, activeReleaseHash: null });
 
 for (const v of DEMO_VERSIONS) {
@@ -154,5 +158,60 @@ for (const [scenario, reason, note] of toFlag) {
   }
 }
 
-console.log(`seeded ${sittings.length} synthetic sittings across ${DEMO_VERSIONS.length} versions, summarised by the trigger, in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+// ── A second study space (docs/12) ──────────────────────────────────────────
+// As the Studio leaves one: its registry document, and two surveys published in it,
+// each a version of the synthetic questions under the pilot study's own ids.
+const PILOT = "pilot";
+const day = (iso) => new Date(iso);
+const pilotVersion = (surveyId, title) => {
+  const { hash, ...body } = structuredClone(demoManifest("2.0.0"));
+  void hash;
+  body.release = { ...body.release, study: PILOT, assessment: surveyId, key: `${surveyId}_r1_0_0`, version: "1.0.0", publishedAt: "2026-09-20T09:00:00.000Z" };
+  body.composition = { ...body.composition, key: surveyId, study: PILOT, title };
+  return { ...body, hash: contentHash(body) };
+};
+const pilotSurveys = [pilotVersion("pilot_main", "Pilot: main questionnaire"), pilotVersion("pilot_extra", "Pilot: extra questions")];
+await research.doc(`studies/${PILOT}`).set({ study: PILOT, title: "Pilot of the new questions", status: "open", createdAt: day("2026-09-18T09:00:00.000Z"), createdBy: uids.admin, updatedAt: day("2026-09-18T09:00:00.000Z"), updatedBy: uids.admin, closedAt: null });
+for (const m of pilotSurveys) {
+  const surveyId = m.release.assessment;
+  const manifest = JSON.stringify(m);
+  await research.doc(`studies/${PILOT}/surveys/${surveyId}`).set({ surveyId, study: PILOT, title: m.composition.title, createdAt: day("2026-09-18T09:00:00.000Z"), createdBy: uids.admin, active: null, latestVersion: "1.0.0", versionCount: 1, draftEditors: [] });
+  await research.doc(`studies/${PILOT}/surveys/${surveyId}/versions/1.0.0`).set({
+    surveyId, version: "1.0.0", hash: m.hash, releaseKey: m.release.key, engineVersion: m.release.engineVersion, releaseNote: "The pilot's first version", changeSummary: null, bump: null, itemKeys: [], variables: [],
+    source: "studio", draftRevision: 2, basedOnVersion: null, authors: [PEOPLE.admin.email], publishedAt: day(m.release.publishedAt), publishedBy: uids.admin, publishedByEmail: PEOPLE.admin.email, manifestPublishedAt: m.release.publishedAt,
+  });
+  await research.doc(`studies/${PILOT}/publicReleases/${m.hash.slice("sha256:".length)}`).set({ surveyId, study: PILOT, hash: m.hash, version: "1.0.0", releaseKey: m.release.key, engineVersion: m.release.engineVersion, manifest, bytes: manifest.length, publishedAt: day(m.release.publishedAt) });
+  await research.doc(`studies/${PILOT}/published/${surveyId}`).set({ surveyId, study: PILOT, hash: m.hash, version: "1.0.0", releaseKey: m.release.key, engineVersion: m.release.engineVersion, generation: 1, publishedAt: day(m.release.publishedAt) });
+}
+// Who else may see it: the researcher, by address. The reviewer may not.
+await dash.doc(`studies/${PILOT}/config/access`).set({ emails: [PEOPLE.researcher.email], domains: [], updatedAt: new Date(), updatedBy: uids.admin, updatedByEmail: PEOPLE.admin.email });
+const v2 = demoManifest("2.0.0").hash;
+const ordinary = sittings.filter((s) => s.doc.releaseHash === v2 && !s.doc.quarantined && ["complete", "complete_no_phone", "incomplete_skips"].includes(s.scenario));
+// e2e/studies.spec.ts counts these.
+const PILOT_SITTINGS = { pilot_main: 6, pilot_extra: 4 };
+if (ordinary.length < 10) throw new Error(`only ${ordinary.length} ordinary sittings under 2.0.0 to copy into the pilot study`);
+let taken = 0;
+const pilotDocs = [];
+for (const m of pilotSurveys) {
+  for (const s of ordinary.slice(taken, taken + PILOT_SITTINGS[m.release.assessment])) {
+    pilotDocs.push({ ...s.doc, sessionId: `${s.doc.sessionId}P`, study: PILOT, releaseHash: m.hash, releaseKey: m.release.key });
+  }
+  taken += PILOT_SITTINGS[m.release.assessment];
+}
+const pilotBatch = research.batch();
+for (const d of pilotDocs) pilotBatch.set(research.doc(`studies/${PILOT}/sessions/${d.sessionId}`), d);
+await pilotBatch.commit();
+const pilotDeadline = Date.now() + 60_000;
+let p = 0;
+while (Date.now() < pilotDeadline) {
+  p = (await dash.collection(`studies/${PILOT}/sessionSummaries`).count().get()).data().count;
+  if (p >= pilotDocs.length) break;
+  await new Promise((r) => setTimeout(r, 1000));
+}
+if (p < pilotDocs.length) {
+  console.error(`only ${p} of ${pilotDocs.length} pilot sittings were summarised — does the trigger summarise every registered study?`);
+  process.exit(1);
+}
+
+console.log(`seeded ${sittings.length} synthetic sittings across ${DEMO_VERSIONS.length} versions, and ${pilotDocs.length} in a second study, summarised by the trigger, in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exit(0);

@@ -20,6 +20,8 @@ import { SCHEME_STATUS_LABELS, type ScoringScheme } from "../scoring/scheme.js";
 
 export interface BidsExportInput {
   study: string;
+  /** The one survey of the study exported, when the export is of one (docs/12 §12.9). */
+  survey?: string | null;
   /** The whole study, derived once (see deriveStudyDataset). */
   studyData: StudyDataset;
   /** The sittings the researcher chose. */
@@ -116,7 +118,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
 
   const files = buildBidsExport(data, {
     manifest: input.manifest,
-    datasetName: `MySelf ${input.study}`,
+    datasetName: `MySelf ${input.study}${input.survey ? ` ${input.survey}` : ""}`,
     narratives: [...narratives],
     description: {
       GeneratedBy: [
@@ -195,7 +197,7 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
   const byReason = new Map<string, number>();
   for (const e of excluded) byReason.set(e.reason, (byReason.get(e.reason) ?? 0) + 1);
   const readme = [
-    `# MySelf ${input.study} — BIDS export`,
+    `# MySelf ${input.study}${input.survey ? ` (survey ${input.survey})` : ""} — BIDS export`,
     "",
     `Created ${p.createdAt} by ${p.createdBy} (${p.role}) from the MySelf Research Dashboard, export \`${p.exportId}\`.`,
     "",
@@ -261,6 +263,8 @@ export function buildDashboardBids(input: BidsExportInput): BidsExportResult {
     path: "export_manifest.json",
     content: json({
       exportId: p.exportId,
+      study: input.study,
+      survey: input.survey ?? null,
       createdAt: p.createdAt,
       createdBy: p.createdBy,
       role: p.role,

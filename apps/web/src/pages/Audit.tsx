@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { collection, getDocs, limit, orderBy, query, startAfter, Timestamp, where, type QueryConstraint, type QueryDocumentSnapshot } from "firebase/firestore";
-import { firebase, STUDY } from "../lib/firebase";
+import { firebase } from "../lib/firebase";
+import { studyPath } from "../lib/study";
 import { dateTime } from "../lib/format";
 import { useAuth } from "../app/auth";
 import { PageHeader } from "../components/Metric";
@@ -23,6 +24,7 @@ const ACTIONS: Record<string, string> = {
   "groups.changed": "Changed schools and year groups",
   "role.changed": "Changed a role",
   "access_policy.changed": "Changed the access list",
+  "study_access.changed": "Changed who may see this study",
   "policy.changed": "Changed study settings",
   "summaries.rebuilt": "Rebuilt summaries",
   "release.registered": "Registered a survey version",
@@ -66,7 +68,7 @@ export default function Audit() {
       constraints.push(orderBy("at", "desc"));
       if (after) constraints.push(startAfter(after));
       constraints.push(limit(50));
-      const snap = await getDocs(query(collection(firebase().db, `studies/${STUDY}/auditLog`), ...constraints));
+      const snap = await getDocs(query(collection(firebase().db, studyPath("auditLog")), ...constraints));
       const page = snap.docs.map((d) => {
         const x = d.data();
         return {
@@ -108,7 +110,11 @@ export default function Audit() {
 
   return (
     <div className="page">
-      <PageHeader title={everyone ? "Audit activity" : "My activity"} description={everyone ? "Every sign-in, session viewed, review change, export, download and administrative change. Entries cannot be edited or deleted." : "Your own recorded activity. Administrators can see everyone's."} />
+      <PageHeader title={everyone ? "Audit activity" : "My activity"} description={
+          everyone
+            ? "Every session viewed, review change, export, download and administrative change in this study; sign-ins, refusals, roles and the dashboard's access list are recorded in the default study's. Entries cannot be edited or deleted."
+            : "Your own recorded activity in this study. Administrators can see everyone's."
+        } />
       <div className="filter-row card">
         <label className="inline-select">
           Action

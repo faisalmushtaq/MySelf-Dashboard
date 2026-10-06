@@ -20,7 +20,8 @@ import {
 import { useLoad } from "../lib/hooks";
 import { api, explain } from "../lib/api";
 import { downloadExport } from "../lib/download";
-import { firebase, STUDY } from "../lib/firebase";
+import { firebase } from "../lib/firebase";
+import { studyPath } from "../lib/study";
 import { useDebounced } from "../lib/hooks";
 import { bytes, int } from "../lib/format";
 import { useAuth } from "../app/auth";
@@ -54,7 +55,11 @@ export interface ExportInitial {
 export function ExportDialog({ open, onClose, initial }: { open: boolean; onClose: () => void; initial: ExportInitial }) {
   const { can, me } = useAuth();
   const announce = useAnnounce();
-  const { byNewest, activeRelease } = useStudyData();
+  const { byNewest: all, activeRelease: studyActive, surveyOf } = useStudyData();
+  // A question-level summary is of one version: of the survey the export is filtered to, when it is.
+  const surveys = initial.filters.surveys;
+  const byNewest = surveys.length ? all.filter((r) => surveys.includes(surveyOf(r.hash) ?? "")) : all;
+  const activeRelease = byNewest.find((r) => r.hash === studyActive?.hash) ?? byNewest[0] ?? null;
   const rowLevel = can("export.sessions");
   const [kind, setKind] = useState<ExportKind>(initial.kind ?? (rowLevel ? "sessions" : "completeness_summary"));
   const [scope, setScope] = useState<ExportScope>(initial.scope ?? "filtered");
@@ -147,7 +152,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
   // While the server works, follow this person's newest job for its progress.
   useEffect(() => {
     if (!running || !me?.uid) return;
-    const q = query(collection(firebase().db, `studies/${STUDY}/exportJobs`), where("requestedBy", "==", me.uid), orderBy("createdAt", "desc"), limit(1));
+    const q = query(collection(firebase().db, studyPath("exportJobs")), where("requestedBy", "==", me.uid), orderBy("createdAt", "desc"), limit(1));
     return onSnapshot(q, (snap) => {
       const d = snap.docs[0]?.data();
       if (d && typeof d["progress"] === "number") setProgress(d["progress"] as number);

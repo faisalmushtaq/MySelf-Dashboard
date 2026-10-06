@@ -26,7 +26,6 @@ run("pnpm", ["--filter", "@myself-dashboard/functions", "build"]);
 run("pnpm", ["--filter", "@myself-dashboard/web", "exec", "vite", "build", "--outDir", "dist-record"], {
   env: {
     VITE_USE_EMULATORS: "true",
-    VITE_STUDY: "ybm",
     VITE_AUTH_EMULATOR_PORT: String(PORTS.auth),
     VITE_FIRESTORE_EMULATOR_PORT: String(PORTS.firestore),
     VITE_FUNCTIONS_EMULATOR_PORT: String(PORTS.functions),

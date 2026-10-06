@@ -398,6 +398,22 @@ legend {
 .field-row .grow {
   flex: 1 1 280px;
 }
+/* Settings → Study access: one block per study, hairlines between. */
+.study-access {
+  border-top: 1px solid var(--hairline);
+  padding-top: 14px;
+}
+.study-access legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  float: left;
+  width: 100%;
+}
+.study-access legend + * {
+  clear: both;
+}
 .check-list label {
   flex-direction: row;
   align-items: center;
@@ -656,6 +672,27 @@ ul.tight {
 }
 .version-ctl select {
   padding-left: 10px;
+}
+.survey-ctl select {
+  max-width: 240px;
+}
+/* The study switcher: first in the bar, because everything after it is of that study. */
+.study-ctl {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+.study-ctl .ctl-caption {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.study-ctl select {
+  font-weight: 600;
+  max-width: 260px;
+  padding-left: 10px;
+  color: var(--text);
 }
 .ctl-label {
   font-weight: 500;
@@ -2880,7 +2917,8 @@ table.codebook th[scope="row"] {
     width: 100%;
     flex-wrap: wrap;
   }
-  .global-controls select {
+  .global-controls select,
+  .study-ctl select {
     min-width: 0;
     max-width: 100%;
   }

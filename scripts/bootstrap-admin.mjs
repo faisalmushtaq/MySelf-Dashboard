@@ -18,6 +18,7 @@
  * The account must have signed in to the dashboard once first (an account is
  * created by signing in). After this, everyone else is managed in Settings.
  */
+import { isPublicMailDomain } from "@myself-dashboard/core";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
@@ -42,7 +43,13 @@ const snap = await ref.get();
 const current = snap.exists ? snap.data() : {};
 const emails = [...new Set([...(current.emails ?? []), email])];
 const domains = [...new Set([...(current.domains ?? []), ...(domain ? [domain] : [])])];
-await ref.set({ emails, domains, updatedAt: FieldValue.serverTimestamp(), updatedBy: "scripts/bootstrap-admin.mjs" });
+// A domain rule admits everyone at the domain: never a public mail service (docs/12 §12.4).
+if (domain && isPublicMailDomain(domain)) {
+  console.error(`${domain} is a public mail service: anyone can have an address there. Give the administrator's address alone.`);
+  process.exit(1);
+}
+// Kept as it is: the security rules read the default study from here (docs/12 §12.4).
+await ref.set({ emails, domains, ...(current.defaultStudy ? { defaultStudy: current.defaultStudy } : {}), updatedAt: FieldValue.serverTimestamp(), updatedBy: "scripts/bootstrap-admin.mjs" });
 console.log(`access list: ${emails.length} account(s), ${domains.length} domain(s)`);
 
 let user;

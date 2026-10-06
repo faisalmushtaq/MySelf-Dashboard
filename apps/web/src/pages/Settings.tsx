@@ -1,19 +1,21 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Policy, type SettingsResponse } from "@myself-dashboard/core";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES, type Policy, type SettingsResponse, type StudyAccessView } from "@myself-dashboard/core";
 import { api, explain } from "../lib/api";
 import { dateTime, relative } from "../lib/format";
 import { usePreference } from "../lib/hooks";
 import { useAuth } from "../app/auth";
 import { useAnnounce } from "../app/announcer";
+import { useStudyData } from "../app/data";
 import { PageHeader } from "../components/Metric";
 import { ErrorState, Loading, Notice } from "../components/States";
 import { Icon } from "../components/Icon";
 
 /**
  * Settings. Everyone gets their display preferences; administrators also manage
- * who has access, what the numbers mean, the survey-version registry and data
- * maintenance. Every administrative change is audited on the server.
+ * who has access to the dashboard and to each study, what the numbers mean in
+ * the study on screen, its survey-version registry and data maintenance. Every
+ * administrative change is audited on the server.
  */
 export default function Settings() {
   const { can } = useAuth();
@@ -66,6 +68,8 @@ function Preferences() {
 function Admin() {
   const announce = useAnnounce();
   const { me } = useAuth();
+  const { study, studies } = useStudyData();
+  const titles = new Map(studies.map((s) => [s.study, s.title]));
   const [data, setData] = useState<SettingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [emails, setEmails] = useState("");
@@ -150,7 +154,11 @@ function Admin() {
             <textarea rows={4} value={domains} onChange={(e) => setDomains(e.target.value)} spellCheck={false} placeholder="e.g. brainpop.example" />
           </label>
         </div>
-        <p className="hint">Only list a domain your organisation manages in Google Workspace: anyone with a Google account at that domain could otherwise qualify.</p>
+        <p className="hint">
+          Only list a domain your organisation manages in Google Workspace: anyone with a Google account at that domain could otherwise qualify. Public mail
+          services (gmail.com, outlook.com and the like) are refused as domains; list the people's addresses instead. Everyone on this list who holds a role
+          sees the default study; other studies are given below.
+        </p>
         <button
           type="button"
           className="btn"
@@ -209,6 +217,7 @@ function Admin() {
                 <th scope="col">Account</th>
                 <th scope="col">On access list</th>
                 <th scope="col">Role</th>
+                <th scope="col">Studies</th>
                 <th scope="col">Last sign-in</th>
                 <th scope="col"><span className="sr-only">Actions</span></th>
               </tr>
@@ -222,6 +231,7 @@ function Admin() {
                   </td>
                   <td>{p.allowed ? "Yes" : <span className="muted">No</span>}</td>
                   <td>{p.role ? ROLE_LABELS[p.role] : <span className="muted">None</span>}</td>
+                  <td>{p.studies.length ? p.studies.map((id) => titles.get(id) ?? id).join(", ") : <span className="muted">None</span>}</td>
                   <td>{p.lastSignIn ? relative(p.lastSignIn) : "—"}</td>
                   <td>
                     {p.role && p.uid !== me?.uid ? (
@@ -248,9 +258,14 @@ function Admin() {
         </div>
       </section>
 
+      <StudyAccess onSaved={(text) => setMsg({ tone: "info", text })} />
+
       <section className="card">
-        <h2>Study settings</h2>
-        <p className="hint">These change what the numbers mean. Changes are audited; changing the required levels needs a summary rebuild to take effect.</p>
+        <h2>Study settings: {study.title}</h2>
+        <p className="hint">
+          These change what the numbers mean in this study. Changes are audited; changing the required levels needs a summary rebuild to take effect.
+          {study.isDefault ? "" : " Until they are saved here, this study uses the default study's settings."}
+        </p>
         <div className="settings-grid">
           <fieldset className="check-list">
             <legend>Required levels counted in completeness</legend>
@@ -315,7 +330,7 @@ function Admin() {
       </section>
 
       <section className="card">
-        <h2>Survey versions</h2>
+        <h2>Survey versions in {study.title}</h2>
         <p className="hint">
           Each registered release is verified against its content hash; the dashboard reads every session through the version it was collected under. A
           version published in MySelf Studio registers itself, checked the same way, when its first sitting arrives.
@@ -335,7 +350,7 @@ function Admin() {
 
       <section className="card">
         <h2>Data maintenance</h2>
-        <p>Re-read the survey's sessions and rebuild the dashboard's summaries. Read-only against participant data; safe to repeat.</p>
+        <p>Re-read this study's sessions and rebuild the dashboard's summaries of them. Read-only against participant data; safe to repeat.</p>
         <div className="button-row">
           <button type="button" className="btn" disabled={busy !== null} onClick={() => void run("rebuild-unknown", async () => {
             const r = await api.rebuildSummaries({ onlyUnknownRelease: true });
@@ -356,5 +371,110 @@ function Admin() {
         </div>
       </section>
     </>
+  );
+}
+
+/**
+ * Who else may see each study (docs/12 §12.4). Administrators see every study;
+ * everyone on the dashboard's access list sees the default one; anyone else
+ * sees a study only when it lists their address or their Workspace domain.
+ * Saved on the server, which refuses public mail services as domains and
+ * audits each change in that study's log.
+ */
+function StudyAccess({ onSaved }: { onSaved: (text: string) => void }) {
+  const announce = useAnnounce();
+  const [studies, setStudies] = useState<StudyAccessView[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, { emails: string; domains: string }>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<{ study: string; text: string } | null>(null);
+
+  const load = async () => {
+    try {
+      const r = await api.getStudyAccess({});
+      setStudies(r.studies);
+      setDrafts(Object.fromEntries(r.studies.map((s) => [s.study, { emails: (s.list?.emails ?? []).join("\n"), domains: (s.list?.domains ?? []).join("\n") }])));
+      setError(null);
+    } catch (e) {
+      setError(explain(e).message);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (error) return <ErrorState title="Study access could not be loaded" message={error} onRetry={() => void load()} />;
+  if (!studies) return <Loading label="Loading study access" />;
+  if (studies.length < 2) return null;
+
+  const lines = (s: string) => s.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+  const save = async (s: StudyAccessView) => {
+    const d = drafts[s.study] ?? { emails: "", domains: "" };
+    setBusy(s.study);
+    setProblem(null);
+    try {
+      await api.updateStudyAccess({ study: s.study, emails: lines(d.emails), domains: lines(d.domains) });
+      const text = `Saved who may see ${s.title}.`;
+      onSaved(text);
+      announce(text, "success");
+      await load();
+    } catch (e) {
+      const text = explain(e).message;
+      setProblem({ study: s.study, text });
+      announce(text, "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="card" aria-labelledby="study-access-h">
+      <h2 id="study-access-h">Study access</h2>
+      <p>
+        Administrators see every study. Everyone on the access list above who holds a role sees the default study. Anyone else sees another study only when it
+        lists their address or their Workspace domain here; a role is the same in every study they see. Each change is audited in that study's log.
+      </p>
+      {studies.map((s) => {
+        const d = drafts[s.study] ?? { emails: "", domains: "" };
+        return (
+          <fieldset key={s.study} className="study-access">
+            <legend>
+              {s.title} <code>{s.study}</code>
+              {s.status === "closed" ? <span className="tag">closed</span> : null}
+            </legend>
+            {s.isDefault || !s.list ? (
+              <p className="hint">The default study: everyone on the dashboard's access list who holds a role.</p>
+            ) : (
+              <>
+                <div className="field-row">
+                  <label className="grow">
+                    People who may see it (one address per line)
+                    <textarea rows={3} value={d.emails} onChange={(e) => setDrafts({ ...drafts, [s.study]: { ...d, emails: e.target.value } })} spellCheck={false} />
+                  </label>
+                  <label className="grow">
+                    Google Workspace domains
+                    <textarea rows={3} value={d.domains} onChange={(e) => setDrafts({ ...drafts, [s.study]: { ...d, domains: e.target.value } })} spellCheck={false} placeholder="e.g. leeds.ac.uk" />
+                  </label>
+                </div>
+                {problem?.study === s.study ? <Notice tone="warn">{problem.text}</Notice> : null}
+                <div className="button-row">
+                  <button type="button" className="btn" disabled={busy !== null} onClick={() => void save(s)}>
+                    Save who may see {s.title}
+                  </button>
+                  {s.updatedAt ? (
+                    <span className="hint">
+                      Last changed {relative(s.updatedAt)}
+                      {s.updatedBy ? ` by ${s.updatedBy}` : ""}
+                    </span>
+                  ) : (
+                    <span className="hint">Nobody has been added yet: administrators only.</span>
+                  )}
+                </div>
+              </>
+            )}
+          </fieldset>
+        );
+      })}
+    </section>
   );
 }

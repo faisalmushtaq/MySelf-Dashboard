@@ -15,7 +15,7 @@ import { useLoad } from "../lib/hooks";
 import { dateTime, duration, int, pct, relative, shortDay } from "../lib/format";
 import { useFilters, sessionsLink } from "../app/filters";
 import { FilterBar } from "../app/FilterControls";
-import { useStudyData } from "../app/data";
+import { useStudyData, useSurveyReleases } from "../app/data";
 import { Metric, PageHeader } from "../components/Metric";
 import { EmptyState, ErrorState, Notice, Skeleton } from "../components/States";
 import { STATUS_ICON } from "../components/Status";
@@ -51,7 +51,10 @@ export function periodLabel(f: ReturnType<typeof useFilters>["filters"]): string
 export default function Overview() {
   const { filters } = useFilters();
   const { data, error, loading, reload } = useAnalytics();
-  const { activeRelease } = useStudyData();
+  // With a survey chosen, its active version; otherwise the study's (docs/12 §12.6).
+  const { activeRelease } = useSurveyReleases();
+  const { surveys, surveyOf, surveyTitle } = useStudyData();
+  const activeSurvey = activeRelease && surveys.length > 1 ? surveyOf(activeRelease.hash) : null;
   const a = data?.analytics;
   const m = a?.metrics;
   const link = (patch: Parameters<typeof sessionsLink>[1]) => sessionsLink(filters, patch);
@@ -141,7 +144,7 @@ export default function Overview() {
             <Metric
               label="Active published version"
               value={activeRelease ? `v${activeRelease.version}` : "—"}
-              sub={activeRelease ? `Published ${dateTime(activeRelease.publishedAt)}` : "No versions registered"}
+              sub={activeRelease ? `${activeSurvey ? `${surveyTitle(activeSurvey)}, published` : "Published"} ${dateTime(activeRelease.publishedAt)}` : "No versions registered"}
               definition="The release the survey is serving: set by an administrator, otherwise the newest registered release."
             />
           </section>

@@ -2,7 +2,9 @@
 
 Everything needed to run, deploy, operate and roll back the MySelf Research
 Dashboard. Read [02-architecture.md](02-architecture.md) and
-[03-completeness.md](03-completeness.md) first for the why. For working on the
+[03-completeness.md](03-completeness.md) first for the why, and
+[12-studies-and-surveys.md](12-studies-and-surveys.md) for several studies and
+surveys (survey decision D-56). For working on the
 code itself — where things are, how data flows through them, and step-by-step
 recipes (a new page, callable, codebook name, survey release, scoring scheme,
 re-vendoring the survey) — see the
@@ -20,21 +22,24 @@ decision for its owners. §5 is the deployment procedure.
 ```
  Browser (React SPA, Hosting site "myself-research-dashboard")
    │  Google sign-in (Firebase Auth) — ID token on every call
+   │  every call and read names the study on screen (header switcher)
    │
    ├── callables (europe-west2, codebase "dashboard") ─────────────┐
    │     whoAmI · querySessions · getSessionDetail · getAnalytics  │ role + allowlist
-   │     getQuestionAnalytics · getQuestionHistory · updateReview  │ checked on EVERY
-   │     addNote · previewExport · createExport · getSettings ·    │ call; audited
-   │     updateAccessPolicy · updatePolicy · setDashboardRole ·    │
-   │     rebuildSummaries · registerReleaseManifest · logChartDownload
-   ├── GET downloadExport?job=… (Bearer ID token) ─────────────────┘
-   └── direct Firestore reads, "dashboard" DB (rules-enforced):
+   │     getQuestionAnalytics · getQuestionHistory · updateReview  │ + the study (registered,
+   │     addNote · previewExport · createExport · getSettings ·    │ and the caller may see it)
+   │     updateAccessPolicy · updatePolicy · setDashboardRole ·    │ checked on EVERY call;
+   │     rebuildSummaries · registerReleaseManifest · getSurveys · │ audited
+   │     getStudyAccess · updateStudyAccess · logChartDownload …   │
+   ├── GET downloadExport?study=…&job=… (Bearer ID token) ─────────┘
+   └── direct Firestore reads, "dashboard" DB (rules-enforced, per study):
          releases · meta/freshness · reviews(+notes) · own savedViews (r/w)
          · own exportJobs · own auditLog (admins: all)
 
  Firestore (default)  ← survey devices via saveSitting (survey repo)
+   studies/{study} (the registry)          read: which studies exist
    studies/{study}/sessions/{id}  ──trigger onSessionWritten──►  Firestore "dashboard"
-                                                                  studies/{study}/sessionSummaries/{id}
+     (any registered study)                                       studies/{study}/sessionSummaries/{id}
  Storage: dashboard-exports/{jobId}/… (no client access; 24 h; hourly cleanup)
 ```
 
@@ -79,19 +84,23 @@ Run the whole stack locally with synthetic data:
 ```bash
 pnpm e2e:build                                 # core, functions, emulator web build
 pnpm dev:emulators                             # terminal 1: Auth, Firestore, Functions, Storage
-pnpm seed:emulators                            # terminal 2: rules, policy, versions, people, 64 sittings
+pnpm seed:emulators                            # terminal 2: rules, policy, versions, people, 64 sittings, a second study
 pnpm --filter @myself-dashboard/web dev:emulators   # terminal 2: http://127.0.0.1:5173
 ```
 
 The emulator build's sign-in page has an extra "Emulated Google account" form
 (removed at compile time from production builds). Seeded accounts:
 
-| Account | Role |
-|---|---|
-| `brainpopresearch@gmail.com` | Administrator |
-| `researcher@brainpop.example` | Researcher |
-| `reviewer@brainpop.example` | Read-only reviewer |
-| `stranger@gmail.com` | has an `owner` claim but is **not** on the access list → denied |
+| Account | Role | Studies |
+|---|---|---|
+| `brainpopresearch@gmail.com` | Administrator | `demo` (the default) and `pilot` |
+| `researcher@brainpop.example` | Researcher | `demo` and `pilot` (on its list) |
+| `reviewer@brainpop.example` | Read-only reviewer | `demo` only |
+| `stranger@gmail.com` | has an `owner` claim but is **not** on the access list → denied | none |
+
+The second study, `pilot` ("Pilot of the new questions"), is seeded as the Studio
+leaves one: a registry document and two Studio-published surveys with ten
+sittings between them.
 
 ## 4. Configuration
 
@@ -101,9 +110,10 @@ The emulator build's sign-in page has an extra "Emulated Google account" form
 |---|---|---|
 | Web (build time) | `VITE_FIREBASE_CONFIG` | Web-app config JSON from the Firebase console. Set `authDomain` to the dashboard's own Hosting domain (`myself-research-dashboard.web.app`) so sign-in is same-origin. Public, not secret. |
 | | `VITE_USE_EMULATORS` | `true` only for local/emulator builds. |
-| | `VITE_STUDY` | Study id (default `ybm`; emulator `demo`). |
 | | `VITE_DOWNLOAD_URL` | Optional override for the `downloadExport` URL. |
-| Functions (`apps/functions/.env.<project>`) | `MYSELF_STUDY` | Study id, as the survey's functions use. |
+| | `VITE_STUDIO_URL` | MySelf Studio's survey list (default `https://faisalmushtaq.github.io/MySelf/researcher/#/surveys`), for Edit in Studio. |
+| | `VITE_PARTICIPANT_URL` | The participant app (default `https://faisalmushtaq.github.io/MySelf/`), where every participant link starts (docs/12 §12.8). |
+| Functions (`apps/functions/.env.<project>`) | `MYSELF_STUDY` | The **default** study, as the survey's functions use it (`ybm`; `demo` in the emulators). Every other study comes from the survey's registry (docs/12). |
 | | `DASHBOARD_DATABASE` | Named database id (default `dashboard`). |
 | | `DASHBOARD_ORIGINS` | Comma-separated browser origins allowed to call the functions. |
 | | `DASHBOARD_ENFORCE_APP_CHECK` | `true` once App Check is configured. |
@@ -118,10 +128,24 @@ Nothing secret is needed by the dashboard at runtime.
 
 ### 4.2 Study settings (in the app)
 
-Settings → Study settings (administrators), stored in `config/policy`: required
+Settings → Study settings (administrators), for the study on screen: required
 levels, abandonment window, test-code patterns, reviewer free-text access, export
-retention, time zone, too-fast threshold, active release. Defaults and meaning are
-in [05-plan.md §5.2](05-plan.md). Changing required levels needs a rebuild.
+retention, time zone, too-fast threshold, active release. The default study's are
+in `config/policy`, where they always were; another study's in
+`studies/{study}/config/policy` once saved there, the default study's (with no
+active version) until then. School names and year groups work the same way
+(`config/groups`, `studies/{study}/config/groups`). Defaults and meaning are in
+[05-plan.md §5.2](05-plan.md). Changing required levels needs a rebuild.
+
+### 4.3 Study spaces and their access (in the app)
+
+Studies are created, closed and reopened in MySelf Studio by a project owner;
+the dashboard lists them from the survey's registry and shows the study switcher
+in its header when a person may see more than one. **Settings → Study access**
+(administrators) says who else may see each study other than the default one:
+addresses and Google Workspace domains, never a public mail service as a domain.
+Administrators see every study; everyone on the access list sees the default
+study ([12 §12.4](12-studies-and-surveys.md)).
 
 ## 5. Deploying into `myself-research`
 
@@ -182,7 +206,11 @@ firebase hosting:sites:create myself-research-dashboard --project myself-researc
 #    authDomain = myself-research-dashboard.web.app → VITE_FIREBASE_CONFIG.
 ```
 
-Deploy (each touches only the dashboard's resources):
+Deploy (each touches only the dashboard's resources). **Deploy the functions
+first, then the rules, then the web app** when a change spans them, as the
+study-space change does: the new web app names a study in every call, which the
+old functions would ignore, and the new rules read `config/access.defaultStudy`
+(absent: `ybm`), which the old ones did not need.
 
 ```bash
 pnpm deploy:rules          # firestore/dashboard.rules + indexes → "dashboard" DB only
@@ -235,6 +263,21 @@ that for a few pounds a month.
 - **Nobody grants themselves a role**: claims are set only by the Admin SDK
   (`setDashboardRole`, `bootstrap-admin.mjs`, or the survey's `setRole`). Rules deny
   every client write to `config/**` and `users/**`.
+- **Which studies** ([12 §12.4](12-studies-and-surveys.md)): administrators see
+  every study; everyone on the access list sees the default study (`ybm`); anyone
+  else sees another study only when Settings → Study access lists their address or
+  Workspace domain for it. Checked by the backend on every call (the study is a
+  registered study and the caller may see it) and by the rules on every read under
+  `studies/{study}/`. A role is the same in every study a person sees.
+
+### Giving someone another study
+
+1. They must already use the dashboard (access list and a role, above).
+2. Settings → Study access → that study: add their address (or their Workspace
+   domain). Save. It is audited as `study_access.changed` in that study's log.
+3. They choose the study in the header's switcher (it appears once they may see
+   two). Remove the address to take the study away; the next call and read are
+   refused.
 
 ### Adding a researcher
 
@@ -256,12 +299,16 @@ Do both. Their past audit entries, notes and flags remain, attributed to them.
 
 ## 7. Data model mapping
 
-| Survey `(default)` `studies/{s}/sessions/{id}` | Dashboard `sessionSummaries/{id}` |
+Every registered study has its own space: a sitting at `studies/{s}/sessions/{id}`
+is summarised to the dashboard's `studies/{s}/sessionSummaries/{id}`, never into
+another study's (docs/12 §12.3, §12.5).
+
+| Survey `(default)` `studies/{s}/sessions/{id}` | Dashboard `studies/{s}/sessionSummaries/{id}` |
 |---|---|
 | `sessionId` | `sessionId` |
 | `studyCode` | `studyCode` (masked for reviewers by the API), `site` (its letters) |
 | `deviceId` | `deviceId` (hidden from reviewers; dropped from de-identified exports) |
-| `releaseHash`, `releaseKey` | same, plus `releaseVersion`, `releaseKnown` (registry lookup) |
+| `releaseHash`, `releaseKey` | same, plus `releaseVersion`, `releaseKnown` (the study's registry); the **survey** is its release's `release.assessment`, worked out when rows are built, never stored |
 | `startedAt`, `completedAt` (device clock) | same |
 | max(`events[].tWall`) | `lastActivityAt`; latest response → `lastResponseAt` |
 | `receivedAt` (server, last upload) | `receivedAt`; first one seen → `firstReceivedAt` |
@@ -271,9 +318,11 @@ Do both. Their past audit entries, notes and flags remain, attributed to them.
 | `events[]` | never copied. Replayed into `counts`, `requiredCompletion`, `estimated`, `sections`, `missingRequiredKeys`, `invalidKeys`, `lastPresentedKey`, `finalSectionKey`, `warnings`, and `items[]` (per-question outcome code + stored code/number for non-identifying, non-free-text answers) |
 | `session.completed.totalMs/foregroundMs` | `durationMs`, `foregroundMs`; first→last event → `wallClockMs` |
 
-Dashboard-only collections: `config/access`, `config/policy`, `users/{uid}`,
-`studies/{s}/releases`, `releaseManifests`, `meta/freshness`, `reviews(+notes)`,
-`savedViews`, `exportJobs`, `auditLog` — shapes in [02 §2.3](02-architecture.md) —
+Dashboard-only collections: `config/access` (with `defaultStudy`), `config/policy`,
+`users/{uid}` (with the study last chosen), `studies/{s}/config/{access,policy,groups}`
+(another study's own), `studies/{s}/releases`, `releaseManifests`, `meta/freshness`,
+`reviews(+notes)`, `savedViews`, `exportJobs`, `auditLog` — shapes in
+[02 §2.3](02-architecture.md) and [12 §12.3](12-studies-and-surveys.md) —
 and, for scoring ([08](08-scoring.md)), `config/groups` (school names, year-group
 sources and rules, minimum group size) and `studies/{s}/scoringSchemes/{key}`
 with every saved version under `…/versions/{version}`. Neither is readable or
@@ -300,14 +349,21 @@ lists and metrics need no composite indexes: they are computed server-side
 ## 9. Security rules
 
 `firestore/dashboard.rules` governs **only** the `dashboard` database. Summary:
-members read versions, freshness, reviews and notes; nobody reads summaries or
-manifests directly; saved views are the only client-written collection (owner-only,
-`request.time` stamps, sharing only for researchers/administrators, no search text);
-export jobs readable by requester or administrator; audit log readable by
-administrators (all) or its subject (own), never writable. Everything else is closed.
+every rule under `studies/{study}/` asks `studyMember(study)` — a member who is an
+administrator, or the study is the default one, or its own list names them;
+members read versions, freshness, reviews and notes of the studies they may see;
+nobody reads summaries or manifests directly; saved views are the only
+client-written collection (owner-only, `request.time` stamps, sharing only for
+researchers/administrators, no search text); export jobs readable by requester or
+administrator; audit log readable by administrators (all) or its subject (own),
+never writable; a study's list and settings readable by administrators, written by
+nobody. Everything else is closed. The rules learn the default study from
+`config/access.defaultStudy` (absent: `ybm`).
 
-Tests: `pnpm test:rules` (28 cases: outsiders of every kind, each role, malicious
-writes, self-granted roles, forged owners and timestamps, audit tampering).
+Tests: `pnpm test:rules` (36 cases: outsiders of every kind, each role, malicious
+writes, self-granted roles, forged owners and timestamps, audit tampering, and
+study spaces — a researcher of one study reads nothing of another, lists by
+address and by domain, an unlisted study, lists never written from a browser).
 
 **Survey-side dependency:** exports live in the project's single Storage bucket
 under `dashboard-exports/`. They are private because the survey's `storage.rules`
@@ -335,6 +391,9 @@ end in a catch-all deny. If those rules are ever loosened, add an explicit
    cells are formula-neutralised; XLSX cells are typed values, never formulas.
 7. The default session format is a BIDS dataset (zip) built with the survey's own
    data layer, so participant codes, waves and scores match the survey's export.
+   An export is of the study on screen, filed in its `exportJobs`; its file name
+   starts `myself_<study>_` (then the survey, when one is chosen), and the BIDS
+   dataset's name, README and `export_manifest.json` carry the study and survey.
    With identifiers, `linkage.tsv` maps each BIDS subject/session to the codes and
    is listed in `.bidsignore`; `export_manifest.json` holds a SHA-256 per file.
 
@@ -342,10 +401,10 @@ end in a catch-all deny. If those rules are ever loosened, add an explicit
 
 | Suite | Command | What |
 |---|---|---|
-| Unit | `pnpm -r test` | 274 core (completeness, statuses, filters, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, 20k-session performance, real YBM manifests, figures, scoring schemes and engine, benchmarks, school reports, the codebook and the quality review against every real survey version) + 27 functions (access decisions, allowed origins, release verification, encoders, PDF reports) + 8 web components |
-| Rules | `pnpm test:rules` | 29 emulator tests (Firestore emulator) |
-| Integration | `pnpm test:integration` | 37 backend tests against Auth/Firestore/Storage emulators with real Google-provider ID tokens |
-| End to end | `pnpm e2e:build && pnpm test:e2e` (`E2E_PORT=4183` if 4173 is taken) | 10 Playwright tests: the brief's research journey, publication figures in every format, reviewer restrictions, participants, administrator screens and empty states, scores and school reports, scoring changes, the codebook and quality review, axe WCAG 2.1 AA on the main screens |
+| Unit | `pnpm -r test` | 399: 348 core (completeness, statuses, filters and the survey filter, dates/DST, query, analytics, questions/versions, exports, CSV injection, roles, study access and ids, 20k-session performance, real YBM manifests, figures, scoring schemes and engine, benchmarks, school reports, the codebook and the quality review against every real survey version) + 34 functions (access decisions, allowed origins, release verification, per-study paths, encoders, PDF reports) + 17 web (components, Survey versions, the study on every call, the survey filter) |
+| Rules | `pnpm test:rules` | 36 emulator tests (Firestore emulator) |
+| Integration | `pnpm test:integration` | 55 backend tests against Auth/Firestore/Storage emulators with real Google-provider ID tokens, 11 of them on study spaces and surveys |
+| End to end | `pnpm e2e:build && pnpm test:e2e` (`E2E_PORT=4183` if 4173 is taken) | 13 Playwright tests: the brief's research journey, publication figures in every format, reviewer restrictions, participants, administrator screens and empty states, scores and school reports, scoring changes, the codebook and quality review, axe WCAG 2.1 AA on the main screens, and a second study space switched to, filtered by survey, and refused to a reviewer |
 | Privacy lint | `pnpm lint:privacy` | no console logging or analytics in the web app |
 | Drift | `pnpm check:vendored ../MySelf` | the vendored evaluator and data layer still match the survey |
 
@@ -358,7 +417,8 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 | Web app | Firebase console → Hosting → `myself-research-dashboard` → Release history → ⋮ → Roll back (instant, no rebuild); or `git checkout <previous tag>` and `pnpm deploy:hosting`. |
 | Functions | `git checkout <previous tag> && pnpm deploy:functions`. Container images are kept per the project's artifact policy (survey docs/13 §6). |
 | Rules / indexes | Console → Firestore → `dashboard` → Rules → history → restore; or redeploy the previous `firestore/dashboard.rules`. |
-| Summaries | Derived. Settings → Rebuild all summaries (or `rebuildSummaries`). |
+| Summaries | Derived. Settings → Rebuild all summaries (or `rebuildSummaries`), per study. |
+| Several studies | Redeploy the previous functions, rules and web app. What this change added — `studies/{study}/config/*`, `users/{uid}.study`, `config/access.defaultStudy`, other studies' spaces — is additive and the previous build ignores it (docs/12 §12.10). |
 | Reviews, notes, views, audit | Primary dashboard data: restore with PITR / scheduled backups (§5 step 1). |
 | Remove the dashboard entirely | Delete the `dashboard` functions codebase (`firebase functions:delete <names> --region europe-west2`), the Hosting site, and the database (`gcloud firestore databases delete --database=dashboard`). The survey is untouched: nothing in this repository writes to `(default)`. |
 
@@ -416,7 +476,12 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
   `clock_ahead` when detectably so).
 - Notifications are in-app only (no email/push). No free-text search, by design.
 - Light theme only (the survey style guide defines no dark theme).
-- One study per deployment, as in the survey.
+- Every dashboard member sees the default study (`ybm`): its access list is the
+  dashboard's own. And the survey's own rules let every `owner`, `researcher`
+  and `analyst` claim read every study's raw sittings; the dashboard's per-study
+  access narrows the dashboard only (docs/12 §12.4, §12.11).
+- A study's title is public to anyone who knows its id (the survey's registry is
+  readable by `get`), so titles are written for the public.
 - The existing `apps/researcher` view in the survey repo still reads raw logs
   directly (audit F1); see recommended change S1.
 
@@ -432,3 +497,6 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 5. Add WebKit to the e2e matrix; add a physical-tablet accessibility pass
    (VoiceOver), as the survey does for iPads.
 6. Consider email digests of sessions needing review during fieldwork.
+7. Confirm the study-space decisions in [12 §12.11](12-studies-and-surveys.md):
+   whether every dashboard member should see `ybm`, and whether raw sittings
+   should be readable per study in the survey too.

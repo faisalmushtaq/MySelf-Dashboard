@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp, Timestamp, updateDoc, where } from "firebase/firestore";
 import { DEFAULT_FILTERS, describeFilters, filtersToParams, sanitiseFilters, sanitiseSort, sortToParams, type FilterState } from "@myself-dashboard/core";
-import { firebase, STUDY } from "../lib/firebase";
+import { firebase } from "../lib/firebase";
+import { studyPath } from "../lib/study";
 import { dateTime } from "../lib/format";
 import { useAuth } from "../app/auth";
 import { useAnnounce } from "../app/announcer";
@@ -46,14 +47,14 @@ function suggestions(activeHash: string | undefined): { name: string; descriptio
 export default function SavedViews() {
   const { me, can } = useAuth();
   const announce = useAnnounce();
-  const { activeRelease, versionLabel } = useStudyData();
+  const { activeRelease, versionLabel, surveyTitle } = useStudyData();
   const [mine, setMine] = useState<ViewDoc[] | null>(null);
   const [shared, setShared] = useState<ViewDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!me?.uid) return;
-    const col = collection(firebase().db, `studies/${STUDY}/savedViews`);
+    const col = collection(firebase().db, studyPath("savedViews"));
     const map = (snap: { docs: { id: string; data: () => Record<string, unknown> }[] }) =>
       snap.docs.map((d) => {
         const x = d.data();
@@ -70,18 +71,18 @@ export default function SavedViews() {
   const rename = async (v: ViewDoc) => {
     const name = window.prompt("New name for this view", v.name)?.trim();
     if (!name) return;
-    await updateDoc(doc(firebase().db, `studies/${STUDY}/savedViews/${v.id}`), { name: name.slice(0, 80), updatedAt: serverTimestamp() })
+    await updateDoc(doc(firebase().db, studyPath(`savedViews/${v.id}`)), { name: name.slice(0, 80), updatedAt: serverTimestamp() })
       .then(() => announce("View renamed.", "success"))
       .catch(() => announce("The view could not be renamed.", "error"));
   };
   const toggleShare = async (v: ViewDoc) => {
-    await updateDoc(doc(firebase().db, `studies/${STUDY}/savedViews/${v.id}`), { shared: !v.shared, updatedAt: serverTimestamp() })
+    await updateDoc(doc(firebase().db, studyPath(`savedViews/${v.id}`)), { shared: !v.shared, updatedAt: serverTimestamp() })
       .then(() => announce(v.shared ? "View is now private." : "View shared with all dashboard members.", "success"))
       .catch(() => announce("Sharing could not be changed.", "error"));
   };
   const remove = async (v: ViewDoc) => {
     if (!window.confirm(`Delete the view “${v.name}”?`)) return;
-    await deleteDoc(doc(firebase().db, `studies/${STUDY}/savedViews/${v.id}`))
+    await deleteDoc(doc(firebase().db, studyPath(`savedViews/${v.id}`)))
       .then(() => announce("View deleted.", "success"))
       .catch(() => announce("The view could not be deleted.", "error"));
   };
@@ -95,7 +96,7 @@ export default function SavedViews() {
         {v.shared ? <span className="tag tag-quiet">Shared</span> : null}
         {v.description ? <p>{v.description}</p> : null}
         <p className="hint">
-          {describeFilters(sanitiseFilters(v.state.filters), { version: versionLabel }).map((c) => c.label).join(" · ") || "No filters"}
+          {describeFilters(sanitiseFilters(v.state.filters), { version: versionLabel, survey: surveyTitle }).map((c) => c.label).join(" · ") || "No filters"}
           {!owned && v.ownerEmail ? ` — by ${v.ownerEmail}` : ""} · updated {dateTime(v.updatedAt)}
         </p>
       </div>

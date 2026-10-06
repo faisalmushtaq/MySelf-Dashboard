@@ -237,11 +237,74 @@ function schoolTime(dayMs, rnd) {
   return d.getTime();
 }
 
+const YEARS = [7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 13];
+
+/** An invented child at one of `sites`, with a hidden wellbeing trait. */
+function newChild(i, rnd, sites = ["NTH", "STH", "WST"]) {
+  const site = sites[i % sites.length];
+  const year = YEARS[Math.floor(rnd() * YEARS.length)];
+  return {
+    site,
+    first: FIRST[Math.floor(rnd() * FIRST.length)],
+    last: LAST[Math.floor(rnd() * LAST.length)],
+    dob: dobFor(year, rnd),
+    address: CAMPUSES[i % CAMPUSES.length],
+    z: normal(rnd) + (SCHOOL_EFFECT[site] ?? 0) - 0.06 * (year - 7),
+    hand: rnd(),
+    englishFirst: rnd() < 0.72,
+    otherLanguages: rnd() < 0.42,
+  };
+}
+
+/** A sitting document, as the survey's saveSitting files one, from a walk. */
+function sittingDoc({ idx, start, code, rnd, study, n, w, kind, now }) {
+  return {
+    sessionId: `ses_${ulid(start, rnd)}`,
+    deviceId: `inst_demo_${(n % 4) + 1}`,
+    study,
+    studyCode: code,
+    releaseKey: idx.key,
+    releaseHash: idx.hash,
+    startedAt: at(start),
+    ...(w.finished ? { completedAt: at(w.end) } : {}),
+    complete: w.finished,
+    events: w.events,
+    chunkCount: 0,
+    eventCount: w.events.length,
+    receivedAt: at(kind === "in_progress" ? Math.min(now.getTime() - 60_000, w.end + 30_000) : w.end + (5 + Math.floor(rnd() * 120)) * 60_000),
+    quarantined: false,
+    provenance: "device",
+  };
+}
+
+/**
+ * A survey of another study space (docs/12): `count` invented children at
+ * `sites`, each sitting `manifest` once on a school day between `from` and
+ * `to`, a few of them stopping part-way. Its own random stream, so the YBM
+ * study is the same with or without it.
+ */
+export function generateSittings({ study, manifest, from, to, count, seed, sites, now = new Date() }) {
+  const rnd = prng(seed);
+  const templates = templatesFrom(scenarioSittings());
+  const idx = indexRelease(manifest);
+  const start0 = Date.parse(from);
+  const span = Date.parse(to) - start0;
+  return Array.from({ length: count }, (_, n) => {
+    const child = newChild(n, rnd, sites);
+    const start = schoolTime(start0 + Math.floor((n / count) * span), rnd);
+    const kind = n % 7 === 3 ? "abandoned" : "complete";
+    const opts = { idx, child, start, code: `${child.site}${String(2001 + n).padStart(4, "0")}`, rnd, templates, ...(kind === "abandoned" ? { stopAfter: 6 + Math.floor(rnd() * 20) } : {}) };
+    return sittingDoc({ ...opts, study, n, w: walk(opts), kind, now });
+  });
+}
+
 /**
  * The study: `count` sittings from September 2026 under r9.0.0, and a first wave
  * in June 2026 under r8.0.0 for some of the same children, plus the three
  * sittings the real survey app recorded. `later` adds `count` sittings on `day`
- * under each `manifest` given, for versions published after these.
+ * under each `manifest` given, for versions published after these — by new
+ * children, or (`reuse`) by the first of the study's children again, as a
+ * follow-up survey would be.
  */
 export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date(), study = "ybm", later = [] } = {}) {
   const rnd = prng(seed);
@@ -249,23 +312,6 @@ export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date()
   const templates = templatesFrom(scenarios);
   const r9 = indexRelease(readRelease("9.0.0"));
   const r8 = indexRelease(readRelease("8.0.0"));
-  const sites = ["NTH", "STH", "WST"];
-  const years = [7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 13];
-  const newChild = (i, rnd) => {
-    const site = sites[i % 3];
-    const year = years[Math.floor(rnd() * years.length)];
-    return {
-      site,
-      first: FIRST[Math.floor(rnd() * FIRST.length)],
-      last: LAST[Math.floor(rnd() * LAST.length)],
-      dob: dobFor(year, rnd),
-      address: CAMPUSES[i % CAMPUSES.length],
-      z: normal(rnd) + (SCHOOL_EFFECT[site] ?? 0) - 0.06 * (year - 7),
-      hand: rnd(),
-      englishFirst: rnd() < 0.72,
-      otherLanguages: rnd() < 0.42,
-    };
-  };
   const children = Array.from({ length: count }, (_, i) => newChild(i, rnd));
 
   const plan = [];
@@ -280,27 +326,7 @@ export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date()
   const septSpan = Date.parse("2026-09-29T00:00:00.000Z") - septStart;
   const juneStart = Date.parse("2026-06-08T00:00:00.000Z");
   const out = [];
-  const sitting = (opts, n, kind) => {
-    const { idx, start, code, rnd } = opts;
-    const w = walk(opts);
-    return {
-      sessionId: `ses_${ulid(start, rnd)}`,
-      deviceId: `inst_demo_${(n % 4) + 1}`,
-      study,
-      studyCode: code,
-      releaseKey: idx.key,
-      releaseHash: idx.hash,
-      startedAt: at(start),
-      ...(w.finished ? { completedAt: at(w.end) } : {}),
-      complete: w.finished,
-      events: w.events,
-      chunkCount: 0,
-      eventCount: w.events.length,
-      receivedAt: at(kind === "in_progress" ? Math.min(now.getTime() - 60_000, w.end + 30_000) : w.end + (5 + Math.floor(rnd() * 120)) * 60_000),
-      quarantined: false,
-      provenance: "device",
-    };
-  };
+  const sitting = (opts, n, kind) => sittingDoc({ ...opts, study, n, w: walk(opts), kind, now });
   plan.forEach(({ child, kind, idx, june }, n) => {
     let start = june ? schoolTime(juneStart + Math.floor(rnd() * 18) * 86_400_000, rnd) : schoolTime(septStart + Math.floor((n / plan.length) * septSpan), rnd);
     if (kind === "in_progress") start = now.getTime() - (1 + Math.floor(rnd() * 3)) * 3_600_000;
@@ -318,12 +344,12 @@ export function generateYbmStudy({ count = 64, seed = 20260930, now = new Date()
   // Sittings under versions published later in MySelf Studio (./studio.mjs): new
   // children on the day each version was on the iPads, drawn from their own
   // random stream so the rest of the study is the same with or without them.
-  later.forEach(({ manifest, day, count: k }, j) => {
+  later.forEach(({ manifest, day, count: k, reuse = false }, j) => {
     const more = prng(seed + 1 + j);
     const idx = indexRelease(manifest);
     for (let i = 0; i < k; i += 1) {
-      const n = plan.length + i;
-      const child = newChild(n, more);
+      const n = plan.length + 100 * j + i;
+      const child = reuse ? children[(i * 3) % children.length] : newChild(n, more);
       const start = schoolTime(Date.parse(day), more);
       out.push(sitting({ idx, child, start, code: `${child.site}${String(1001 + n).padStart(4, "0")}`, rnd: more, templates }, n, "complete"));
     }

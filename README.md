@@ -8,10 +8,16 @@ It is a separate application from the public survey. It shares the survey's Fire
 project (`myself-research`) through its **own** named Firestore database
 (`dashboard`), functions codebase (`dashboard`) and Hosting site, so it cannot change
 the survey's rules, functions or data — and needs no change to the survey to run.
+It reads every study space the survey runs in that project, each kept apart.
 
 - **Access:** Google sign-in; an explicit allowlist (and optional Workspace domain)
   **and** a role — Administrator, Researcher or Read-only reviewer — enforced by the
   backend on every call and by Firestore Security Rules on every read.
+- **Study spaces and surveys** (survey decision D-56): every study the survey
+  runs in the project, chosen in the header, each with its own data and its own
+  access list (administrators see all; a study other than `ybm` only those it
+  lists); a survey filter inside a study, counted by the survey's own rules; each
+  live survey's participant link ([details](docs/12-studies-and-surveys.md)).
 - **Completeness** is judged against the survey version each participant actually
   received, distinguishing unanswered, hidden-by-branching, not-reached, invalid,
   declined and never-collected questions ([definitions](docs/03-completeness.md)).
@@ -61,6 +67,7 @@ Screenshots (emulator seed, synthetic sittings only):
 9. [Codebook and data-quality review](docs/09-data-quality.md)
 10. [**Maintainers' guide**: repository map, data flow, recipes, tests, deploys](docs/10-maintainers-guide.md)
 11. [Survey versions: MySelf Studio's history, read-only, and the sittings under each version](docs/11-survey-editor.md)
+12. [**Study spaces and surveys**: several studies, access per study, the survey filter](docs/12-studies-and-surveys.md)
 
 ## Quick start (local, synthetic data)
 
@@ -73,16 +80,17 @@ pnpm --filter @myself-dashboard/web dev:emulators  # http://127.0.0.1:5173
 ```
 
 Sign in on the emulator page as `brainpopresearch@gmail.com` (Administrator),
-`researcher@brainpop.example`, `reviewer@brainpop.example`, or
-`stranger@gmail.com` (denied). All data is synthetic.
+`researcher@brainpop.example` (who also sees the second study, `pilot`),
+`reviewer@brainpop.example`, or `stranger@gmail.com` (denied). All data is
+synthetic.
 
 ## Tests
 
 ```bash
-pnpm -r test            # 309 unit tests (core 274, functions 27, web 8)
-pnpm test:rules         # 29 Firestore rules tests (emulator)
-pnpm test:integration   # 37 backend tests against the emulators
-pnpm test:e2e           # 10 Playwright tests: the research journey, figures, roles, a11y (after pnpm e2e:build)
+pnpm -r test            # 399 unit tests (core 348, functions 34, web 17)
+pnpm test:rules         # 36 Firestore rules tests (emulator), cross-study isolation among them
+pnpm test:integration   # 55 backend tests against the emulators
+pnpm test:e2e           # 13 Playwright tests: the research journey, figures, roles, a11y, study spaces (after pnpm e2e:build)
 ```
 
 Port 4173 taken (the survey's own preview uses it too)? `E2E_PORT=4183 pnpm test:e2e`.

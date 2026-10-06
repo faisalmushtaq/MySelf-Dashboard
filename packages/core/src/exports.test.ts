@@ -68,6 +68,9 @@ describe("export requests", () => {
     expect(exportFileName(bids, { fromDay: null, toDay: null }, now)).toBe("myself_sessions-all_all-time_bids_deidentified_created-20260928-1200.zip");
     const single = parseExportSpec({ kind: "session_report", format: "pdf", scope: "single", sessionIds: ["01J../../etc/passwd"] });
     expect(exportFileName(single, { fromDay: null, toDay: null }, now)).toMatch(/^myself_session-report_session-01jetcpasswd_created-20260928-1200\.pdf$/);
+    // The study, and the survey when the export is of one (docs/12 §12.9).
+    expect(exportFileName(spec, { fromDay: null, toDay: null }, now, { study: "ybm" })).toBe("myself_ybm_sessions-filtered_all-time_created-20260928-1200.csv");
+    expect(exportFileName(spec, { fromDay: null, toDay: null }, now, { study: "future", survey: "future_v1" })).toBe("myself_future_future_v1_sessions-filtered_all-time_created-20260928-1200.csv");
   });
 });
 

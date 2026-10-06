@@ -7,10 +7,11 @@ import { Popover } from "../components/Popover";
 import { Dialog } from "../components/Dialog";
 import { useAuth } from "./auth";
 import { useStudyData } from "./data";
-import { filterQuery } from "./filters";
-import { DateRangeControl, VersionControl } from "./FilterControls";
+import { filterQuery, surveyQuery } from "./filters";
+import { DateRangeControl, SurveyControl, VersionControl } from "./FilterControls";
 import { HelpContent } from "../pages/Help";
-import { firebase, STUDY } from "../lib/firebase";
+import { firebase } from "../lib/firebase";
+import { explain } from "../lib/api";
 import { refreshAll, useOnline, useSessionState } from "../lib/hooks";
 import { relative } from "../lib/format";
 
@@ -19,7 +20,10 @@ interface NavItem {
   label: string;
   icon: IconName;
   capability?: Capability;
+  /** Follows every global filter: the date, survey and version controls show, and the filters carry over. */
   filtered?: boolean;
+  /** Follows the survey filter alone (docs/12 §12.6). */
+  surveyed?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -27,11 +31,11 @@ const NAV: NavItem[] = [
   { to: "/sessions", label: "Sessions", icon: "sessions", filtered: true },
   { to: "/completeness", label: "Completeness", icon: "completeness", filtered: true },
   { to: "/questions", label: "Questions", icon: "questions", filtered: true },
-  { to: "/codebook", label: "Codebook", icon: "book" },
+  { to: "/codebook", label: "Codebook", icon: "book", surveyed: true },
   { to: "/scores", label: "Scores", icon: "scores", filtered: true },
   { to: "/figures", label: "Figures", icon: "figure", filtered: true },
-  { to: "/participants", label: "Participants", icon: "people" },
-  { to: "/survey", label: "Survey versions", icon: "note", capability: "survey.versions" },
+  { to: "/participants", label: "Participants", icon: "people", surveyed: true },
+  { to: "/survey", label: "Survey versions", icon: "note", capability: "survey.versions", surveyed: true },
   { to: "/reports", label: "Reports and exports", icon: "reports", capability: "export.aggregate" },
   { to: "/views", label: "Saved views", icon: "views", capability: "views.private" },
   { to: "/audit", label: "Audit activity", icon: "audit", capability: "audit.readOwn" },
@@ -41,9 +45,50 @@ const NAV: NavItem[] = [
 /** Minutes after which the "data last refreshed" marker is called stale. */
 const STALE_MINUTES = 24 * 60;
 
+/**
+ * The study switcher (docs/12 §12.7): the studies this person may see, as the
+ * server listed them. Shown only when there is more than one. Choosing one
+ * asks the server, which remembers it, and opens that study's Overview.
+ */
+function StudySwitcher() {
+  const { me, switchStudy } = useAuth();
+  const { study, studies } = useStudyData();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!me || studies.length < 2) return null;
+  const choose = async (next: string) => {
+    if (next === study.study) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await switchStudy(next, () => navigate("/overview"));
+    } catch (e) {
+      setProblem(explain(e).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <label className="study-ctl" title={problem ?? "The study you are working in"}>
+      <Icon name="layers" size={16} />
+      <span className="ctl-caption" aria-hidden="true">
+        Study
+      </span>
+      <select value={study.study} onChange={(e) => void choose(e.target.value)} disabled={busy} aria-label="Study" aria-invalid={problem ? true : undefined}>
+        {studies.map((s) => (
+          <option key={s.study} value={s.study}>
+            {s.title}
+            {s.status === "closed" ? " (closed)" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function Shell() {
   const { me, can, signOut } = useAuth();
-  const { lastSummaryAt, freshnessError } = useStudyData();
+  const { lastSummaryAt, freshnessError, study } = useStudyData();
   const online = useOnline();
   const location = useLocation();
   const [params] = useSearchParams();
@@ -75,7 +120,7 @@ export function Shell() {
   // Exports finished for this person: a notification until downloaded or expired.
   useEffect(() => {
     if (!me?.uid) return;
-    const q = query(collection(firebase().db, `studies/${STUDY}/exportJobs`), where("requestedBy", "==", me.uid), orderBy("createdAt", "desc"), limit(10));
+    const q = query(collection(firebase().db, `studies/${me.study}/exportJobs`), where("requestedBy", "==", me.uid), orderBy("createdAt", "desc"), limit(10));
     return onSnapshot(
       q,
       (snap) => {
@@ -89,10 +134,13 @@ export function Shell() {
       },
       () => setReadyExports([]),
     );
-  }, [me?.uid]);
+  }, [me?.uid, me?.study]);
 
-  const filterScoped = NAV.find((n) => location.pathname.startsWith(n.to))?.filtered ?? location.pathname.startsWith("/sessions");
+  const here = NAV.find((n) => location.pathname.startsWith(n.to));
+  const filterScoped = here?.filtered ?? location.pathname.startsWith("/sessions");
+  const surveyScoped = here?.surveyed === true;
   const carry = filterQuery(params);
+  const carrySurvey = surveyQuery(params);
   const stale = lastSummaryAt ? (Date.now() - Date.parse(lastSummaryAt)) / 60_000 > STALE_MINUTES : false;
   const noticeCount = readyExports.length + (online ? 0 : 1) + (freshnessError ? 1 : 0);
 
@@ -122,7 +170,7 @@ export function Shell() {
           <ul>
             {NAV.filter((n) => !n.capability || can(n.capability)).map((n) => (
               <li key={n.to}>
-                <NavLink to={`${n.to}${n.filtered ? carry : ""}`} className={({ isActive }) => (isActive ? "active" : "")}>
+                <NavLink to={`${n.to}${n.filtered ? carry : n.surveyed ? carrySurvey : ""}`} className={({ isActive }) => (isActive ? "active" : "")}>
                   <Icon name={n.icon} />
                   <span>{n.to === "/audit" && !can("audit.readAll") ? "My activity" : n.label}</span>
                 </NavLink>
@@ -131,7 +179,10 @@ export function Shell() {
           </ul>
         </nav>
         <div className="sidebar-foot">
-          <span className="study-tag">Study: {STUDY}</span>
+          <span className="study-tag" title={study.study}>
+            Study: {study.title}
+            {study.status === "closed" ? " (closed)" : ""}
+          </span>
         </div>
       </aside>
 
@@ -139,6 +190,7 @@ export function Shell() {
         <button type="button" className="icon-btn nav-toggle" aria-label="Menu" aria-expanded={navOpen} onClick={() => setNavOpen((o) => !o)}>
           <Icon name="menu" />
         </button>
+        <StudySwitcher />
         <form role="search" className="global-search" onSubmit={submitSearch}>
           <label htmlFor="global-search" className="sr-only">
             Search sessions by session ID{can("view.studyCode") ? " or study code" : ""}
@@ -157,7 +209,12 @@ export function Shell() {
         {filterScoped ? (
           <div className="global-controls">
             <DateRangeControl />
+            <SurveyControl />
             <VersionControl />
+          </div>
+        ) : surveyScoped ? (
+          <div className="global-controls">
+            <SurveyControl />
           </div>
         ) : (
           <div className="global-controls" />

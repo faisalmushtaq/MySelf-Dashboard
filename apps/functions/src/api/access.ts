@@ -1,11 +1,12 @@
-import { CAPABILITIES, can, type PublicPolicy, type WhoAmIResponse } from "@myself-dashboard/core";
+import { CAPABILITIES, can, decideStudyAccess, type PublicPolicy, type StudyView, type WhoAmIResponse } from "@myself-dashboard/core";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall } from "firebase-functions/v2/https";
 import { audit } from "../audit.js";
 import { evaluate } from "../authz.js";
-import { dash, STUDY } from "../env.js";
+import { dash, DEFAULT_STUDY } from "../env.js";
 import { dpaths } from "../paths.js";
-import { studyPolicy } from "../settings.js";
+import { studyAccessList, studyPolicy } from "../settings.js";
+import { registeredStudies, studyView } from "../studies.js";
 import { callableOptions } from "./common.js";
 
 /**
@@ -15,6 +16,11 @@ import { callableOptions } from "./common.js";
  * unauthorised caller with something other than an error: the app needs to know
  * WHY (not approved, no role, unverified) to say it plainly — silence looks like a
  * bug and invites a workaround (docs/13 §3 in the survey repo says the same).
+ *
+ * It also says which studies the person may see and which one they are working
+ * in (docs/12 §12.7): the one asked for, else the one they last chose, else the
+ * default — never one they may not see. Choosing a study is remembered for them,
+ * on the server, so it follows them to any browser.
  *
  * Every sign-in and every refusal is audited. Refusals are throttled per account
  * so a page left open on a refused account cannot flood the log.
@@ -35,7 +41,8 @@ export const publicPolicy = (p: Awaited<ReturnType<typeof studyPolicy>>): Public
 
 export const whoAmI = onCall(callableOptions, async (request): Promise<WhoAmIResponse> => {
   const { decision, token } = await evaluate(request);
-  const signIn = (request.data as { signIn?: boolean } | undefined)?.signIn === true;
+  const data = (request.data ?? {}) as { signIn?: unknown; study?: unknown };
+  const signIn = data.signIn === true;
   if (!decision.ok) {
     const key = token?.uid ?? "anonymous";
     const last = deniedRecently.get(key) ?? 0;
@@ -58,17 +65,28 @@ export const whoAmI = onCall(callableOptions, async (request): Promise<WhoAmIRes
       role: null,
       capabilities: [],
       policy: null,
-      study: STUDY,
+      study: DEFAULT_STUDY,
+      defaultStudy: DEFAULT_STUDY,
+      studies: [],
     };
   }
-  const policy = await studyPolicy();
   const uid = request.auth!.uid;
+  const userRef = dash().doc(dpaths.user(uid));
+  const [registered, userSnap] = await Promise.all([registeredStudies(), userRef.get()]);
+  const visible: StudyView[] = [];
+  for (const s of registered) {
+    const list = await studyAccessList(s.study);
+    if (decideStudyAccess({ role: decision.role, email: decision.email, study: s.study, defaultStudy: DEFAULT_STUDY, list })) visible.push(await studyView(s));
+  }
+  const ids = new Set(visible.map((s) => s.study));
+  const asked = typeof data.study === "string" && ids.has(data.study) ? data.study : null;
+  const remembered = userSnap.get("study");
+  const study = asked ?? (typeof remembered === "string" && ids.has(remembered) ? remembered : DEFAULT_STUDY);
+  const policy = await studyPolicy(study);
   if (signIn) {
     await audit({ action: "auth.signed_in", actorUid: uid, actorEmail: decision.email, actorRole: decision.role });
   }
-  await dash()
-    .doc(dpaths.user(uid))
-    .set({ email: decision.email, role: decision.role, lastSeenAt: FieldValue.serverTimestamp() }, { merge: true });
+  await userRef.set({ email: decision.email, role: decision.role, lastSeenAt: FieldValue.serverTimestamp(), ...(asked ? { study: asked } : {}) }, { merge: true });
   return {
     authorised: true,
     reason: null,
@@ -77,6 +95,8 @@ export const whoAmI = onCall(callableOptions, async (request): Promise<WhoAmIRes
     role: decision.role,
     capabilities: CAPABILITIES.filter((c) => can(decision.role, c, policy)),
     policy: publicPolicy(policy),
-    study: STUDY,
+    study,
+    defaultStudy: DEFAULT_STUDY,
+    studies: visible,
   };
 });

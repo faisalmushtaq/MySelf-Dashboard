@@ -4,6 +4,7 @@ import { api, explain } from "../lib/api";
 import { dateTime, duration, int, pct, shortId } from "../lib/format";
 import { useLoad } from "../lib/hooks";
 import { useAnnounce } from "../app/announcer";
+import { useStudyData } from "../app/data";
 import { Icon } from "./Icon";
 import { StatusBadge } from "./Status";
 import { ErrorState, Notice, Skeleton } from "./States";
@@ -43,6 +44,7 @@ export function SessionDetail({
   split?: boolean;
 }) {
   const announce = useAnnounce();
+  const { surveys, surveyTitle } = useStudyData();
   const ctxKey = JSON.stringify(context);
   const { data, error, loading, reload, setData } = useLoad<SessionDetailResponse>(
     () => api.getSessionDetail({ sessionId, ...(context ? { context } : {}) }),
@@ -194,6 +196,7 @@ export function SessionDetail({
                 {it.studyCode}
               </span>
             ) : null}
+            {it.survey && surveys.length > 1 ? <span className="pill">{surveyTitle(it.survey)}</span> : null}
             <span className="pill">{data.release ? `Survey v${data.release.version}` : "Unknown survey version"}</span>
             {it.provenance === "imported" ? <span className="pill">Imported from file</span> : null}
           </div>

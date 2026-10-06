@@ -21,7 +21,7 @@ import {
 import { Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { actorFields, audit } from "../audit.js";
-import { requireActor } from "../authz.js";
+import { requireStudyActor } from "../authz.js";
 import { dash } from "../env.js";
 import { dpaths } from "../paths.js";
 import { allReleaseIndexes, releaseIndex, releaseList } from "../releases.js";
@@ -34,10 +34,10 @@ const iso = (v: unknown): string | null =>
 
 /** The session directory: filtered, searched, sorted and paged on the server. */
 export const querySessions = onCall({ ...callableOptions, memory: "1GiB" }, async (request): Promise<QuerySessionsResponse> => {
-  const actor = await requireActor(request);
+  const actor = await requireStudyActor(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const now = new Date();
-  const [{ rows }, releases] = await Promise.all([currentRows(now), allReleaseIndexes()]);
+  const [{ rows }, releases] = await Promise.all([currentRows(actor.study, now), allReleaseIndexes(actor.study)]);
   const defs = definitionsFrom(releases);
   const studyCodes = can(actor.role, "view.studyCode", actor.policy);
   const pageSize = (PAGE_SIZES as readonly number[]).includes(data["pageSize"] as number) ? (data["pageSize"] as number) : 50;
@@ -70,19 +70,20 @@ export const querySessions = onCall({ ...callableOptions, memory: "1GiB" }, asyn
  * never sent, free text only to roles that may read it. Every view is audited.
  */
 export const getSessionDetail = onCall({ ...callableOptions, memory: "1GiB" }, async (request): Promise<SessionDetailResponse> => {
-  const actor = await requireActor(request);
+  const actor = await requireStudyActor(request);
+  const { study } = actor;
   const data = (request.data ?? {}) as Record<string, unknown>;
   const sessionId = sessionIdArg(data["sessionId"]);
   const now = new Date();
 
-  const sitting = await readSitting(sessionId);
-  if (!sitting) throw new HttpsError("not-found", "No session with that id exists (it may have been withdrawn).");
+  const sitting = await readSitting(study, sessionId);
+  if (!sitting) throw new HttpsError("not-found", "No session with that id exists in this study (it may have been withdrawn).");
 
   const [release, reviewSnap, notesSnap, metas] = await Promise.all([
-    releaseIndex(sitting.releaseHash),
-    dash().doc(dpaths.review(sessionId)).get(),
-    dash().collection(dpaths.notes(sessionId)).orderBy("createdAt", "asc").limit(500).get(),
-    releaseList(),
+    releaseIndex(study, sitting.releaseHash),
+    dash().doc(dpaths.review(study, sessionId)).get(),
+    dash().collection(dpaths.notes(study, sessionId)).orderBy("createdAt", "asc").limit(500).get(),
+    releaseList(study),
   ]);
   const review: ReviewDoc = reviewSnap.exists ? ({ ...emptyReview(sessionId), ...(reviewSnap.data() as Partial<ReviewDoc>) } as ReviewDoc) : emptyReview(sessionId);
   delete (review as unknown as Record<string, unknown>)["_ts"];
@@ -91,12 +92,12 @@ export const getSessionDetail = onCall({ ...callableOptions, memory: "1GiB" }, a
   const status = deriveStatus(summary, review, actor.policy, now);
   const studyCodes = can(actor.role, "view.studyCode", actor.policy);
   const freeText = can(actor.role, "view.freeText", actor.policy);
-  const row = { summary, review, status };
+  const row = { summary, review, status, survey: release?.survey ?? null };
 
   let nav: SessionDetailResponse["neighbours"] = null;
   const context = data["context"] as Record<string, unknown> | undefined;
   if (context && typeof context === "object") {
-    const { rows } = await currentRows(now);
+    const { rows } = await currentRows(study, now);
     const ordered = orderedRows(
       rows,
       { filters: sanitiseFilters(context["filters"]), sort: sanitiseSort(context["sort"]), search: searchArg(context["search"]) },
@@ -106,9 +107,10 @@ export const getSessionDetail = onCall({ ...callableOptions, memory: "1GiB" }, a
     nav = neighbours(ordered, sessionId, clampInt(context["pageSize"], 25, 200, 50));
   }
 
-  // Questions the newest (or active) version asks that this sitting's version did not.
-  const newest = actor.policy.activeReleaseHash ?? [...metas].sort((a, b) => compareVersions(b.version, a.version))[0]?.hash;
-  const newestIndex = newest && newest !== sitting.releaseHash ? await releaseIndex(newest) : null;
+  // Questions the active (or newest) version of the same survey asks that this sitting's version did not.
+  const sameSurvey = release ? (await allReleaseIndexes(study)).filter((r) => r.survey === release.survey) : [];
+  const newest = sameSurvey.find((r) => r.hash === actor.policy.activeReleaseHash) ?? [...sameSurvey].sort((a, b) => compareVersions(b.version, a.version))[0];
+  const newestIndex = newest && newest.hash !== sitting.releaseHash ? newest : null;
   const notInVersion =
     release && newestIndex
       ? newestIndex.questions.filter((q) => !release.byKey.has(q.key)).map((q) => ({ key: q.key, text: q.text, version: newestIndex.version }))

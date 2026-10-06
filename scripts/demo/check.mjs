@@ -2,8 +2,10 @@
 /**
  * Open the built demo (apps/web/dist-demo, served at DEMO_URL) in a browser and
  * visit every page, failing on any page error, console error or failed call.
- * Survey versions is checked more closely: Studio's history, the link to
- * Studio, no editing controls, and its three downloads.
+ * Survey versions is checked more closely: Studio's history, the links to
+ * Studio, each survey's participant link, no editing controls, and its three
+ * downloads. Then the survey filter, and the second study space (docs/12):
+ * switched to, every page visited in it, and back.
  * DEMO_SHOTS=<folder> keeps a screenshot of each page.
  */
 import { mkdirSync, readFileSync } from "node:fs";
@@ -22,27 +24,37 @@ page.on("response", (r) => r.status() >= 400 && !r.url().endsWith("/favicon.ico"
 
 const routes = ["overview", "sessions", "sessions?st=incomplete", "completeness", "questions", "codebook", "figures", "scores", "participants", "reports", "views", "audit", "settings", "settings/scoring", "help", "survey"];
 let n = 0;
-async function visit(route) {
+async function visit(route, where = "") {
   await page.goto(`${URL_}#/${route}`);
   await page.waitForTimeout(1500);
   const heading = await page.locator("main h1").first().textContent({ timeout: 10_000 }).catch(() => "(no heading)");
   const alerts = (await page.locator("[role=alert], .notice-error, .state-error").allTextContents()).filter((t) => t.trim());
-  console.log(`${route.padEnd(24)} ${heading?.trim()}${alerts.length ? `  ALERT: ${alerts.join(" | ").slice(0, 200)}` : ""}`);
+  console.log(`${`${where}${route}`.padEnd(24)} ${heading?.trim()}${alerts.length ? `  ALERT: ${alerts.join(" | ").slice(0, 200)}` : ""}`);
+  if (alerts.length) problems.push(`${where}${route}: ${alerts.join(" | ").slice(0, 200)}`);
   if (SHOTS) {
     mkdirSync(SHOTS, { recursive: true });
-    await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, "0")}-${route.replace(/\W+/g, "_")}.png`, fullPage: true });
+    await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, "0")}-${`${where}${route}`.replace(/\W+/g, "_")}.png`, fullPage: true });
   }
 }
 for (const r of routes) await visit(r);
 
 // Survey versions: MySelf Studio's history, read-only, the way to Studio, and its downloads.
 await page.goto(`${URL_}#/survey`);
-await page.locator(".versions-table").waitFor({ timeout: 10_000 }).catch((e) => problems.push(`survey versions: ${e.message}`));
-const studio = page.getByRole("link", { name: /Edit in Studio/ });
-const [href, target, rel] = await Promise.all(["href", "target", "rel"].map((a) => studio.getAttribute(a).catch(() => null)));
-if (!href?.startsWith("https://") || target !== "_blank" || rel !== "noopener noreferrer") problems.push(`survey versions: Edit in Studio is ${href} ${target} ${rel}`);
+await page.locator(".versions-table").first().waitFor({ timeout: 10_000 }).catch((e) => problems.push(`survey versions: ${e.message}`));
+// One "Edit in Studio" per survey, each on its own survey's page in Studio.
+const studioLinks = page.getByRole("link", { name: /Edit in Studio/ });
+const surveysShown = await studioLinks.count();
+if (surveysShown !== 2) problems.push(`survey versions: ${surveysShown} surveys shown in YBM, not 2`);
+for (let i = 0; i < surveysShown; i += 1) {
+  const [href, target, rel] = await Promise.all(["href", "target", "rel"].map((a) => studioLinks.nth(i).getAttribute(a).catch(() => null)));
+  if (!/^https:\/\/.+#\/surveys\/[a-z0-9_]+\/versions$/.test(href ?? "") || target !== "_blank" || rel !== "noopener noreferrer") problems.push(`survey versions: Edit in Studio is ${href} ${target} ${rel}`);
+}
 const versionRows = await page.locator(".versions-table tbody tr:not(.row-detail):not(.row-problem)").count();
-for (const want of ["v9.0.0, live since", "Versions are edited, previewed and published in", "np.phone_wellbeing", "already live when Studio was set up", "made live again by", "MyStory needs the newer app on every iPad first", "Written by"]) {
+for (const want of [
+  "v9.0.0, live since", "Versions are edited, previewed and published in", "np.phone_wellbeing", "already live when Studio was set up", "made live again by", "MyStory needs the newer app on every iPad first", "Written by",
+  // Each live survey's participant link, built as the survey builds it.
+  "https://faisalmushtaq.github.io/MySelf/?study=ybm&survey=ybm_nd2026_standard", "https://faisalmushtaq.github.io/MySelf/?study=ybm&survey=ybm_mpmb_followup", "MyPhone MyBrain: follow-up",
+]) {
   if ((await page.getByText(want, { exact: false }).count()) === 0) problems.push(`survey versions: "${want}" is not on the page`);
 }
 for (const name of [/publish/i, /make live/i, /draft/i, /roll ?back/i, /restore/i]) {
@@ -67,6 +79,37 @@ try {
   problems.push(`survey versions downloads: ${e.message}`);
 }
 if (SHOTS) await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, "0")}-survey-versions.png`, fullPage: true });
+
+// The survey filter: every sitting of YBM, then the follow-up's alone.
+const count = async () => Number(((await page.locator(".result-count strong").textContent({ timeout: 10_000 }).catch(() => "")) ?? "").replace(/\D/g, ""));
+await page.goto(`${URL_}#/sessions`);
+await page.waitForTimeout(1500);
+const allSurveys = await count();
+const surveyFilter = page.getByRole("combobox", { name: "Survey", exact: true });
+await surveyFilter.selectOption({ label: "MyPhone MyBrain: follow-up" }).catch((e) => problems.push(`survey filter: ${e.message}`));
+await page.waitForTimeout(1500);
+const followUp = await count();
+if (!page.url().includes("sv=ybm_mpmb_followup") || !(followUp > 0 && followUp < allSurveys)) problems.push(`survey filter: ${allSurveys} sittings in all, ${followUp} in the follow-up (${page.url()})`);
+console.log(`survey filter            ${allSurveys} sittings, ${followUp} of them the follow-up's`);
+if (SHOTS) await page.screenshot({ path: `${SHOTS}/${String(++n).padStart(2, "0")}-survey-filter.png`, fullPage: true });
+
+// The second study space: chosen in the header, every page visited in it, then back.
+const studySwitcher = page.getByRole("combobox", { name: "Study", exact: true });
+const studies = await studySwitcher.locator("option").allTextContents();
+if (studies.length !== 2 || !studies.includes("Perspectives of the future")) problems.push(`study switcher: ${JSON.stringify(studies)}`);
+await studySwitcher.selectOption({ label: "Perspectives of the future" }).catch((e) => problems.push(`study switcher: ${e.message}`));
+await page.locator(".study-tag", { hasText: "Perspectives of the future" }).waitFor({ timeout: 10_000 }).catch(() => problems.push("study switcher: the future study did not open"));
+for (const r of routes) await visit(r, "future: ");
+await page.goto(`${URL_}#/survey`);
+await page.waitForTimeout(1500);
+if ((await page.getByText("https://faisalmushtaq.github.io/MySelf/?study=future&survey=future_perspectives", { exact: false }).count()) === 0) problems.push("future survey versions: its participant link is not on the page");
+const futureStudio = await page.getByRole("link", { name: /Edit in Studio/ }).first().getAttribute("href").catch(() => null);
+if (!futureStudio?.endsWith("#/study/future/surveys/future_perspectives/versions")) problems.push(`future survey versions: Edit in Studio is ${futureStudio}`);
+await page.goto(`${URL_}#/sessions`);
+await page.waitForTimeout(1500);
+console.log(`future sessions          ${await count()} sittings`);
+await studySwitcher.selectOption({ index: 0 }).catch((e) => problems.push(`study switcher back: ${e.message}`));
+await page.locator(".study-tag", { hasNotText: "Perspectives of the future" }).waitFor({ timeout: 10_000 }).catch(() => problems.push("study switcher: YBM did not open again"));
 
 // A session, then the next one, then a flag and a note.
 await page.goto(`${URL_}#/sessions`);
