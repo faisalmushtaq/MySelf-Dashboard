@@ -111,7 +111,7 @@ The emulator build's sign-in page has an extra "Emulated Google account" form
 | | `FIRESTORE_EMULATOR_HOST`, `SEED_COUNT` | Emulator and seed size. |
 | | `PLAYWRIGHT_CHROMIUM_EXECUTABLE` | Browser binary when `playwright install` is not possible. |
 | GitHub | secret `FIREBASE_SERVICE_ACCOUNT` | Deploy credential (manual deploy workflow only). |
-| | variable `DASHBOARD_FIREBASE_CONFIG` | The web config for production builds. |
+| | variable `DASHBOARD_FIREBASE_CONFIG` | Optional: the web config for production builds. When unset, the deploy reads it from the project's registered web app; a build without one is never published. |
 | | secret `SURVEY_REPO_TOKEN` | Optional: read access to the survey repo for the vendored-code check. |
 
 Nothing secret is needed by the dashboard at runtime.

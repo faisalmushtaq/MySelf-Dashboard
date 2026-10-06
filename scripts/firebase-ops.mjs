@@ -6,6 +6,7 @@
  *   node scripts/firebase-ops.mjs preflight   # read-only report, changes nothing
  *   node scripts/firebase-ops.mjs prepare     # dashboard database, Hosting site, web app, sign-in domains
  *   node scripts/firebase-ops.mjs finish      # first administrator, summary backfill, smoke test
+ *   node scripts/firebase-ops.mjs webconfig   # read-only: the registered web app's config, for a build
  *
  * Everything here adds the dashboard's OWN resources. It never changes the
  * survey's database, rules, functions, Hosting site or data. It prints
@@ -50,8 +51,8 @@ const DASHBOARD_FUNCTIONS = [
 ];
 
 const mode = process.argv[2];
-if (!["preflight", "prepare", "finish"].includes(mode)) {
-  console.error("usage: node scripts/firebase-ops.mjs preflight|prepare|finish");
+if (!["preflight", "prepare", "finish", "webconfig"].includes(mode)) {
+  console.error("usage: node scripts/firebase-ops.mjs preflight|prepare|finish|webconfig");
   process.exit(2);
 }
 
@@ -128,6 +129,29 @@ async function webApps() {
 
 async function authConfig() {
   return api("GET", `https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT}/config`);
+}
+
+/**
+ * The web app's public config (apiKey, projectId…), handed to the next workflow
+ * step as VITE_FIREBASE_CONFIG. A web build without it is a dashboard that says
+ * "Not configured" to everyone, so every deploy of the web app reads it here.
+ */
+async function exportWebConfig(web) {
+  const conf = await api("GET", `https://firebase.googleapis.com/v1beta1/projects/${PROJECT}/webApps/${web.appId}/config`);
+  if (!conf.ok) throw new Error(`reading the web app config: ${errorOf(conf)}`);
+  const c = conf.json;
+  const webConfig = { apiKey: c.apiKey, authDomain: c.authDomain ?? `${PROJECT}.firebaseapp.com`, projectId: c.projectId, appId: c.appId, messagingSenderId: c.messagingSenderId };
+  exportEnv("VITE_FIREBASE_CONFIG", JSON.stringify(webConfig));
+  ok("web config ready for the build", `authDomain ${webConfig.authDomain}`);
+}
+
+// ── webconfig (read-only) ─────────────────────────────────────────────────────
+
+async function webconfig() {
+  section("Web app");
+  const web = ((await webApps()) ?? []).find((a) => a.displayName === WEB_APP_NAME);
+  if (!web) throw new Error(`no web app named "${WEB_APP_NAME}" is registered; run the setup workflow first`);
+  await exportWebConfig(web);
 }
 
 const siteDomains = [`${SITE}.web.app`, `${SITE}.firebaseapp.com`];
@@ -340,12 +364,7 @@ async function prepare() {
     if (!web) throw new Error("the web app was registered but cannot be found");
     ok("registered", web.appId);
   }
-  const conf = await api("GET", `https://firebase.googleapis.com/v1beta1/projects/${PROJECT}/webApps/${web.appId}/config`);
-  if (!conf.ok) throw new Error(`reading the web app config: ${errorOf(conf)}`);
-  const c = conf.json;
-  const webConfig = { apiKey: c.apiKey, authDomain: c.authDomain ?? `${PROJECT}.firebaseapp.com`, projectId: c.projectId, appId: c.appId, messagingSenderId: c.messagingSenderId };
-  exportEnv("VITE_FIREBASE_CONFIG", JSON.stringify(webConfig));
-  ok("web config ready for the build", `authDomain ${webConfig.authDomain}`);
+  await exportWebConfig(web);
 
   section("Sign-in domains");
   const cfg = await authConfig();
@@ -473,6 +492,10 @@ async function finish() {
   const csp = page.headers.get("content-security-policy");
   (page.ok ? ok : bad)(`${url} responds`, String(page.status));
   (csp?.includes("frame-ancestors 'none'") ? ok : bad)("security headers served", csp ? "CSP present" : "no CSP header");
+  // A build without its web config still responds, and tells everyone "Not configured".
+  const entry = (await page.text().catch(() => "")).match(/assets\/index-[^"]+\.js/)?.[0];
+  const bundle = entry ? await (await fetch(`${url}${entry}`)).text().catch(() => "") : "";
+  (/AIza[0-9A-Za-z_-]{20,}/.test(bundle) ? ok : bad)("the web app carries its Firebase config", entry ?? "no entry script found");
   const callable = (name) =>
     fetch(`https://europe-west2-${PROJECT}.cloudfunctions.net/${name}`, {
       method: "POST",
@@ -495,6 +518,7 @@ try {
   if (mode === "preflight") await preflight();
   if (mode === "prepare") await prepare();
   if (mode === "finish") await finish();
+  if (mode === "webconfig") await webconfig();
 } catch (e) {
   console.error(`\n✗ ${e.message}`);
   process.exitCode = 1;

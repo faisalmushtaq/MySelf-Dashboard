@@ -42,10 +42,26 @@ jobs:
           if [ -z "$KEY" ]; then echo "::error::FIREBASE_SERVICE_ACCOUNT is not set (docs/06-handover.md §Deploy)"; exit 1; fi
           echo "$KEY" > "$RUNNER_TEMP/key.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> "$GITHUB_ENV"
-      - name: Deploy
+      # The web app's public config (apiKey, projectId…). A build without it is a
+      # dashboard that tells everyone "Not configured", which is what a deploy
+      # with the DASHBOARD_FIREBASE_CONFIG variable unset published on 6 Oct
+      # 2026. So it is read from the project when the variable is not set, and
+      # checked before anything is published.
+      - name: Web app config
+        if: inputs.what == 'all' || inputs.what == 'hosting'
         env:
-          VITE_FIREBASE_CONFIG: ${{ vars.DASHBOARD_FIREBASE_CONFIG }}
+          CONFIG: ${{ vars.DASHBOARD_FIREBASE_CONFIG }}
         run: |
+          if [ -n "$CONFIG" ]; then
+            echo "VITE_FIREBASE_CONFIG=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.env.CONFIG)))')" >> "$GITHUB_ENV"
+          else
+            node scripts/firebase-ops.mjs webconfig
+          fi
+      - name: Deploy
+        run: |
+          case "${{ inputs.what }}" in
+            all|hosting) node -e 'const c = JSON.parse(process.env.VITE_FIREBASE_CONFIG || "{}"); if (!c.apiKey || !c.projectId) { console.log("::error::No web app config for the build: the dashboard would say Not configured. Nothing was published."); process.exit(1); }'
+          esac
           case "${{ inputs.what }}" in
             all) pnpm exec firebase deploy --only firestore,functions:dashboard,hosting:dashboard --project myself-research --non-interactive ;;
             rules) pnpm deploy:rules --non-interactive ;;

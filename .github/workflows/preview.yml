@@ -49,12 +49,25 @@ jobs:
           if [ -z "$KEY" ]; then echo "::error::FIREBASE_SERVICE_ACCOUNT is not set (docs/06-handover.md)"; exit 1; fi
           printf '%s' "$KEY" > "$RUNNER_TEMP/key.json"
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> "$GITHUB_ENV"
-      # The Hosting predeploy in firebase.json builds the web app, with this
+      # The web app's public config (apiKey, projectId…). A build without it is a
+      # dashboard that tells everyone "Not configured", which is what a deploy
+      # with the DASHBOARD_FIREBASE_CONFIG variable unset published on 6 Oct
+      # 2026. So it is read from the project when the variable is not set, and
+      # checked before anything is published.
+      - name: Web app config
+        env:
+          CONFIG: ${{ vars.DASHBOARD_FIREBASE_CONFIG }}
+        run: |
+          if [ -n "$CONFIG" ]; then
+            echo "VITE_FIREBASE_CONFIG=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.env.CONFIG)))')" >> "$GITHUB_ENV"
+          else
+            node scripts/firebase-ops.mjs webconfig
+          fi
+      # The Hosting predeploy in firebase.json builds the web app, with that
       # config in its environment.
       - name: Publish to the preview channel
-        env:
-          VITE_FIREBASE_CONFIG: ${{ vars.DASHBOARD_FIREBASE_CONFIG }}
         run: |
+          node -e 'const c = JSON.parse(process.env.VITE_FIREBASE_CONFIG || "{}"); if (!c.apiKey || !c.projectId) { console.log("::error::No web app config for the build: the dashboard would say Not configured. Nothing was published."); process.exit(1); }'
           pnpm exec firebase hosting:channel:deploy dashboard-preview --only dashboard \
             --expires 30d --project myself-research --non-interactive | tee channel.log
           url=$(grep -oE 'https://[a-z0-9-]+--dashboard-preview-[a-z0-9]+\.web\.app' channel.log | head -1)
