@@ -1,12 +1,16 @@
 import { FieldValue, type Firestore, type Transaction } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
-import { dash } from "./env.js";
+import { dash, DEFAULT_STUDY } from "./env.js";
 import { dpaths } from "./paths.js";
 
 /**
  * The dashboard's audit log: append-only, written only here (the rules deny every
  * client write), readable by administrators in full and by everyone else for
  * their own entries.
+ *
+ * One log per study (docs/12 §12.3): what is done inside a study is recorded in
+ * that study's log (`study`); what concerns the dashboard as a whole — sign-ins,
+ * refusals, its access list, roles — in the default study's, where it always was.
  *
  * Details carry ids, counts and settings — never answers, free text or names.
  */
@@ -29,6 +33,8 @@ export type AuditAction =
   | "groups.changed"
   | "role.changed"
   | "access_policy.changed"
+  /** Who else may see a study (docs/12 §12.4), recorded in that study's log. */
+  | "study_access.changed"
   | "policy.changed"
   | "summaries.rebuilt"
   | "release.registered"
@@ -44,6 +50,8 @@ export interface AuditEntry {
   target?: { type: string; id: string } | null;
   detail?: Record<string, unknown> | null;
   outcome?: "success" | "denied" | "failed";
+  /** The study whose log records it; the default study's when absent. */
+  study?: string;
 }
 
 function row(entry: AuditEntry) {
@@ -61,7 +69,7 @@ function row(entry: AuditEntry) {
 
 export async function audit(entry: AuditEntry, db: Firestore = dash()): Promise<void> {
   try {
-    await db.collection(dpaths.audit()).add(row(entry));
+    await db.collection(dpaths.audit(entry.study ?? DEFAULT_STUDY)).add(row(entry));
   } catch (error) {
     // A failed audit write is logged loudly. For actions whose audit row is part of
     // the action (reviews, notes, exports), the row is written in the same
@@ -72,11 +80,13 @@ export async function audit(entry: AuditEntry, db: Firestore = dash()): Promise<
 
 /** Audit inside a transaction: the row exists if and only if the change does. */
 export function auditIn(tx: Transaction, entry: AuditEntry, db: Firestore = dash()): void {
-  tx.create(db.collection(dpaths.audit()).doc(), row(entry));
+  tx.create(db.collection(dpaths.audit(entry.study ?? DEFAULT_STUDY)).doc(), row(entry));
 }
 
-export const actorFields = (a: { uid: string; email: string; role: string }) => ({
+/** Who did it, and — for someone working in a study — the study whose log records it. */
+export const actorFields = (a: { uid: string; email: string; role: string; study?: string }) => ({
   actorUid: a.uid,
   actorEmail: a.email,
   actorRole: a.role,
+  ...(a.study ? { study: a.study } : {}),
 });

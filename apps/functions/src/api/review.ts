@@ -11,9 +11,10 @@ import {
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { actorFields, auditIn } from "../audit.js";
-import { requireActor } from "../authz.js";
+import { requireStudyActor } from "../authz.js";
 import { dash, research } from "../env.js";
 import { dpaths, spaths } from "../paths.js";
+import { sittingStudyProblem } from "../sittings.js";
 import { callableOptions, sessionIdArg } from "./common.js";
 
 /**
@@ -45,20 +46,21 @@ function parseChange(raw: unknown): ReviewChange {
   }
 }
 
-async function requireSession(sessionId: string): Promise<void> {
-  const snap = await research().doc(spaths.session(sessionId)).get();
-  if (!snap.exists) throw new HttpsError("not-found", "No session with that id exists.");
+/** A review is only ever of a sitting in the study it is filed under. */
+async function requireSession(study: string, sessionId: string): Promise<void> {
+  const snap = await research().doc(spaths.session(study, sessionId)).get();
+  if (!snap.exists || sittingStudyProblem(study, snap.data() as Record<string, unknown>)) throw new HttpsError("not-found", "No session with that id exists in this study.");
 }
 
 export const updateReview = onCall(callableOptions, async (request): Promise<{ review: ReviewDoc }> => {
-  const actor = await requireActor(request, "review.write");
+  const actor = await requireStudyActor(request, "review.write");
   const data = (request.data ?? {}) as Record<string, unknown>;
   const sessionId = sessionIdArg(data["sessionId"]);
   const change = parseChange(data["change"]);
   const expectedRev = typeof data["expectedRev"] === "number" ? data["expectedRev"] : null;
-  await requireSession(sessionId);
+  await requireSession(actor.study, sessionId);
   const db = dash();
-  const ref = db.doc(dpaths.review(sessionId));
+  const ref = db.doc(dpaths.review(actor.study, sessionId));
   try {
     const review = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -85,7 +87,7 @@ export const updateReview = onCall(callableOptions, async (request): Promise<{ r
 });
 
 export const addNote = onCall(callableOptions, async (request): Promise<{ id: string; noteCount: number }> => {
-  const actor = await requireActor(request, "review.write");
+  const actor = await requireStudyActor(request, "review.write");
   const data = (request.data ?? {}) as Record<string, unknown>;
   const sessionId = sessionIdArg(data["sessionId"]);
   let text: string;
@@ -94,10 +96,10 @@ export const addNote = onCall(callableOptions, async (request): Promise<{ id: st
   } catch (error) {
     throw new HttpsError("invalid-argument", (error as Error).message);
   }
-  await requireSession(sessionId);
+  await requireSession(actor.study, sessionId);
   const db = dash();
-  const reviewRef = db.doc(dpaths.review(sessionId));
-  const noteRef = db.collection(dpaths.notes(sessionId)).doc();
+  const reviewRef = db.doc(dpaths.review(actor.study, sessionId));
+  const noteRef = db.collection(dpaths.notes(actor.study, sessionId)).doc();
   const noteCount = await db.runTransaction(async (tx) => {
     const snap = await tx.get(reviewRef);
     const current: ReviewDoc = snap.exists ? ({ ...emptyReview(sessionId), ...(snap.data() as Partial<ReviewDoc>) } as ReviewDoc) : emptyReview(sessionId);

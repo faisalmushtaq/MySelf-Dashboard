@@ -53,7 +53,7 @@ beforeAll(async () => {
   await dash().doc("config/access").set({ emails: ["brainpopresearch@gmail.com"], domains: ["brainpop.example"] });
   for (const m of demoManifests()) await registerRelease(m, "demo", "test");
   sittings = await seedSittings();
-  for (const s of sittings) await summariseSitting(s.doc.sessionId, s.doc as never, { backfill: true });
+  for (const s of sittings) await summariseSitting("demo", s.doc.sessionId, s.doc as never, { backfill: true });
   admin = await person("brainpopresearch@gmail.com", "owner");
   researcher = await person("researcher@brainpop.example", "researcher");
   reviewer = await person("reviewer@brainpop.example", "analyst");
@@ -214,7 +214,7 @@ describe("exports", () => {
     const ok = await run<{ allowed: boolean; sessionCount: number; fileName: string }>(previewExport, researcher, spec);
     expect(ok.allowed).toBe(true);
     expect(ok.sessionCount).toBeGreaterThan(0);
-    expect(ok.fileName).toMatch(/^myself_sessions-filtered_all-time_created-\d{8}-\d{4}\.csv$/);
+    expect(ok.fileName).toMatch(/^myself_demo_sessions-filtered_all-time_created-\d{8}-\d{4}\.csv$/);
   });
 
   it("refuses a reviewer's session-level export on the server, and audits the refusal", async () => {
@@ -411,7 +411,7 @@ describe("scores", () => {
   it("writes a school report any member may export, naming no other school", async () => {
     const job = await run<{ id: string; status: string; fileName: string }>(createExport, reviewer, { kind: "school_report", format: "pdf", scope: "filtered", filters: DEFAULT_FILTERS, school: "NDC", observation: "latest" });
     expect(job.status).toBe("ready");
-    expect(job.fileName).toMatch(/^myself_school-report-ndc_/);
+    expect(job.fileName).toMatch(/^myself_demo_school-report-ndc_/);
     const jobDoc = (await dash().doc(`studies/demo/exportJobs/${job.id}`).get()).data()!;
     const [bytes] = await getStorage().bucket().file(jobDoc["storagePath"]).download();
     const text = pdfText(bytes);
@@ -499,7 +499,7 @@ describe("summaries", () => {
   it("keep the first time the server received a sitting across later uploads", async () => {
     const s = sittings[5]!;
     const before = (await dash().doc(`studies/demo/sessionSummaries/${s.doc.sessionId}`).get()).data()!;
-    await summariseSitting(s.doc.sessionId, { ...s.doc, receivedAt: new Date(Date.now() + 60_000).toISOString() } as never);
+    await summariseSitting("demo", s.doc.sessionId, { ...s.doc, receivedAt: new Date(Date.now() + 60_000).toISOString() } as never);
     const after = (await dash().doc(`studies/demo/sessionSummaries/${s.doc.sessionId}`).get()).data()!;
     expect(after["firstReceivedAt"]).toBe(before["firstReceivedAt"]);
     expect(after["receivedAt"]).not.toBe(before["receivedAt"]);
@@ -568,23 +568,23 @@ describe("survey versions from MySelf Studio", () => {
   it("reads sittings under a version Studio published, once its copy proves to be that version", async () => {
     const s = sittings[0]!;
     const doc = { ...s.doc, sessionId: "ses_studio_v3", releaseHash: v3["hash"], releaseKey: v3["release"]["key"] };
-    const summary = await summariseSitting(doc.sessionId, doc as never);
+    const summary = await summariseSitting("demo", doc.sessionId, doc as never);
     expect(summary.releaseKnown).toBe(true);
     expect(summary.releaseVersion).toBe("3.0.0");
     const registered = (await dash().doc(`studies/demo/releases/${v3["hash"]}`).get()).data()!;
     expect(registered["provenance"]).toMatchObject({ source: "studio", surveyId: SURVEY, version: "3.0.0" });
     expect((await auditRows("release.registered")).filter((r) => r["target"]?.id === v3["hash"])).toHaveLength(1);
     // A second sitting under it reads the registry; no second registration.
-    await summariseSitting("ses_studio_v3b", { ...doc, sessionId: "ses_studio_v3b" } as never);
+    await summariseSitting("demo", "ses_studio_v3b", { ...doc, sessionId: "ses_studio_v3b" } as never);
     expect((await auditRows("release.registered")).filter((r) => r["target"]?.id === v3["hash"])).toHaveLength(1);
   });
 
   it("refuses a copy that has changed since it was published, says so once, and reads nothing through it", async () => {
     const doc = { ...sittings[1]!.doc, sessionId: "ses_studio_tampered", releaseHash: tampered["hash"], releaseKey: tampered["release"]["key"] };
-    const summary = await summariseSitting(doc.sessionId, doc as never);
+    const summary = await summariseSitting("demo", doc.sessionId, doc as never);
     expect(summary.releaseKnown).toBe(false);
     expect(summary.counts.required).toBe(0);
-    await summariseSitting(doc.sessionId, doc as never);
+    await summariseSitting("demo", doc.sessionId, doc as never);
     expect((await dash().doc(`studies/demo/releases/${tampered["hash"]}`).get()).exists).toBe(false);
     const refusals = (await auditRows("release.refused")).filter((r) => r["target"]?.id === tampered["hash"]);
     expect(refusals).toHaveLength(1);

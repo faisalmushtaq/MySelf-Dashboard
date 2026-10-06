@@ -1,7 +1,9 @@
-import { can, emailAllowed, isRole, ROLE_LABELS, type Capability, type Policy, type Role } from "@myself-dashboard/core";
+import { can, decideStudyAccess, emailAllowed, isRole, ROLE_LABELS, type Capability, type Policy, type Role } from "@myself-dashboard/core";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
-import { auth } from "./env.js";
-import { accessPolicy, studyPolicy, type AccessPolicy } from "./settings.js";
+import { audit } from "./audit.js";
+import { auth, DEFAULT_STUDY } from "./env.js";
+import { accessPolicy, studyAccessList, studyPolicy, type AccessPolicy } from "./settings.js";
+import { lookupStudy } from "./studies.js";
 
 /**
  * Who is calling, and may they?
@@ -20,6 +22,9 @@ import { accessPolicy, studyPolicy, type AccessPolicy } from "./settings.js";
  *
  * The decision itself is `decideAccess`, a pure function, so every refusal is
  * unit-tested without an emulator.
+ *
+ * Everything a study holds also goes through `requireStudyActor`, which then
+ * decides the study (docs/12 §12.4).
  */
 
 export interface Actor {
@@ -119,13 +124,61 @@ export async function evaluate(request: Pick<CallableRequest, "auth">): Promise<
   return { decision: decideAccess(token, account, access), token };
 }
 
-/** The authorised caller, or an HttpsError the client can show as it is. */
+/**
+ * The authorised caller, or an HttpsError the client can show as it is. For
+ * what concerns the dashboard as a whole (its access list, roles); `policy` is
+ * the default study's.
+ */
 export async function requireActor(request: Pick<CallableRequest, "auth">, capability: Capability = "view.dashboard"): Promise<Actor> {
   const { decision } = await evaluate(request);
   if (!decision.ok) throw new HttpsError(decision.code, decision.reason);
-  const policy = await studyPolicy();
+  const policy = await studyPolicy(DEFAULT_STUDY);
   if (!can(decision.role, capability, policy)) {
     throw new HttpsError("permission-denied", `${ROLE_LABELS[decision.role]}s cannot do this (${capability}).`);
   }
   return { uid: request.auth!.uid, email: decision.email, role: decision.role, policy };
+}
+
+/** Someone working in a study they may see, with that study's policy. */
+export interface StudyActor extends Actor {
+  study: string;
+}
+
+/** Refusals of a study, throttled per person and study so a page left open cannot flood the log. */
+const studyDeniedRecently = new Map<string, number>();
+
+/**
+ * The authorised caller in the study the request names (absent: the default,
+ * as every request meant until there were several), or an HttpsError.
+ *
+ * In this order, before anything of the study is read: the caller may use the
+ * dashboard at all (`requireActor`'s checks); the study is a study id and a
+ * registered study; the caller may see it (`decideStudyAccess`: administrators
+ * every study, everyone the default one, anyone else a study whose own list
+ * names them); their role may do this under the study's policy. Every path the
+ * handler builds is then built from `actor.study`, never from the request.
+ */
+export async function requireStudyActor(request: Pick<CallableRequest, "auth" | "data">, capability: Capability = "view.dashboard"): Promise<StudyActor> {
+  const { decision } = await evaluate(request);
+  if (!decision.ok) throw new HttpsError(decision.code, decision.reason);
+  const raw = (request.data as Record<string, unknown> | null | undefined)?.["study"];
+  const found = await lookupStudy(raw);
+  if (found.kind === "malformed") throw new HttpsError("invalid-argument", "study must be a study id, such as ybm");
+  if (found.kind === "unknown") throw new HttpsError("not-found", `There is no study “${found.study}” in this project.`);
+  const study = found.study;
+  const uid = request.auth!.uid;
+  const list = await studyAccessList(study);
+  if (!decideStudyAccess({ role: decision.role, email: decision.email, study, defaultStudy: DEFAULT_STUDY, list })) {
+    const key = `${uid} ${study}`;
+    if (Date.now() - (studyDeniedRecently.get(key) ?? 0) > 10 * 60_000) {
+      studyDeniedRecently.set(key, Date.now());
+      await audit({ action: "auth.denied", actorUid: uid, actorEmail: decision.email, actorRole: decision.role, target: { type: "study", id: study }, detail: { reason: "study_not_permitted" }, outcome: "denied" });
+    }
+    throw new HttpsError("permission-denied", `${decision.email} has not been given access to the study “${study}”. Ask a dashboard administrator.`);
+  }
+  const policy = await studyPolicy(study);
+  if (!can(decision.role, capability, policy)) {
+    throw new HttpsError("permission-denied", `${ROLE_LABELS[decision.role]}s cannot do this (${capability}).`);
+  }
+  return { uid, email: decision.email, role: decision.role, policy, study };
 }

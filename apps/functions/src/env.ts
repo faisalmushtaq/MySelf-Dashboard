@@ -18,8 +18,14 @@ setGlobalOptions({ region: REGION, maxInstances: 10 });
 
 if (getApps().length === 0) initializeApp();
 
-/** The study this deployment serves (the survey's MYSELF_STUDY). */
-export const STUDY = process.env["MYSELF_STUDY"] ?? "ybm";
+/**
+ * The deployment's default study (the survey's MYSELF_STUDY): `ybm` in
+ * production. It is registered whether or not it has a registry document, a
+ * request that names no study means it, and its settings and access list are
+ * the dashboard's own (docs/12). Every other study is one an owner created in
+ * the Studio.
+ */
+export const DEFAULT_STUDY = process.env["MYSELF_STUDY"] ?? "ybm";
 
 /** The dashboard's own named Firestore database (docs/02 §2.1). */
 export const DASHBOARD_DATABASE = process.env["DASHBOARD_DATABASE"] ?? "dashboard";

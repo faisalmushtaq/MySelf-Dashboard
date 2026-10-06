@@ -1,6 +1,6 @@
-import { buildQualityReport, compareVersions, type CodebookResponse } from "@myself-dashboard/core";
+import { buildQualityReport, compareVersions, sanitiseFilters, type CodebookResponse } from "@myself-dashboard/core";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { requireActor } from "../authz.js";
+import { requireStudyActor } from "../authz.js";
 import { allReleaseIndexes } from "../releases.js";
 import { effectiveSchemes } from "../scoring.js";
 import { callableOptions } from "./common.js";
@@ -11,12 +11,15 @@ import { callableOptions } from "./common.js";
  * registered version against the study's current scoring schemes.
  *
  * Built from the survey definitions and the schemes alone: no answers are read,
- * so every dashboard member sees the same thing.
+ * so every member of the study sees the same thing. With a survey chosen, that
+ * survey's versions only (docs/12 §12.6).
  */
 export const getCodebook = onCall({ ...callableOptions, memory: "1GiB" }, async (request): Promise<CodebookResponse> => {
-  const actor = await requireActor(request);
+  const actor = await requireStudyActor(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
-  const [releases, schemes] = await Promise.all([allReleaseIndexes(), effectiveSchemes()]);
+  const surveys = sanitiseFilters(data["filters"]).surveys;
+  const [all, schemes] = await Promise.all([allReleaseIndexes(actor.study), effectiveSchemes(actor.study)]);
+  const releases = all.filter((r) => surveys.length === 0 || (r.survey !== null && surveys.includes(r.survey)));
   if (!releases.length) throw new HttpsError("failed-precondition", "No survey versions are registered yet.");
   const ordered = [...releases].sort((a, b) => compareVersions(b.version, a.version));
   const active = ordered.find((r) => r.hash === actor.policy.activeReleaseHash) ?? ordered[0]!;

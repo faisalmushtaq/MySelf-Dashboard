@@ -1,6 +1,6 @@
 import type { StudioLiveEvent, StudioPointer, StudioSurveyRecord, StudioVersionRecord, VersionSource } from "@myself-dashboard/core";
 import { Timestamp } from "firebase-admin/firestore";
-import { research, STUDY } from "./env.js";
+import { research } from "./env.js";
 import { spaths } from "./paths.js";
 
 /**
@@ -81,7 +81,8 @@ function restore(d: Record<string, unknown>): { surveyId: string | null; at: str
   return d["action"] === "draft.restored" && at && version ? { surveyId: str(d["surveyId"]), at, version } : null;
 }
 
-export async function readStudio(study = STUDY): Promise<StudioSurveyRecord[]> {
+/** Studio's records of every survey in `study`. */
+export async function readStudio(study: string): Promise<StudioSurveyRecord[]> {
   const db = research();
   const [surveys, trail] = await Promise.all([
     db.collection(spaths.studioSurveys(study)).get(),
@@ -92,7 +93,7 @@ export async function readStudio(study = STUDY): Promise<StudioSurveyRecord[]> {
   const restores = trail.docs.map((d) => restore(d.data())).filter((r) => r !== null);
   return Promise.all(
     surveys.docs.map(async (s) => {
-      const [versions, pointer] = await Promise.all([db.collection(spaths.studioVersions(s.id, study)).get(), db.doc(spaths.publishedPointer(s.id, study)).get()]);
+      const [versions, pointer] = await Promise.all([db.collection(spaths.studioVersions(study, s.id)).get(), db.doc(spaths.publishedPointer(study, s.id)).get()]);
       return {
         surveyId: s.id,
         title: str(s.get("title")) ?? s.id,

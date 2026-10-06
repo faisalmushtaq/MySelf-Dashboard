@@ -7,6 +7,8 @@ import {
   computeQuestionStats,
   can,
   compareRows,
+  decideStudyAccess,
+  exportSurvey,
   buildSchoolReportView,
   compareVersions,
   composeFigure,
@@ -43,16 +45,16 @@ import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { actorFields, audit } from "../audit.js";
-import { accountFacts, decideAccess, requireActor, tokenFacts, type Actor } from "../authz.js";
-import { ALLOWED_ORIGINS, auth, bucket, dash, EXPORT_PREFIX } from "../env.js";
+import { accountFacts, decideAccess, requireStudyActor, tokenFacts, type StudyActor } from "../authz.js";
+import { ALLOWED_ORIGINS, auth, bucket, dash, DEFAULT_STUDY, EXPORT_PREFIX } from "../env.js";
 import { dpaths } from "../paths.js";
 import { allReleaseIndexes, releaseIndex, releaseList } from "../releases.js";
 import { loadStudyDataset, participantsFor, readNarratives, sha256, surveyManifests } from "../studyData.js";
 import { scoredSessions, studyGroupSettings } from "../scoring.js";
-import { STUDY } from "../env.js";
-import { accessPolicy, studyPolicy } from "../settings.js";
+import { accessPolicy, studyAccessList, studyPolicy } from "../settings.js";
 import { readSittings } from "../sittings.js";
 import { currentRows } from "../store.js";
+import { lookupStudy, registeredStudies, studySurveys } from "../studies.js";
 import { callableOptions } from "./common.js";
 import { csvOf, stackedCsvOf, xlsxOf } from "../exporters/encode.js";
 import { completenessPdf, sessionReportPdf } from "../exporters/pdf.js";
@@ -63,7 +65,12 @@ import { schoolReportPdf } from "../exporters/schoolReport.js";
  * downloaded through an authenticated endpoint, audited, and deleted after the
  * retention period (docs/02 §2.5). The browser never holds more than the file the
  * researcher asked for, and never builds one.
+ *
+ * An export is of one study, the one its creator is working in, and is filed
+ * in that study's `exportJobs` (docs/12 §12.9).
  */
+
+type Actor = StudyActor;
 
 function parseSpec(raw: unknown): ExportSpec {
   try {
@@ -96,7 +103,7 @@ function dateRangeLabel(spec: ExportSpec, actor: Actor, now: Date): { label: str
 }
 
 async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<{ preview: ExportPreview; rows: SessionRow[]; releases: ReleaseIndex[] }> {
-  const [{ rows }, releases] = await Promise.all([currentRows(now), allReleaseIndexes()]);
+  const [{ rows }, releases, surveys] = await Promise.all([currentRows(actor.study, now), allReleaseIndexes(actor.study), studySurveys(actor.study)]);
   const chosen = selectRows(rows, spec, actor, now);
   const byVersion = new Map<string, number>();
   for (const r of chosen) byVersion.set(r.summary.releaseHash ?? "unknown", (byVersion.get(r.summary.releaseHash ?? "unknown") ?? 0) + 1);
@@ -119,7 +126,7 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
   if (isSensitive(spec)) warnings.push(`Session-level research data. The file is kept for ${actor.policy.exportRetentionHours} hours on the server, then deleted.`);
   if (chosen.length === 0) warnings.push("No sessions match — the export would be empty.");
   if (spec.kind === "school_report") {
-    const minCell = (await studyGroupSettings()).minCell;
+    const minCell = (await studyGroupSettings(actor.study)).minCell;
     warnings.push(`Written to be shared with the school: group averages only, other schools never named, and any group of fewer than ${minCell} pupils withheld.`);
     if (!chosen.some((r) => r.summary.site === spec.school)) warnings.push(`No sittings from ${spec.school} match these filters.`);
   }
@@ -156,6 +163,7 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
 
   const describe = describeFilters(spec.filters, {
     version: (h) => relByHash.get(h)?.version ?? h.slice(7, 15),
+    survey: (id) => surveys.find((x) => x.surveyId === id)?.title ?? id,
   }).map((c) => c.label);
 
   return {
@@ -176,7 +184,7 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
       includesFreeText: spec.includeFreeText,
       includesStudyCode: spec.includeStudyCode,
       deidentified: spec.deidentified,
-      fileName: exportFileName(spec, range, now),
+      fileName: exportFileName(spec, range, now, { study: actor.study, survey: exportSurvey(spec) }),
       sensitive: isSensitive(spec),
       warnings,
       allowed: verdict.ok,
@@ -187,7 +195,7 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
 }
 
 export const previewExport = onCall({ ...callableOptions, memory: "1GiB" }, async (request): Promise<ExportPreview> => {
-  const actor = await requireActor(request, "export.aggregate");
+  const actor = await requireStudyActor(request, "export.aggregate");
   const spec = parseSpec(request.data);
   return (await buildPreview(spec, actor, new Date())).preview;
 });
@@ -217,16 +225,16 @@ function jobView(id: string, d: Record<string, unknown>): ExportJobView {
   };
 }
 
-/** Records with answers, read from raw logs in batches, reporting progress. */
-async function withAnswers(rows: SessionRow[], spec: ExportSpec, onProgress: (done: number) => Promise<void>): Promise<SessionRecord[]> {
-  const policy = await studyPolicy();
+/** Records with answers, read from the study's raw logs in batches, reporting progress. */
+async function withAnswers(study: string, rows: SessionRow[], spec: ExportSpec, onProgress: (done: number) => Promise<void>): Promise<SessionRecord[]> {
+  const policy = await studyPolicy(study);
   const out: SessionRecord[] = [];
   for (let i = 0; i < rows.length; i += 100) {
     const batch = rows.slice(i, i + 100);
-    const sittings = await readSittings(batch.map((r) => r.summary.sessionId));
+    const sittings = await readSittings(study, batch.map((r) => r.summary.sessionId));
     for (const row of batch) {
       const sitting = sittings.get(row.summary.sessionId);
-      const release = sitting ? await releaseIndex(sitting.releaseHash) : null;
+      const release = sitting ? await releaseIndex(study, sitting.releaseHash) : null;
       if (!sitting || !release) {
         out.push({ row });
         continue;
@@ -246,18 +254,19 @@ async function withAnswers(rows: SessionRow[], spec: ExportSpec, onProgress: (do
  * restricted to the chosen sittings.
  */
 async function bidsFile(spec: ExportSpec, actor: Actor, rows: SessionRow[], exportId: string, filters: string[], now: Date, progress: (p: number) => Promise<void>) {
-  const { study, sittings } = await loadStudyDataset({ fresh: true, onProgress: (f) => progress(0.05 + 0.6 * f) });
-  const [manifests, indexes, metas] = await Promise.all([surveyManifests(), allReleaseIndexes(), releaseList()]);
+  const { study, sittings } = await loadStudyDataset(actor.study, { fresh: true, onProgress: (f) => progress(0.05 + 0.6 * f) });
+  const [manifests, indexes, metas] = await Promise.all([surveyManifests(actor.study), allReleaseIndexes(actor.study), releaseList(actor.study)]);
   const version = (h: string) => metas.find((m) => m.hash === h)?.version ?? "0";
   const included = [...new Set(rows.map((r) => r.summary.releaseHash).filter((h): h is string => !!h && manifests.has(h)))];
   const sidecar = (included.length ? included : [...manifests.keys()]).sort((a, b) => compareVersions(version(b), version(a)))[0];
   if (!sidecar) throw new HttpsError("failed-precondition", "No registered survey version can be read, so there is nothing to build a BIDS dataset from.");
-  const narratives = spec.includeFreeText ? await readNarratives() : [];
+  const narratives = spec.includeFreeText ? await readNarratives(actor.study) : [];
   // Scores from the study's scoring schemes, not the survey's own definitions (docs/08).
-  const scoring = await scoredSessions();
+  const scoring = await scoredSessions(actor.study);
   await progress(0.8);
   const result = buildDashboardBids({
-    study: STUDY,
+    study: actor.study,
+    survey: exportSurvey(spec),
     studyData: study,
     selected: new Set(rows.map((r) => r.summary.sessionId)),
     sittings,
@@ -302,14 +311,14 @@ async function generate(
     case "sessions": {
       if (spec.format === "bids") return bidsFile(spec, actor, rows, context.exportId, context.filters, now, progress);
       // Participant codes and waves, as the survey derives them, for every format.
-      const { study } = await loadStudyDataset({ fresh: true, onProgress: (f) => progress(0.02 + 0.2 * f) });
+      const { study } = await loadStudyDataset(actor.study, { fresh: true, onProgress: (f) => progress(0.02 + 0.2 * f) });
       const linkage = participantsFor(study, rows.map((r) => r.summary.sessionId), spec.deidentified);
       const link = (rec: SessionRecord): SessionRecord => {
         const l = linkage.get(rec.row.summary.sessionId);
         return { ...rec, participant: l?.participant ?? null, wave: l?.wave ?? null };
       };
       const records: SessionRecord[] = (
-        spec.includeAnswers ? await withAnswers(rows, spec, (done) => progress(0.25 + (0.6 * done) / Math.max(1, rows.length))) : rows.map((row) => ({ row }))
+        spec.includeAnswers ? await withAnswers(actor.study, rows, spec, (done) => progress(0.25 + (0.6 * done) / Math.max(1, rows.length))) : rows.map((row) => ({ row }))
       ).map(link);
       const table = sessionsTable(records, spec, tz);
       const included = [...new Map(records.filter((r) => r.release).map((r) => [r.release!.hash, r.release!])).values()];
@@ -321,6 +330,8 @@ async function generate(
       }
       // JSON (administrators only — enforced by authoriseExport).
       const json = {
+        study: actor.study,
+        survey: exportSurvey(spec),
         generatedAt: now.toISOString(),
         generatedBy: actor.email,
         spec: { ...spec, sessionIds: spec.scope === "selected" ? spec.sessionIds : [] },
@@ -338,14 +349,14 @@ async function generate(
       if (!row) throw new HttpsError("not-found", "That session is not available.");
       const sessionId = row.summary.sessionId;
       const [[record], notesSnap] = await Promise.all([
-        withAnswers([row], spec, async () => undefined),
-        dash().collection(dpaths.notes(sessionId)).orderBy("createdAt", "asc").limit(500).get(),
+        withAnswers(actor.study, [row], spec, async () => undefined),
+        dash().collection(dpaths.notes(actor.study, sessionId)).orderBy("createdAt", "asc").limit(500).get(),
       ]);
       const review: ReviewDoc = row.review ?? ({ status: "unreviewed", flags: [], qualityConcerns: [], markedTest: false, markedInvalid: false, lastReviewedAt: null } as unknown as ReviewDoc);
       // The participant code, wave and their other sittings — only when the report carries identifiers.
       let participant: Parameters<typeof sessionReportPdf>[0]["participant"] = null;
       if (!spec.deidentified) {
-        const { study } = await loadStudyDataset();
+        const { study } = await loadStudyDataset(actor.study);
         const self = study.dataset.sessions.find((s) => s.sessionId === sessionId);
         if (self) {
           participant = {
@@ -432,7 +443,7 @@ async function generate(
       };
     }
     case "school_report": {
-      const { sessions, schemes, settings } = await scoredSessions();
+      const { sessions, schemes, settings } = await scoredSessions(actor.study);
       const allowed = new Set(rows.map((r) => r.summary.sessionId));
       const view = buildSchoolReportView(
         sessions.filter((x) => allowed.has(x.sessionId)),
@@ -465,11 +476,12 @@ async function generate(
 }
 
 export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeoutSeconds: 540 }, async (request): Promise<ExportJobView> => {
-  const actor = await requireActor(request, "export.aggregate");
+  const actor = await requireStudyActor(request, "export.aggregate");
   const spec = parseSpec(request.data);
   const now = new Date();
   const { preview, rows, releases } = await buildPreview(spec, actor, now);
-  const describe = { kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, identifiers: !spec.deidentified && isSensitive(spec), deidentified: spec.deidentified, includesAnswers: spec.includeAnswers, ...(spec.kind === "school_report" ? { school: spec.school, yearGroup: spec.yearGroup ?? null } : {}) };
+  const survey = exportSurvey(spec);
+  const describe = { study: actor.study, ...(survey ? { survey } : {}), kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, identifiers: !spec.deidentified && isSensitive(spec), deidentified: spec.deidentified, includesAnswers: spec.includeAnswers, ...(spec.kind === "school_report" ? { school: spec.school, yearGroup: spec.yearGroup ?? null } : {}) };
   if (!preview.allowed) {
     await audit({ action: "export.created", ...actorFields(actor), detail: { ...describe, refusal: preview.refusal }, outcome: "denied" });
     throw new HttpsError("permission-denied", preview.refusal ?? "not permitted");
@@ -477,9 +489,11 @@ export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeout
   if (preview.sessionCount === 0 && spec.kind !== "question_summary") throw new HttpsError("failed-precondition", "No sessions match — there is nothing to export.");
 
   const db = dash();
-  const jobRef = db.collection(dpaths.exportJobs()).doc();
+  const jobRef = db.collection(dpaths.exportJobs(actor.study)).doc();
   const expiresAt = Timestamp.fromMillis(now.getTime() + actor.policy.exportRetentionHours * 3_600_000);
   await jobRef.set({
+    study: actor.study,
+    survey,
     requestedBy: actor.uid,
     requestedByEmail: actor.email,
     requestedByRole: actor.role,
@@ -524,10 +538,13 @@ export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeout
 });
 
 /**
- * The only way to fetch an export file. GET with `Authorization: Bearer <ID token>`.
- * Checks the token (and that it has not been revoked), the caller's current
- * access, that the export is theirs (or they administer the dashboard), and that it
- * has not expired — then streams it. Every download, and every refusal, is audited.
+ * The only way to fetch an export file. GET `?study=<study>&job=<id>` with
+ * `Authorization: Bearer <ID token>` (no study means the default one, as every
+ * download meant before there were several). Checks the token (and that it has
+ * not been revoked), the caller's current access to the dashboard and to the
+ * study, that the export is theirs (or they administer the dashboard), and that
+ * it has not expired — then streams it. Every download, and every refusal, is
+ * audited in the study's log.
  */
 export const downloadExport = onRequest({ cors: ALLOWED_ORIGINS, memory: "512MiB", timeoutSeconds: 300 }, async (req, res) => {
   res.set("Cache-Control", "no-store");
@@ -541,6 +558,12 @@ export const downloadExport = onRequest({ cors: ALLOWED_ORIGINS, memory: "512MiB
     res.status(400).json({ error: "which export? pass ?job=<id>" });
     return;
   }
+  const found = await lookupStudy(typeof req.query["study"] === "string" ? req.query["study"] : undefined);
+  if (found.kind !== "registered") {
+    res.status(found.kind === "malformed" ? 400 : 404).json({ error: found.kind === "malformed" ? "study must be a study id" : "There is no such study." });
+    return;
+  }
+  const study = found.study;
   const header = req.headers.authorization ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   let decoded;
@@ -553,16 +576,19 @@ export const downloadExport = onRequest({ cors: ALLOWED_ORIGINS, memory: "512MiB
   }
   const facts = tokenFacts(decoded as unknown as Record<string, unknown>, decoded.uid);
   const decision = decideAccess(facts, await accountFacts(decoded.uid), await accessPolicy());
-  const job = await dash().doc(dpaths.exportJob(jobId)).get();
-  const data = job.data() ?? {};
   const deny = async (status: number, message: string) => {
-    await audit({ action: "export.download_denied", actorUid: decoded.uid, actorEmail: facts?.email ?? null, actorRole: decision.ok ? decision.role : null, target: { type: "export", id: jobId }, detail: { reason: message }, outcome: "denied" });
+    await audit({ action: "export.download_denied", actorUid: decoded.uid, actorEmail: facts?.email ?? null, actorRole: decision.ok ? decision.role : null, study, target: { type: "export", id: jobId }, detail: { reason: message }, outcome: "denied" });
     res.status(status).json({ error: message });
   };
   if (!decision.ok) return deny(403, decision.reason);
+  if (!decideStudyAccess({ role: decision.role, email: decision.email, study, defaultStudy: DEFAULT_STUDY, list: await studyAccessList(study) })) {
+    return deny(403, "You have not been given access to this export's study.");
+  }
+  const job = await dash().doc(dpaths.exportJob(study, jobId)).get();
+  const data = job.data() ?? {};
   if (!job.exists) return deny(404, "No such export.");
   if (data["requestedBy"] !== decoded.uid && decision.role !== "owner") return deny(403, "Only the person who created an export (or an administrator) can download it.");
-  const policy = await studyPolicy();
+  const policy = await studyPolicy(study);
   if (!can(decision.role, data["kind"] === "sessions" || data["kind"] === "session_report" ? "export.sessions" : "export.aggregate", policy)) {
     return deny(403, "Your role no longer allows this export.");
   }
@@ -574,7 +600,7 @@ export const downloadExport = onRequest({ cors: ALLOWED_ORIGINS, memory: "512MiB
   const file = bucket().file(String(data["storagePath"]));
   const [exists] = await file.exists();
   if (!exists) return deny(410, "This export's file is no longer available. Create it again.");
-  await audit({ action: "export.downloaded", actorUid: decoded.uid, actorEmail: decision.email, actorRole: decision.role, target: { type: "export", id: jobId }, detail: { fileName } });
+  await audit({ action: "export.downloaded", actorUid: decoded.uid, actorEmail: decision.email, actorRole: decision.role, study, target: { type: "export", id: jobId }, detail: { fileName } });
   res.set("Content-Type", MIME[data["format"] as ExportSpec["format"]] ?? "application/octet-stream");
   res.set("Content-Disposition", `attachment; filename="${fileName.replace(/[^a-z0-9._-]/gi, "")}"`);
   await new Promise<void>((resolve, reject) => {
@@ -582,17 +608,19 @@ export const downloadExport = onRequest({ cors: ALLOWED_ORIGINS, memory: "512MiB
   });
 });
 
-/** Delete export files past their retention and mark their jobs expired. */
+/** Delete export files past their retention and mark their jobs expired, in every study. */
 export async function expireExports(now = new Date()): Promise<number> {
   const db = dash();
-  const due = await db.collection(dpaths.exportJobs()).where("expiresAt", "<=", Timestamp.fromDate(now)).limit(500).get();
   let expired = 0;
-  for (const d of due.docs) {
-    if (d.data()["status"] === "expired") continue;
-    const path = d.data()["storagePath"];
-    if (typeof path === "string") await bucket().file(path).delete({ ignoreNotFound: true });
-    await d.ref.update({ status: "expired", storagePath: null, expiredAt: FieldValue.serverTimestamp() });
-    expired += 1;
+  for (const { study } of await registeredStudies(true)) {
+    const due = await db.collection(dpaths.exportJobs(study)).where("expiresAt", "<=", Timestamp.fromDate(now)).limit(500).get();
+    for (const d of due.docs) {
+      if (d.data()["status"] === "expired") continue;
+      const path = d.data()["storagePath"];
+      if (typeof path === "string") await bucket().file(path).delete({ ignoreNotFound: true });
+      await d.ref.update({ status: "expired", storagePath: null, expiredAt: FieldValue.serverTimestamp() });
+      expired += 1;
+    }
   }
   return expired;
 }

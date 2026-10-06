@@ -4,13 +4,16 @@ import { hashHex, verifyRawManifestHash } from "@myself-dashboard/core/survey";
 import { FieldValue } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { audit, auditIn } from "./audit.js";
-import { dash, research, STUDY } from "./env.js";
+import { dash, research } from "./env.js";
 import { dpaths, spaths } from "./paths.js";
 
 /**
- * The release registry: every survey version the study has published, keyed by
- * its content hash. Metadata lives in `releases/{hash}` (readable by dashboard
- * users); the manifest itself in `releaseManifests/{hash}` (backend only).
+ * The release registry: every survey version a study has published, keyed by
+ * its content hash, one registry per study. Metadata lives in
+ * `studies/{study}/releases/{hash}` (readable by the study's dashboard users);
+ * the manifest itself in `…/releaseManifests/{hash}` (backend only). A release
+ * is only ever looked up in its sitting's own study (docs/12 §12.2): the
+ * repository's bundled releases are registered for `ybm` alone.
  *
  * Manifests are immutable, so a parsed one is cached for the life of the
  * instance; the list of hashes is re-read at most once a minute.
@@ -35,45 +38,49 @@ export interface ReleaseMeta {
   provenance?: { source: "studio"; surveyId: string | null; version: string; from: string };
 }
 
+/** Caches are keyed by study and hash: a version registered in one study is nothing in another. */
+const keyOf = (study: string, hash: string) => `${study} ${hash}`;
 const indexes = new Map<string, ReleaseIndex>();
 const facts = new Map<string, ManifestFacts>();
-let listCache: { at: number; metas: ReleaseMeta[] } | null = null;
+const listCache = new Map<string, { at: number; metas: ReleaseMeta[] }>();
 const LIST_TTL_MS = 60_000;
 
-export async function releaseList(fresh = false): Promise<ReleaseMeta[]> {
-  if (!fresh && listCache && Date.now() - listCache.at < LIST_TTL_MS) return listCache.metas;
-  const snap = await dash().collection(dpaths.releases()).get();
+export async function releaseList(study: string, fresh = false): Promise<ReleaseMeta[]> {
+  const hit = listCache.get(study);
+  if (!fresh && hit && Date.now() - hit.at < LIST_TTL_MS) return hit.metas;
+  const snap = await dash().collection(dpaths.releases(study)).get();
   const metas = snap.docs.map((d) => d.data() as ReleaseMeta).sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }));
-  listCache = { at: Date.now(), metas };
+  listCache.set(study, { at: Date.now(), metas });
   return metas;
 }
 
-export async function releaseIndex(hash: string | null | undefined): Promise<ReleaseIndex | null> {
+export async function releaseIndex(study: string, hash: string | null | undefined): Promise<ReleaseIndex | null> {
   if (!hash) return null;
-  const hit = indexes.get(hash);
+  const key = keyOf(study, hash);
+  const hit = indexes.get(key);
   if (hit) return hit;
-  const snap = await dash().doc(dpaths.releaseManifest(hash)).get();
+  const snap = await dash().doc(dpaths.releaseManifest(study, hash)).get();
   if (!snap.exists) return null;
   const json = (snap.data() as { manifestJson?: string }).manifestJson;
   if (!json) return null;
   const raw = JSON.parse(json);
-  facts.set(hash, manifestFacts(raw));
+  facts.set(key, manifestFacts(raw));
   const index = indexRelease(raw, hash);
-  indexes.set(hash, index);
+  indexes.set(key, index);
   return index;
 }
 
-/** What a registered version's manifest says about itself (engine, MyStory). */
-export async function registryFacts(hash: string): Promise<ManifestFacts | null> {
-  if (!facts.has(hash)) await releaseIndex(hash);
-  return facts.get(hash) ?? null;
+/** What a registered version's manifest says about itself (engine, MyStory, survey). */
+export async function registryFacts(study: string, hash: string): Promise<ManifestFacts | null> {
+  if (!facts.has(keyOf(study, hash))) await releaseIndex(study, hash);
+  return facts.get(keyOf(study, hash)) ?? null;
 }
 
-export async function allReleaseIndexes(): Promise<ReleaseIndex[]> {
-  const metas = await releaseList();
+export async function allReleaseIndexes(study: string): Promise<ReleaseIndex[]> {
+  const metas = await releaseList(study);
   const out: ReleaseIndex[] = [];
   for (const m of metas) {
-    const idx = await releaseIndex(m.hash);
+    const idx = await releaseIndex(study, m.hash);
     if (idx) out.push(idx);
   }
   return out;
@@ -116,10 +123,10 @@ export async function registerRelease(raw: unknown, study: string, registeredBy:
   const { meta, manifestJson } = prepareRelease(raw, study);
   const db = dash();
   const batch = db.batch();
-  batch.set(db.doc(dpaths.releaseManifest(meta.hash, study)), { manifestJson });
-  batch.set(db.doc(dpaths.release(meta.hash, study)), { ...meta, registeredAt: FieldValue.serverTimestamp(), registeredBy });
+  batch.set(db.doc(dpaths.releaseManifest(study, meta.hash)), { manifestJson });
+  batch.set(db.doc(dpaths.release(study, meta.hash)), { ...meta, registeredAt: FieldValue.serverTimestamp(), registeredBy });
   await batch.commit();
-  listCache = null;
+  listCache.delete(study);
   return meta;
 }
 
@@ -171,15 +178,15 @@ export async function checkStudioRelease(hash: string, data: Record<string, unkn
   return { hash, surveyId: typeof data["surveyId"] === "string" ? data["surveyId"] : null, version: String(release["version"] ?? ""), json, manifest: m };
 }
 
-/** Studio's copy of a release by hash, checked; null when Studio has none. Throws ReleaseRejected. */
-export async function studioRelease(hash: string, study = STUDY): Promise<StudioRelease | null> {
+/** Studio's copy of a release by hash in `study`, checked; null when Studio has none. Throws ReleaseRejected. */
+export async function studioRelease(hash: string, study: string): Promise<StudioRelease | null> {
   if (!HASH.test(hash)) return null;
-  const snap = await research().doc(spaths.publicRelease(hashHex(hash), study)).get();
+  const snap = await research().doc(spaths.publicRelease(study, hashHex(hash))).get();
   if (!snap.exists) return null;
   return checkStudioRelease(hash, snap.data() as Record<string, unknown>, study);
 }
 
-/** Hashes Studio has no copy of, or refused, recently: not asked again on every sitting. */
+/** Hashes Studio has no copy of, or refused, recently, by study and hash: not asked again on every sitting. */
 const absent = new Map<string, number>();
 const refused = new Map<string, { at: number; reason: string }>();
 const ABSENT_TTL_MS = 60_000;
@@ -187,17 +194,18 @@ const REFUSED_TTL_MS = 10 * 60_000;
 const adopting = new Map<string, Promise<ReleaseIndex | null>>();
 
 /** Why the registry refused Studio's copy of a release, if it did lately. */
-const refusalOf = (hash: string): string | null => {
-  const r = refused.get(hash);
+const refusalOf = (key: string): string | null => {
+  const r = refused.get(key);
   return r && Date.now() - r.at < REFUSED_TTL_MS ? r.reason : null;
 };
 
-async function refuse(hash: string, reason: string): Promise<void> {
-  const reported = refusalOf(hash) !== null;
-  refused.set(hash, { at: Date.now(), reason });
+async function refuse(study: string, hash: string, reason: string): Promise<void> {
+  const key = keyOf(study, hash);
+  const reported = refusalOf(key) !== null;
+  refused.set(key, { at: Date.now(), reason });
   if (reported) return;
-  logger.error("a survey version from MySelf Studio failed its checks; sittings under it are not read", { hash, reason });
-  await audit({ action: "release.refused", actorUid: null, actorEmail: null, actorRole: null, target: { type: "release", id: hash }, detail: { source: "studio", reason }, outcome: "failed" });
+  logger.error("a survey version from MySelf Studio failed its checks; sittings under it are not read", { study, hash, reason });
+  await audit({ action: "release.refused", actorUid: null, actorEmail: null, actorRole: null, study, target: { type: "release", id: hash }, detail: { source: "studio", reason }, outcome: "failed" });
 }
 
 /**
@@ -205,52 +213,55 @@ async function refuse(hash: string, reason: string): Promise<void> {
  * instances meeting the same new version together write it and its audit row
  * once between them.
  */
-async function adopt(hash: string): Promise<ReleaseIndex | null> {
+async function adopt(study: string, hash: string): Promise<ReleaseIndex | null> {
+  const key = keyOf(study, hash);
   let found: StudioRelease | null;
   let prepared: ReturnType<typeof prepareRelease>;
   try {
-    found = await studioRelease(hash);
+    found = await studioRelease(hash, study);
     if (!found) {
-      absent.set(hash, Date.now());
+      absent.set(key, Date.now());
       return null;
     }
-    prepared = prepareRelease(found.manifest, STUDY);
+    prepared = prepareRelease(found.manifest, study);
   } catch (error) {
     if (!(error instanceof ReleaseRejected || error instanceof ManifestError)) throw error;
-    await refuse(hash, error.message);
+    await refuse(study, hash, error.message);
     return null;
   }
   const { meta, manifestJson } = prepared;
   const { surveyId, version } = found;
-  const provenance: NonNullable<ReleaseMeta["provenance"]> = { source: "studio", surveyId, version, from: spaths.publicRelease(hashHex(hash)) };
+  const provenance: NonNullable<ReleaseMeta["provenance"]> = { source: "studio", surveyId, version, from: spaths.publicRelease(study, hashHex(hash)) };
   const db = dash();
-  const ref = db.doc(dpaths.release(meta.hash));
+  const ref = db.doc(dpaths.release(study, meta.hash));
   await db.runTransaction(async (tx) => {
     if ((await tx.get(ref)).exists) return;
-    tx.set(db.doc(dpaths.releaseManifest(meta.hash)), { manifestJson });
+    tx.set(db.doc(dpaths.releaseManifest(study, meta.hash)), { manifestJson });
     tx.create(ref, { ...meta, provenance, registeredAt: FieldValue.serverTimestamp(), registeredBy: "studio" });
-    auditIn(tx, { action: "release.registered", actorUid: null, actorEmail: null, actorRole: null, target: { type: "release", id: meta.hash }, detail: { version: meta.version, key: meta.key, source: "studio", surveyId } });
+    auditIn(tx, { action: "release.registered", actorUid: null, actorEmail: null, actorRole: null, study, target: { type: "release", id: meta.hash }, detail: { version: meta.version, key: meta.key, source: "studio", surveyId } });
   });
-  listCache = null;
-  logger.info("registered a survey version from MySelf Studio", { hash, version: meta.version });
-  return releaseIndex(meta.hash);
+  listCache.delete(study);
+  logger.info("registered a survey version from MySelf Studio", { study, hash, version: meta.version });
+  return releaseIndex(study, meta.hash);
 }
 
 /**
- * A sitting's version: from the registry, or else from MySelf Studio's copy,
- * checked and registered. Null when neither has it, or Studio's copy failed
- * its checks (reported once, in the log and the audit trail): the sitting is
- * then an unregistered version's, never read through another.
+ * A sitting's version, in its own study: from that study's registry, or else
+ * from MySelf Studio's copy in that study, checked and registered there. Null
+ * when neither has it, or Studio's copy failed its checks (reported once, in
+ * the log and the study's audit trail): the sitting is then an unregistered
+ * version's, never read through another.
  */
-export async function resolveRelease(hash: string | null | undefined): Promise<ReleaseIndex | null> {
-  const known = await releaseIndex(hash);
-  if (known || !hash) return known;
-  const missedAt = absent.get(hash);
-  if ((missedAt && Date.now() - missedAt < ABSENT_TTL_MS) || refusalOf(hash)) return null;
-  let pending = adopting.get(hash);
+export async function resolveRelease(study: string, hash: string | null | undefined): Promise<ReleaseIndex | null> {
+  const found = await releaseIndex(study, hash);
+  if (found || !hash) return found;
+  const key = keyOf(study, hash);
+  const missedAt = absent.get(key);
+  if ((missedAt && Date.now() - missedAt < ABSENT_TTL_MS) || refusalOf(key)) return null;
+  let pending = adopting.get(key);
   if (!pending) {
-    pending = adopt(hash).finally(() => adopting.delete(hash));
-    adopting.set(hash, pending);
+    pending = adopt(study, hash).finally(() => adopting.delete(key));
+    adopting.set(key, pending);
   }
   return pending;
 }
@@ -259,5 +270,5 @@ export async function resolveRelease(hash: string | null | undefined): Promise<R
 export function resetStudioCache(): void {
   absent.clear();
   refused.clear();
-  listCache = null;
+  listCache.clear();
 }
