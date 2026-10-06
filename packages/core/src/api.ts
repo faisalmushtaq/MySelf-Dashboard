@@ -18,6 +18,7 @@ import type { GroupSettings, YearGroupSource } from "./scoring/groups.js";
 import type { ScoringScheme } from "./scoring/scheme.js";
 import type { CodebookRow, QualityReport } from "./quality/types.js";
 import type { HeadlineFigures } from "./vendor/myself/store/counting.js";
+import type { StudyAccessList, StudyView } from "./studies.js";
 
 /**
  * The contract between the web app and the backend, defined once so both sides
@@ -48,6 +49,8 @@ export interface SessionListItem {
   studyCode: string | null;
   studyCodeMasked: boolean;
   site: string | null;
+  /** The survey of the study it was collected for, when its version is registered. */
+  survey: string | null;
   releaseHash: string | null;
   releaseVersion: string | null;
   releaseKnown: boolean;
@@ -80,6 +83,7 @@ export function toListItem(row: SessionRow, options: { studyCodes: boolean; sect
     studyCode: options.studyCodes ? s.studyCode : maskStudyCode(s.studyCode),
     studyCodeMasked: !options.studyCodes,
     site: s.site,
+    survey: row.survey ?? null,
     releaseHash: s.releaseHash,
     releaseVersion: s.releaseVersion,
     releaseKnown: s.releaseKnown,
@@ -131,9 +135,25 @@ export interface WhoAmIResponse {
   email: string | null;
   uid: string | null;
   role: Role | null;
+  /** In `study`: a role is the same in every study, but what the policy allows is the study's. */
   capabilities: Capability[];
+  /** `study`'s policy. */
   policy: PublicPolicy | null;
+  /**
+   * The study this answer is for: the one asked for, else the one the person
+   * last chose, else the default (docs/12 §12.7). Every later call names it.
+   */
   study: string;
+  /** The deployment's default study (`ybm`). */
+  defaultStudy: string;
+  /** Every study this person may see, the default first. Empty when not authorised. */
+  studies: StudyView[];
+}
+
+export interface WhoAmIRequest {
+  signIn?: boolean;
+  /** The study to work in; absent means the one last chosen. */
+  study?: string;
 }
 
 // ── sessions ──────────────────────────────────────────────────────────────
@@ -312,6 +332,24 @@ export interface PersonView {
   allowed: boolean;
   disabled: boolean;
   lastSignIn: string | null;
+  /** The studies they may see, when they may use the dashboard at all. */
+  studies: string[];
+}
+
+/** One study's access, as Settings → Study access shows it to administrators. */
+export interface StudyAccessView extends StudyView {
+  /** Null for the default study, whose list is the dashboard's own. */
+  list: StudyAccessList | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface StudyAccessResponse {
+  studies: StudyAccessView[];
+}
+
+export interface UpdateStudyAccessRequest extends StudyAccessList {
+  study: string;
 }
 
 export interface SettingsResponse {

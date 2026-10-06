@@ -140,8 +140,13 @@ export function parseExportSpec(raw: unknown): ExportSpec {
     ...(d.kind === "school_report" && d.school ? { school: d.school, yearGroup: d.yearGroup ?? null } : {}),
     observation: d.observation,
   };
-  if (spec.scope === "all") spec.filters = { ...spec.filters, datePreset: "all", statuses: [], versions: [], sites: [], sources: [], flagged: "any", reviewStatuses: [], questionOutcomes: [] };
+  if (spec.scope === "all") spec.filters = { ...spec.filters, datePreset: "all", statuses: [], surveys: [], versions: [], sites: [], sources: [], flagged: "any", reviewStatuses: [], questionOutcomes: [] };
   return spec;
+}
+
+/** The one survey an export covers, when its filters choose exactly one (for its name and provenance). */
+export function exportSurvey(spec: Pick<ExportSpec, "scope" | "filters">): string | null {
+  return spec.scope === "filtered" && spec.filters.surveys.length === 1 ? spec.filters.surveys[0]! : null;
 }
 
 /** Row-level data (one row per sitting or per answer) is sensitive; aggregates are not. */
@@ -173,7 +178,9 @@ const stamp = (d: Date) => {
 };
 
 /**
- * `myself_sessions-filtered_2026-09-01_to_2026-09-28_created-20260928-1415.csv`
+ * `myself_ybm_sessions-filtered_2026-09-01_to_2026-09-28_created-20260928-1415.csv`,
+ * with the survey after the study when the export is of one survey
+ * (`myself_ybm_ybm_nd2026_standard_sessions-…`; docs/12 §12.9).
  *
  * Only [a-z0-9._-]: safe on every file system and in a Content-Disposition header.
  */
@@ -181,6 +188,7 @@ export function exportFileName(
   spec: Pick<ExportSpec, "kind" | "scope" | "format" | "sessionIds" | "deidentified"> & Partial<Pick<ExportSpec, "school" | "yearGroup">>,
   range: { fromDay: string | null; toDay: string | null },
   createdAt: Date,
+  where: { study?: string | null; survey?: string | null } = {},
 ): string {
   const kind = spec.kind.replaceAll("_", "-") + (spec.kind === "school_report" && spec.school ? `-${spec.school.toLowerCase()}${spec.yearGroup ? `-y${spec.yearGroup}` : ""}` : "");
   const scope = spec.kind === "sessions" ? `-${spec.scope}` : "";
@@ -192,5 +200,6 @@ export function exportFileName(
         : "all-time";
   const deid = spec.deidentified && spec.kind === "sessions" ? "_deidentified" : "";
   const bids = spec.format === "bids" ? "_bids" : "";
-  return `myself_${kind}${scope}_${what}${bids}${deid}_created-${stamp(createdAt)}.${FORMAT_EXTENSION[spec.format]}`.replace(/[^a-z0-9._-]/g, "");
+  const place = [where.study, where.survey].filter((x): x is string => !!x).map((x) => `${x}_`).join("");
+  return `myself_${place}${kind}${scope}_${what}${bids}${deid}_created-${stamp(createdAt)}.${FORMAT_EXTENSION[spec.format]}`.replace(/[^a-z0-9._-]/g, "");
 }

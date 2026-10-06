@@ -24,3 +24,4 @@ export * from "./scoring/index.js";
 export * from "./codebook/index.js";
 export * from "./quality/index.js";
 export * from "./versions.js";
+export * from "./studies.js";

@@ -42,6 +42,7 @@ describe("filter URLs", () => {
       statuses: ["incomplete", "needs_review"],
       completionMin: 10,
       completionMax: 90,
+      surveys: ["demo_wellbeing", "demo_followup"],
       versions: [rels[0]!.hash, "unknown"],
       sites: ["NDC"],
       sources: ["device"],
@@ -142,5 +143,44 @@ describe("filter chips", () => {
     expect(cleared.statuses).toEqual([]);
     expect(cleared.flagged).toBe("flagged");
     expect(clearFilter(f, "completionMin").completionMin).toBeUndefined();
+  });
+});
+
+describe("the survey filter", () => {
+  // Two surveys in one study: the newest version is another survey's, as a Studio survey's would be.
+  const newest = rels.at(-1)!;
+  const surveyOf = (hash: string) => (hash === newest.hash ? "demo_followup" : (byHash.get(hash)?.survey ?? null));
+  const surveyed = buildRows(summaries, reviews, DEFAULT_POLICY, now, { surveyOf });
+  const pick = (f: Partial<FilterState>) => surveyed.filter(makePredicate({ ...DEFAULT_FILTERS, dataset: "all", ...f }, ctx));
+
+  it("gives each row its release's survey, and none when the version is not registered", () => {
+    expect(rels.every((r) => r.survey === "demo_wellbeing")).toBe(true);
+    for (const r of surveyed) {
+      if (!r.summary.releaseKnown) expect(r.survey).toBeNull();
+      else expect(r.survey).toBe(r.summary.releaseHash === newest.hash ? "demo_followup" : "demo_wellbeing");
+    }
+    expect(surveyed.some((r) => r.survey === null)).toBe(true);
+  });
+
+  it("is all surveys by default, and one survey's sittings when chosen", () => {
+    expect(pick({})).toHaveLength(surveyed.length);
+    const followup = pick({ surveys: ["demo_followup"] });
+    expect(followup.length).toBeGreaterThan(0);
+    expect(followup.every((r) => r.summary.releaseHash === newest.hash)).toBe(true);
+    const wellbeing = pick({ surveys: ["demo_wellbeing"] });
+    // A sitting under an unregistered version belongs to no survey, so neither list has it.
+    expect(wellbeing.length + followup.length).toBe(surveyed.filter((r) => r.summary.releaseKnown).length);
+    expect(pick({ surveys: ["demo_wellbeing", "demo_followup"] })).toHaveLength(wellbeing.length + followup.length);
+  });
+
+  it("keeps only survey ids from a URL or a request, untouched", () => {
+    expect(filtersFromParams(new URLSearchParams("sv=demo_wellbeing,Demo,a%2Fb,..,9x")).surveys).toEqual(["demo_wellbeing"]);
+    expect(sanitiseFilters({ surveys: ["demo_followup", "ybm/../x", 7, "x".repeat(65)] }).surveys).toEqual(["demo_followup"]);
+  });
+
+  it("is described with the survey's title, and cleared with its chip", () => {
+    const f = { ...DEFAULT_FILTERS, surveys: ["demo_followup"] };
+    expect(describeFilters(f, { survey: (id) => (id === "demo_followup" ? "Follow-up" : id) })).toContainEqual({ key: "surveys", label: "Survey: Follow-up" });
+    expect(clearFilter(f, "surveys").surveys).toEqual([]);
   });
 });

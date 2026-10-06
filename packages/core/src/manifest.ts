@@ -142,6 +142,8 @@ export interface ReleaseIndex extends ReleaseQuestions {
   key: string;
   version: string;
   study: string;
+  /** The survey this is a version of: `release.assessment` (the survey's docs/16 §11.6). */
+  survey: string | null;
   title: string;
   publishedAt: string;
   questions: QuestionDef[];
@@ -233,6 +235,7 @@ export function indexRelease(raw: unknown, hashOverride?: string): ReleaseIndex 
     key: manifest.release.key,
     version: manifest.release.version,
     study: manifest.release.study,
+    survey: manifest.release.assessment ?? null,
     title: manifest.composition.title,
     publishedAt: manifest.release.publishedAt,
     questions,

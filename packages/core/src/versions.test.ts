@@ -46,7 +46,7 @@ describe("reading MyStory from a manifest", () => {
     const withMyStory = structuredClone(m);
     withMyStory.composition.sections.push({ key: "mystory", title: "MyStory", components: [{ kind: "narrative", protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }] });
     expect(myStoryOf(withMyStory)).toEqual({ protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" });
-    expect(manifestFacts(withMyStory)).toEqual({ engineVersion: "0.1.0", myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" } });
+    expect(manifestFacts(withMyStory)).toEqual({ engineVersion: "0.1.0", myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }, survey: "ybm_nd2026_standard" });
     // Not last: not "ends with MyStory".
     const notLast = structuredClone(withMyStory);
     notLast.composition.sections.push(notLast.composition.sections[0]!);
@@ -125,10 +125,10 @@ describe("the version history", () => {
     ],
     sittings,
     facts: new Map([
-      [H(1), { engineVersion: "0.2.0", myStory: null }],
-      [H(2), { engineVersion: "0.3.0", myStory: null }],
+      [H(1), { engineVersion: "0.2.0", myStory: null, survey: "ybm_nd2026_standard" }],
+      [H(2), { engineVersion: "0.3.0", myStory: null, survey: "ybm_nd2026_standard" }],
       [H(3), { problem: "Studio's copy does not hash to its hash." }],
-      [H(4), { engineVersion: "0.1.0", myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" } }],
+      [H(4), { engineVersion: "0.1.0", myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }, survey: "ybm_nd2026_standard" }],
     ]),
     now: new Date("2026-10-01T00:00:00.000Z"),
   });
@@ -140,6 +140,16 @@ describe("the version history", () => {
       ["9.0.0", "studio", true, true],
       ["8.0.0", "repository", true, true],
       ["7.3.0", "repository", false, true],
+    ]);
+  });
+
+  it("places every version under its survey: Studio's, or the one its manifest names", () => {
+    expect(history.versions.map((v) => [v.version, v.surveyId, v.survey])).toEqual([
+      ["10.0.0", "ybm_nd2026_standard", "ybm_nd2026_standard"],
+      ["9.0.0", "ybm_nd2026_standard", "ybm_nd2026_standard"],
+      ["8.0.0", "ybm_nd2026_standard", "ybm_nd2026_standard"],
+      // Only the registry knows it: no Studio survey, but its manifest says which survey it is.
+      ["7.3.0", null, "ybm_nd2026_standard"],
     ]);
   });
 
