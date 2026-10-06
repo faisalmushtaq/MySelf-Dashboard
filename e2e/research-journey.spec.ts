@@ -100,12 +100,12 @@ test("a researcher reviews incomplete sessions and exports them; a stranger is d
   await expect(preview).toContainText(`${incompleteCount} — current filtered sessions`);
   await expect(preview).toContainText("Status: incomplete");
   await expect(preview).toContainText("Participant codes, study codes, sitting and device IDs, exact times");
-  await expect(preview).toContainText(/myself_sessions-filtered_all-time_bids_created-\d{8}-\d{4}\.zip/);
+  await expect(preview).toContainText(/myself_demo_sessions-filtered_all-time_bids_created-\d{8}-\d{4}\.zip/);
   await dialog.getByLabel(/I will store and share this file only/).check();
   await dialog.getByRole("button", { name: "Generate export" }).click();
   await expect(dialog.getByText(/is ready/)).toBeVisible({ timeout: 60_000 });
   const [bids] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Download" }).click()]);
-  expect(bids.suggestedFilename()).toMatch(/^myself_sessions-filtered_.*_bids_.*\.zip$/);
+  expect(bids.suggestedFilename()).toMatch(/^myself_demo_sessions-filtered_.*_bids_.*\.zip$/);
   // Stored (uncompressed) zip entries: file names and contents are readable in the bytes.
   const zip = readFileSync((await bids.path())!).toString("latin1");
   expect(zip.startsWith("PK")).toBe(true);
@@ -124,12 +124,12 @@ test("a researcher reviews incomplete sessions and exports them; a stranger is d
   await dialog.getByLabel(/Include identifiers for linkage/).uncheck();
   await dialog.getByLabel(/Include answers/).check();
   await expect(preview).toContainText("None (de-identified)");
-  await expect(preview).toContainText(/myself_sessions-filtered_all-time_deidentified_created-\d{8}-\d{4}\.csv/);
+  await expect(preview).toContainText(/myself_demo_sessions-filtered_all-time_deidentified_created-\d{8}-\d{4}\.csv/);
   await dialog.getByLabel(/I will store and share this file only/).check();
   await dialog.getByRole("button", { name: "Generate export" }).click();
   await expect(dialog.getByText(/is ready/)).toBeVisible({ timeout: 60_000 });
   const [download] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Download" }).click()]);
-  expect(download.suggestedFilename()).toMatch(/^myself_sessions-filtered_.*\.csv$/);
+  expect(download.suggestedFilename()).toMatch(/^myself_demo_sessions-filtered_.*\.csv$/);
   const csv = readFileSync((await download.path())!, "utf8");
   // A BOM so Excel reads UTF-8 (String.trim would strip it, so check first).
   expect(csv.startsWith("\uFEFFsession_id,participant_label,wave,")).toBe(true);

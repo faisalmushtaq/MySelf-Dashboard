@@ -31,7 +31,7 @@ test("any member reads the codebook: readable names, what each answer scores, an
 
   // The same codebook as a spreadsheet.
   const [csv] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Codebook (CSV)" }).click()]);
-  expect(csv.suggestedFilename()).toMatch(/^myself_codebook_r[\d.]+\.csv$/);
+  expect(csv.suggestedFilename()).toMatch(/^myself_demo_codebook_r[\d.]+\.csv$/);
   const text = readFileSync((await csv.path())!, "utf8");
   expect(text.split("\n")[0]).toContain("name,label,question_key,survey_variable,qualtrics_variable");
   expect(text).toContain("sdq_13_unhappy");

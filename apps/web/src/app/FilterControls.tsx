@@ -140,6 +140,12 @@ export function SurveyControl() {
 export function VersionControl() {
   const { filters, update } = useFilters();
   const { byNewest, activeRelease } = useSurveyReleases();
+  const { surveys, surveyOf, surveyTitle } = useStudyData();
+  // Every survey numbers its own versions: with all of them listed, each says whose it is.
+  const whose = (hash: string) => {
+    const id = filters.surveys.length === 0 && surveys.length > 1 ? surveyOf(hash) : null;
+    return id ? ` · ${surveyTitle(id)}` : "";
+  };
   const value = filters.versions.length === 1 ? filters.versions[0]! : filters.versions.length === 0 ? "" : "__many";
   return (
     <label className="version-ctl">
@@ -156,6 +162,7 @@ export function VersionControl() {
           <option key={r.hash} value={r.hash}>
             v{r.version}
             {activeRelease?.hash === r.hash ? " (active)" : ""}
+            {whose(r.hash)}
           </option>
         ))}
         <option value="unknown">Unknown version</option>
