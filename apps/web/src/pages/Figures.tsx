@@ -30,7 +30,7 @@ import { api, explain } from "../lib/api";
 import { useLoad, usePreference } from "../lib/hooks";
 import { useFilters } from "../app/filters";
 import { FilterBar } from "../app/FilterControls";
-import { useStudyData } from "../app/data";
+import { useStudyData, useSurveyReleases } from "../app/data";
 import { useAuth } from "../app/auth";
 import { useAnnounce } from "../app/announcer";
 import { PageHeader } from "../components/Metric";
@@ -59,7 +59,8 @@ export default function Figures() {
   const { filters } = useFilters();
   const { me, can } = useAuth();
   const announce = useAnnounce();
-  const { byNewest, activeRelease } = useStudyData();
+  const { byNewest, activeRelease } = useSurveyReleases();
+  const { surveyTitle } = useStudyData();
   const analytics = useAnalytics();
   const [stored, setStored] = usePreference<unknown>("figure-spec", DEFAULT_FIGURE);
   const spec = useMemo(() => parseFigureSpec(stored), [stored]);
@@ -123,11 +124,11 @@ export default function Figures() {
 
   const filterText = useMemo(
     () =>
-      describeFilters(filters, { version: versionLabel })
+      describeFilters(filters, { version: versionLabel, survey: surveyTitle })
         .filter((f) => f.key !== "date")
         .map((f) => f.label),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, byNewest],
+    [filters, byNewest, surveyTitle],
   );
 
   const figure = useMemo(() => {

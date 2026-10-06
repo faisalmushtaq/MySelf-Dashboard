@@ -52,6 +52,8 @@ const PATHS: Record<string, string> = {
   menu: "M4 7h16M4 12h16M4 17h16",
   skipNext: "M5 5l9 7-9 7zM18 5v14",
   note: "M5 4h14v12l-4 4H5zM15 20v-4h4",
+  copy: "M9 9h11v11H9zM15 9V4H4v11h5",
+  layers: "M12 3l9 5-9 5-9-5zM3 13l9 5 9-5",
   external: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
 };
 

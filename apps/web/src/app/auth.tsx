@@ -4,6 +4,7 @@ import type { Capability, WhoAmIResponse } from "@myself-dashboard/core";
 import { api, explain } from "../lib/api";
 import { configured, firebase, googleProvider, USE_EMULATORS } from "../lib/firebase";
 import { setTimeZone } from "../lib/format";
+import { setCurrentStudy } from "../lib/study";
 
 /**
  * Who is signed in, and what the dashboard says they may do.
@@ -11,6 +12,10 @@ import { setTimeZone } from "../lib/format";
  * Signing in with Google says who you are; `whoAmI` says whether the study knows
  * you. The answer is checked on the server (and again on every call and by the
  * security rules), so nothing here is a control — it decides what to SHOW.
+ *
+ * It also says which studies you may see and which one you are working in
+ * (docs/12 §12.7). Choosing another asks `whoAmI` again, for that study's
+ * policy and what your role may do there, and the server remembers the choice.
  */
 
 export type AuthState =
@@ -29,6 +34,18 @@ interface AuthApi {
   retry: () => void;
   can: (c: Capability) => boolean;
   me: WhoAmIResponse | null;
+  /**
+   * Work in another study: asks the server (which refuses one you may not see),
+   * then runs `before` — the caller's chance to leave a page of the old study —
+   * and shows the dashboard for the new one.
+   */
+  switchStudy: (study: string, before?: () => void) => Promise<void>;
+}
+
+/** What the rest of the app needs to know about whoever is signed in, once the server has said. */
+function adopt(me: WhoAmIResponse): void {
+  setCurrentStudy(me.study);
+  if (me.policy) setTimeZone(me.policy.timeZone);
 }
 
 const Ctx = createContext<AuthApi | null>(null);
@@ -59,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         sessionStorage.setItem(key, "1");
-        if (me.policy) setTimeZone(me.policy.timeZone);
+        adopt(me);
         setState({ kind: "authorised", user, me });
       } catch (e) {
         setState({ kind: "error", message: explain(e).message });
@@ -102,6 +119,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       state,
       me,
       can: (c) => !!me?.capabilities.includes(c),
+      switchStudy: async (study, before) => {
+        if (state.kind !== "authorised") return;
+        const next = await api.whoAmI({ study });
+        if (!next.authorised) {
+          setState({ kind: "denied", email: next.email, reason: next.reason ?? "This account is not permitted." });
+          return;
+        }
+        before?.();
+        adopt(next);
+        setState({ kind: "authorised", user: state.user, me: next });
+      },
       retry: () => setAttempt((a) => a + 1),
       signOut,
       signIn: async () => {

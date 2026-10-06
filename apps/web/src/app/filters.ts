@@ -18,7 +18,7 @@ import {
  */
 
 /** URL keys owned by the filter model; everything else on a URL is page state. */
-const FILTER_KEYS = ["d", "from", "to", "basis", "st", "cmin", "cmax", "v", "site", "src", "fl", "ds", "rs", "q", "qo", "miss", "drop", "dsec", "sinc", "w"];
+const FILTER_KEYS = ["d", "from", "to", "basis", "st", "cmin", "cmax", "sv", "v", "site", "src", "fl", "ds", "rs", "q", "qo", "miss", "drop", "dsec", "sinc", "w"];
 
 export function useFilters() {
   const [params, setParams] = useSearchParams();
@@ -82,6 +82,12 @@ export function filterQuery(params: URLSearchParams): string {
   }
   const s = p.toString();
   return s ? `?${s}` : "";
+}
+
+/** The survey filter alone, for pages that follow the survey but no other filter (docs/12 §12.6). */
+export function surveyQuery(params: URLSearchParams): string {
+  const sv = params.get("sv");
+  return sv ? `?${new URLSearchParams({ sv }).toString()}` : "";
 }
 
 /** A link to the session list for a metric or chart mark, keeping the current filters. */

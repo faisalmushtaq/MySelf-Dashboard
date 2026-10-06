@@ -1,26 +1,31 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SurveyVersionsResponse, SurveyVersionView } from "@myself-dashboard/core";
 
 const H = (n: number) => `sha256:${String(n).repeat(64)}`;
 const version = (v: string, hash: string, more: Partial<SurveyVersionView> = {}): SurveyVersionView => ({
-  surveyId: "ybm_nd2026_standard", version: v, releaseKey: `ybm_nd2026_standard_r${v.replaceAll(".", "_")}`, hash, engineVersion: "0.3.0", source: "studio", inStudio: true, registered: true,
+  surveyId: "ybm_nd2026_standard", survey: "ybm_nd2026_standard", version: v, releaseKey: `ybm_nd2026_standard_r${v.replaceAll(".", "_")}`, hash, engineVersion: "0.3.0", source: "studio", inStudio: true, registered: true,
   authors: [], publishedBy: null, publishedAt: "2026-09-04T09:00:00.000Z", basedOn: null, restoredFrom: null, releaseNote: null, changes: [], requiredBump: null, chosenBump: null, myStory: null, live: false, livePeriods: [],
   sittings: 0, complete: 0, partial: 0, firstSitting: null, lastSitting: null, problem: null, ...more,
 });
 const history: SurveyVersionsResponse = {
   studioSetUp: true,
-  live: [{ surveyId: "ybm_nd2026_standard", title: "Your Brain Matters", version: "9.0.0", hash: H(2), releaseKey: "ybm_nd2026_standard_r9_0_0", generation: 4, since: "2026-09-23T09:00:00.000Z" }],
+  live: [
+    { surveyId: "ybm_nd2026_standard", title: "Your Brain Matters", version: "9.0.0", hash: H(2), releaseKey: "ybm_nd2026_standard_r9_0_0", generation: 4, since: "2026-09-23T09:00:00.000Z" },
+    { surveyId: "ybm_followup", title: "MyPhone MyBrain follow-up", version: "1.0.0", hash: H(5), releaseKey: "ybm_followup_r1_0_0", generation: 1, since: "2026-10-01T09:00:00.000Z" },
+  ],
   versions: [
     version("10.0.0", H(3), { restoredFrom: "8.0.0", chosenBump: "major", basedOn: "9.0.0", releaseNote: "<img src=x onerror=alert(1)> MyStory at the end", myStory: { protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }, changes: ["MyStory added (np.phone_wellbeing@0.1.1)"], problem: "Not read: it has changed since it was published." }),
     version("9.0.0", H(2), { live: true, publishedBy: "a@brainpop.example", authors: ["a@brainpop.example"], sittings: 3, complete: 2, partial: 1, firstSitting: "2026-09-07T09:00:00.000Z", lastSitting: "2026-09-28T09:00:00.000Z", livePeriods: [{ from: "2026-09-23T09:00:00.000Z", to: null, how: "made_live_again", by: "b@brainpop.example", reason: "Back to the shorter survey" }] }),
+    // Only the registry knows it, but its manifest says which survey it is.
     version("7.3.0", H(1), { source: "repository", inStudio: false, surveyId: null }),
+    version("1.0.0", H(5), { surveyId: "ybm_followup", survey: "ybm_followup", releaseKey: "ybm_followup_r1_0_0", live: true }),
   ],
   unknownSittings: 2,
   computedAt: "2026-10-01T00:00:00.000Z",
 };
 
-const calls = vi.hoisted(() => ({ manifest: vi.fn(), provenance: vi.fn(), saved: vi.fn() }));
+const calls = vi.hoisted(() => ({ manifest: vi.fn(), provenance: vi.fn(), saved: vi.fn(), announced: vi.fn(), study: { study: "ybm", defaultStudy: "ybm", title: "Your Brain Matters" } }));
 vi.mock("../../lib/api", () => ({
   api: {
     listSurveyVersions: () => Promise.resolve(history),
@@ -30,26 +35,70 @@ vi.mock("../../lib/api", () => ({
   explain: (e: unknown) => ({ code: "unknown", message: String(e) }),
 }));
 vi.mock("../../lib/figureFiles", () => ({ saveBlob: (_b: Blob, name: string) => calls.saved(name) }));
+vi.mock("../../app/auth", () => ({ useAuth: () => ({ me: { study: calls.study.study, defaultStudy: calls.study.defaultStudy } }) }));
+vi.mock("../../app/announcer", () => ({ useAnnounce: () => calls.announced }));
+vi.mock("../../app/data", () => ({
+  useStudyData: () => ({
+    study: { study: calls.study.study, title: calls.study.title, status: "open", isDefault: calls.study.study === calls.study.defaultStudy },
+    surveys: [
+      { surveyId: "ybm_followup", title: "MyPhone MyBrain follow-up", live: { version: "1.0.0", hash: H(5) }, releases: [H(5)] },
+      { surveyId: "ybm_nd2026_standard", title: "Your Brain Matters", live: { version: "9.0.0", hash: H(2) }, releases: [H(1), H(2)] },
+    ],
+  }),
+}));
 
 const { default: Versions } = await import("./Versions");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  calls.study = { study: "ybm", defaultStudy: "ybm", title: "Your Brain Matters" };
+});
+
+const section = async (name: string) => (await screen.findByRole("heading", { name: new RegExp(name) })).closest("section")!;
 
 describe("the Survey versions page", () => {
-  it("says versions are edited and published in Studio, and links there safely in a new tab", async () => {
+  it("says versions are edited and published in Studio, and links each survey there safely in a new tab", async () => {
     render(<Versions />);
-    const link = await screen.findByRole("link", { name: /Edit in Studio/ });
-    expect(link).toHaveAttribute("href", "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys");
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    const links = await screen.findAllByRole("link", { name: /Edit in Studio/ });
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys/ybm_followup/versions",
+      "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys/ybm_nd2026_standard/versions",
+    ]);
+    for (const link of links) {
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    }
     expect(screen.getByText(/This page is a read-only record/)).toBeInTheDocument();
     // Nothing on the page changes a version.
     for (const name of [/publish/i, /make live/i, /roll ?back/i, /draft/i, /restore/i]) expect(screen.queryByRole("button", { name })).toBeNull();
   });
 
-  it("shows the live version and each version's provenance, sittings and live periods", async () => {
+  it("gives each live survey its participant link, exactly as the survey builds it", async () => {
     render(<Versions />);
-    expect(await screen.findByText(/live since/)).toHaveTextContent("v9.0.0, live since 23 Sept 2026");
+    const standard = await section("Your Brain Matters");
+    expect(within(standard).getByText("https://faisalmushtaq.github.io/MySelf/?study=ybm&survey=ybm_nd2026_standard")).toBeInTheDocument();
+    const followUp = await section("MyPhone MyBrain follow-up");
+    expect(within(followUp).getByText("https://faisalmushtaq.github.io/MySelf/?study=ybm&survey=ybm_followup")).toBeInTheDocument();
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(() => Promise.resolve()) } });
+    fireEvent.click(within(followUp).getByRole("button", { name: /Copy the participant link/ }));
+    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("https://faisalmushtaq.github.io/MySelf/?study=ybm&survey=ybm_followup"));
+  });
+
+  it("opens Studio's survey list for a study Studio's addresses cannot name, and says so", async () => {
+    calls.study = { study: "future", defaultStudy: "ybm", title: "Perspectives of the future" };
+    render(<Versions />);
+    const links = await screen.findAllByRole("link", { name: /Edit in Studio/ });
+    expect(links.every((l) => l.getAttribute("href") === "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys")).toBe(true);
+    expect(screen.getAllByText(/choose future in Studio's study switcher/)).not.toHaveLength(0);
+    expect(screen.getByText("https://faisalmushtaq.github.io/MySelf/?study=future&survey=ybm_followup")).toBeInTheDocument();
+  });
+
+  it("places each version under its survey, with its provenance, sittings and live periods", async () => {
+    render(<Versions />);
+    const standard = await section("Your Brain Matters");
+    expect(within(standard).getByText(/live since/)).toHaveTextContent("v9.0.0, live since 23 Sept 2026");
+    expect(within(standard).getAllByText(/^v\d/).map((e) => e.textContent)).toEqual(["v9.0.0", "v10.0.0", "v9.0.0", "v7.3.0"]);
+    expect(within(await section("MyPhone MyBrain follow-up")).getAllByText(/^v\d/).map((e) => e.textContent)).toEqual(["v1.0.0", "v1.0.0"]);
     expect(screen.getByText(/2 sittings were recorded under a version/)).toBeInTheDocument();
     expect(screen.getByText("np.phone_wellbeing")).toHaveAttribute("title", "np.phone_wellbeing@0.1.1");
     expect(screen.getByText("version 0.1.1")).toBeInTheDocument();
@@ -71,14 +120,14 @@ describe("the Survey versions page", () => {
     expect(container.querySelector("img")).toBeNull();
   });
 
-  it("downloads a manifest and the provenance", async () => {
+  it("downloads a manifest and the provenance, named after the study", async () => {
     render(<Versions />);
-    fireEvent.click((await screen.findAllByRole("button", { name: /Manifest/ }))[1]!);
+    fireEvent.click(within(await section("Your Brain Matters")).getAllByRole("button", { name: /Manifest/ })[1]!);
     await waitFor(() => expect(calls.saved).toHaveBeenCalledWith("ybm_nd2026_standard_r9_0_0.manifest.json"));
     expect(calls.manifest).toHaveBeenCalledWith({ hash: H(2) });
     fireEvent.click(screen.getByRole("button", { name: /Version history \(CSV\)/ }));
-    await waitFor(() => expect(calls.saved).toHaveBeenCalledWith("survey_versions.csv"));
+    await waitFor(() => expect(calls.saved).toHaveBeenCalledWith("ybm_survey_versions.csv"));
     fireEvent.click(screen.getByRole("button", { name: "JSON" }));
-    await waitFor(() => expect(calls.saved).toHaveBeenCalledWith("survey_versions.json"));
+    await waitFor(() => expect(calls.saved).toHaveBeenCalledWith("ybm_survey_versions.json"));
   });
 });

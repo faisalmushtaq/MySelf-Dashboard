@@ -19,7 +19,6 @@ import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase
  */
 
 export const USE_EMULATORS = import.meta.env.VITE_USE_EMULATORS === "true";
-export const STUDY: string = (import.meta.env.VITE_STUDY as string | undefined) || (USE_EMULATORS ? "demo" : "ybm");
 export const REGION = "europe-west2";
 export const DATABASE = "dashboard";
 
@@ -75,11 +74,11 @@ export function googleProvider(): GoogleAuthProvider {
   return p;
 }
 
-/** Where the authenticated export download endpoint lives. */
-export function downloadUrl(jobId: string): string {
+/** Where the authenticated export download endpoint lives: an export of `study`. */
+export function downloadUrl(jobId: string, study: string): string {
   const project = config?.["projectId"] ?? "";
   const base = USE_EMULATORS
     ? `http://127.0.0.1:${PORTS.functions}/${project}/${REGION}/downloadExport`
     : ((import.meta.env.VITE_DOWNLOAD_URL as string | undefined) ?? `https://${REGION}-${project}.cloudfunctions.net/downloadExport`);
-  return `${base}?job=${encodeURIComponent(jobId)}`;
+  return `${base}?${new URLSearchParams({ study, job: jobId }).toString()}`;
 }

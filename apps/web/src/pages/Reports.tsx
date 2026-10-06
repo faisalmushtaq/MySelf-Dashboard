@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { collection, limit, onSnapshot, orderBy, query, where, Timestamp } from "firebase/firestore";
 import { EXPORT_KIND_LABELS, type ExportKind } from "@myself-dashboard/core";
-import { firebase, STUDY } from "../lib/firebase";
+import { firebase } from "../lib/firebase";
+import { studyPath } from "../lib/study";
 import { downloadExport } from "../lib/download";
 import { bytes, dateTime, int, relative } from "../lib/format";
 import { useAuth } from "../app/auth";
@@ -49,7 +50,7 @@ export default function Reports() {
 
   useEffect(() => {
     if (!me?.uid) return;
-    const col = collection(firebase().db, `studies/${STUDY}/exportJobs`);
+    const col = collection(firebase().db, studyPath("exportJobs"));
     const q = all && can("audit.readAll") ? query(col, orderBy("createdAt", "desc"), limit(50)) : query(col, where("requestedBy", "==", me.uid), orderBy("createdAt", "desc"), limit(25));
     return onSnapshot(
       q,

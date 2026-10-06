@@ -11,7 +11,7 @@ export interface Column {
   label: string;
   sort?: SortKey;
   numeric?: boolean;
-  render: (s: SessionListItem, ctx: { versionLabel: (h: string) => string }) => ReactNode;
+  render: (s: SessionListItem, ctx: { versionLabel: (h: string) => string; surveyTitle: (id: string) => string }) => ReactNode;
 }
 
 export const COLUMNS: Column[] = [
@@ -20,6 +20,8 @@ export const COLUMNS: Column[] = [
   { id: "started", label: "Started", sort: "startedAt", render: (s) => dateTime(s.startedAt) },
   { id: "last", label: "Last activity", sort: "lastActivityAt", render: (s) => dateTime(s.lastActivityAt) },
   { id: "completed", label: "Completed", sort: "completedAt", render: (s) => (s.completedAt ? dateTime(s.completedAt) : "—") },
+  // The survey of the study it was collected for (docs/12 §12.6): its version's, so none for an unknown version.
+  { id: "survey", label: "Survey", render: (s, c) => (s.survey ? c.surveyTitle(s.survey) : <span className="muted">—</span>) },
   { id: "version", label: "Version", sort: "version", render: (s, c) => (s.releaseKnown && s.releaseHash ? c.versionLabel(s.releaseHash) : <span title={s.releaseHash ?? ""}>Unknown</span>) },
   {
     id: "completion",

@@ -5,7 +5,9 @@ import react from "@vitejs/plugin-react";
  * Build-time configuration (all public, none secret):
  *   VITE_FIREBASE_CONFIG  web app config JSON from the Firebase console
  *   VITE_USE_EMULATORS    "true" to talk to the local Emulator Suite
- *   VITE_STUDY            study id (default "ybm"; the emulator seed uses "demo")
+ *   VITE_STUDIO_URL       MySelf Studio's survey list (default the survey's GitHub Pages researcher view)
+ *   VITE_PARTICIPANT_URL  the participant app, where participant links start (docs/12 §12.8)
+ * The study is not configured here: the server lists those a person may see (docs/12).
  */
 export default defineConfig({
   plugins: [react()],

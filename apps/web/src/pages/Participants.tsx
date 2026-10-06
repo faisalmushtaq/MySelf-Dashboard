@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { PARTICIPANT_ATTENTION_LABELS, type ParticipantAttention, type ParticipantView } from "@myself-dashboard/core";
+import { DEFAULT_FILTERS, PARTICIPANT_ATTENTION_LABELS, type ParticipantAttention, type ParticipantView } from "@myself-dashboard/core";
+import { useFilters } from "../app/filters";
 import { api } from "../lib/api";
 import { useLoad } from "../lib/hooks";
 import { dateOnly, dateTime, relative } from "../lib/format";
@@ -28,7 +29,10 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString
  */
 export default function Participants() {
   const [fresh, setFresh] = useState(0);
-  const { data, error, loading, reload } = useLoad(() => api.getParticipants({ fresh: fresh > 0 }), [fresh]);
+  // The survey filter alone applies here (docs/12 §12.6): participants with a sitting in that survey.
+  const { filters } = useFilters();
+  const surveys = filters.surveys;
+  const { data, error, loading, reload } = useLoad(() => api.getParticipants({ fresh: fresh > 0, filters: { ...DEFAULT_FILTERS, surveys } }), [fresh, surveys.join()]);
   const [search, setSearch] = useState("");
   const [waves, setWaves] = useState<WaveFilter>("all");
   const [attention, setAttention] = useState<AttentionFilter>("any");

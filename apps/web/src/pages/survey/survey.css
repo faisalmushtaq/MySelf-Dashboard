@@ -54,3 +54,44 @@ tr.row-problem td {
 .versions-table .btn-link {
   padding-left: 0;
 }
+
+/* One card per survey of the study (docs/12 §12.8). */
+.survey-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.survey-head h2 {
+  margin-bottom: 4px;
+}
+.survey-id {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+/* The participant link: shown whole, never shortened, so what is copied is what is read. */
+.participant-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 4px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.participant-link-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+.participant-link-url {
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.participant-link .hint {
+  flex-basis: 100%;
+  margin: 0;
+}

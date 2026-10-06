@@ -150,8 +150,9 @@ function Gate() {
         </Centered>
       );
     case "authorised":
+      // Mounted afresh for each study: nothing of one study stays on screen in another (docs/12 §12.7).
       return (
-        <StudyDataProvider>
+        <StudyDataProvider key={state.me.study}>
           <BrowserRouter>
             <Suspense fallback={<Loading />}>
               <Routes>

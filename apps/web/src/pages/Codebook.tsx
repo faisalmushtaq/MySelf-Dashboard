@@ -1,6 +1,8 @@
 import { Fragment, useMemo, useState } from "react";
-import { codebookCsvRows, QUALITY_AREA_LABELS, toCsv, type CodebookRow, type QualityFinding, type QualitySeverity } from "@myself-dashboard/core";
+import { codebookCsvRows, DEFAULT_FILTERS, QUALITY_AREA_LABELS, toCsv, type CodebookRow, type QualityFinding, type QualitySeverity } from "@myself-dashboard/core";
+import { useFilters } from "../app/filters";
 import { api } from "../lib/api";
+import { currentStudy } from "../lib/study";
 import { useLoad } from "../lib/hooks";
 import { Metric, PageHeader } from "../components/Metric";
 import { EmptyState, ErrorState, Loading } from "../components/States";
@@ -36,7 +38,9 @@ const scoreText = (v: number | null) => (v === null ? "missing" : Number.isInteg
  */
 export default function Codebook() {
   const [release, setRelease] = useState<string | undefined>(undefined);
-  const { data, error, loading, reload } = useLoad(() => api.getCodebook(release ? { release } : {}), [release]);
+  // A survey filter narrows the versions to that survey's (docs/12 §12.6).
+  const surveys = useFilters().filters.surveys;
+  const { data, error, loading, reload } = useLoad(() => api.getCodebook({ ...(release ? { release } : {}), filters: { ...DEFAULT_FILTERS, surveys } }), [release, surveys.join()]);
   const [severity, setSeverity] = useState<QualitySeverity | "all">("all");
   const [search, setSearch] = useState("");
   const [instrument, setInstrument] = useState("");
@@ -65,7 +69,7 @@ export default function Codebook() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `myself_codebook_r${data.release.version}.csv`;
+    a.download = `myself_${currentStudy() ?? "study"}_codebook_r${data.release.version}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
