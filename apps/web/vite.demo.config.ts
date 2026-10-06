@@ -9,7 +9,6 @@ import react from "@vitejs/plugin-react";
  */
 const demo = (file: string) => fileURLToPath(new URL(`./demo/${file}`, import.meta.url));
 process.env["VITE_FIREBASE_CONFIG"] = JSON.stringify({ apiKey: "demo", projectId: "demo-myself-dashboard" });
-process.env["VITE_STUDY"] = "ybm";
 
 export default defineConfig({
   plugins: [react()],
