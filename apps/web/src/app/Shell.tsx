@@ -71,7 +71,9 @@ function StudySwitcher() {
   return (
     <label className="study-ctl" title={problem ?? "The study you are working in"}>
       <Icon name="layers" size={16} />
-      <span className="sr-only">Study</span>
+      <span className="ctl-caption" aria-hidden="true">
+        Study
+      </span>
       <select value={study.study} onChange={(e) => void choose(e.target.value)} disabled={busy} aria-label="Study" aria-invalid={problem ? true : undefined}>
         {studies.map((s) => (
           <option key={s.study} value={s.study}>

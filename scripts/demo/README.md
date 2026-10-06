@@ -28,21 +28,34 @@ any web server (for example `python3 -m http.server` in that folder).
   r10.0.0 on 1 October. r10.0.0 is not put in the dashboard's registry: the
   dashboard's trigger meets it in those sittings, checks Studio's copy and
   registers it, as in production, and the seed fails if it does not.
+- **So are a second survey and a second study (docs/12).** On 3 October a
+  short "MyPhone MyBrain: follow-up" survey is created and published in the
+  YBM study (r9.0.0's phone, gaming and right-now sections); twelve children who
+  already sat r9.0.0 sit it on 5 October, so the participants link across the
+  two surveys. On 4 October an owner creates a second study space,
+  "Perspectives of the future" (`future`), and publishes its survey (r9.0.0's
+  wellbeing sections and the message to their future self); fourteen new
+  children at two invented colleges sit it. Its own access list names the
+  colleague. Neither version is in the dashboard's registry: the trigger
+  registers each from Studio's copy, in its own study, and the seed fails if it
+  does not. So the header shows the study switcher and the survey filter.
 - **The answers are the real dashboard's.** `seed.mjs` loads the study into the
   Emulator Suite, where the dashboard's own trigger summarises it. Then
-  `record.mjs` walks every page in a browser and records each function's answer.
-  It also sweeps the views a visitor might open that the walk did not: every
-  session, and every way the Scores page groups.
+  `record.mjs` walks every page in a browser and records each function's answer:
+  in YBM, again with each of its surveys chosen, and in the second study, chosen
+  in the header. It also sweeps the views a visitor might open that the walk did
+  not: every session of both studies, and every way the Scores page groups.
 - **Lists and charts are live.** In the demo build, `apps/web/demo/backend.ts`
   computes the session list, the Overview and the question analysis in the
   browser, using the same core routines the functions use. So every filter
   works. Flags and notes change in memory until the tab is closed. Everything
   else is played back from the recording, including Survey versions and its
   provenance export. Saving settings and exporting sessions are switched off.
-  The survey researcher view's figures on the Overview are
+  Every call names its study, so nothing of one study ever answers for the
+  other. The survey researcher view's figures on the Overview are
   computed from raw sittings, which the demo does not carry, so they are played
   back only for the filters they were recorded under (every dataset choice,
-  otherwise the defaults).
+  and in YBM each survey, otherwise the defaults).
 
 ## How it is put together
 
@@ -51,11 +64,11 @@ any web server (for example `python3 -m http.server` in that folder).
 | `firebase.demo.json` | Emulator ports kept apart from the e2e suite's (9109, 8291, 5111) |
 | `scripts/demo/build.mjs` | Runs everything below, in order |
 | `scripts/demo/ybm-study.mjs` | The made-up study |
-| `scripts/demo/studio.mjs` | MySelf Studio's records of its versions, for Survey versions |
+| `scripts/demo/studio.mjs` | MySelf Studio's records of its versions, the follow-up survey and the second study space, for Survey versions |
 | `scripts/demo/seed.mjs` | Loads it into the emulators |
 | `scripts/demo/record.mjs` | Walks the dashboard and records it |
 | `scripts/demo/pack.mjs` | Splits the recording into small, lazily loaded files |
-| `scripts/demo/check.mjs` | Opens the built demo and fails on any error (`DEMO_URL=…`); checks Survey versions and its downloads |
+| `scripts/demo/check.mjs` | Opens the built demo and fails on any error (`DEMO_URL=…`); checks Survey versions (each survey's participant link) and its downloads, the survey filter, and every page in the second study |
 | `apps/web/vite.demo.config.ts` | Builds the web app with the stand-ins below |
 | `apps/web/demo/` | Stand-ins for `firebase/*` and the router (addresses go in the `#`), plus the demo's backend |
 

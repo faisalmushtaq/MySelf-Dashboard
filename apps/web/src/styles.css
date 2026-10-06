@@ -683,6 +683,11 @@ ul.tight {
   gap: 6px;
   color: var(--accent);
 }
+.study-ctl .ctl-caption {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+}
 .study-ctl select {
   font-weight: 600;
   max-width: 260px;

@@ -41,6 +41,9 @@ import firestoreSeed from "./data/firestore.json";
  * reviews and notes change in memory, so flagging a session works until the tab
  * is closed. Saving settings and exporting sessions are switched off; the survey's
  * version history and its provenance export play back as recorded.
+ *
+ * Two studies were recorded (docs/12): every call names its study, as the web
+ * app's do, and nothing of one study ever answers for another.
  */
 
 type Data = Record<string, unknown>;
@@ -48,7 +51,9 @@ type Call = { name: string; data: unknown; status: number; body?: { result?: unk
 type Live = { documents: Record<string, Data> };
 
 export const DEMO_USER = { uid: firestoreSeed.uid, email: firestoreSeed.email };
-const STUDY = firestoreSeed.study;
+/** The default study, which a call that names none means, as on the server. */
+const DEFAULT_STUDY = firestoreSeed.study;
+const studyOf = (data: Data): string => (typeof data["study"] === "string" ? data["study"] : DEFAULT_STUDY);
 
 // ── Documents the web app reads from Firestore itself ───────────────────────
 
@@ -83,8 +88,8 @@ export function onDocumentsChanged(f: () => void): () => void {
 export function touchDocuments(): void {
   setTimeout(() => listeners.forEach((f) => f()), 0);
 }
-function audit(action: string, target: Data, detail: Data = {}): void {
-  documents().set(`studies/${STUDY}/auditLog/demo${Date.now()}${Math.random().toString(36).slice(2, 6)}`, {
+function audit(study: string, action: string, target: Data, detail: Data = {}): void {
+  documents().set(`studies/${study}/auditLog/demo${Date.now()}${Math.random().toString(36).slice(2, 6)}`, {
     action, actorUid: DEMO_USER.uid, actorEmail: DEMO_USER.email, actorRole: "owner", target, detail: { ...detail, demo: true }, outcome: "success", at: revive(Date.now()),
   });
   touchDocuments();
@@ -101,8 +106,8 @@ const canonical = (v: unknown): string => {
   if (v && typeof v === "object") return `{${Object.keys(v as Data).sort().map((k) => `${JSON.stringify(k)}:${canonical((v as Data)[k])}`).join(",")}}`;
   return JSON.stringify(v ?? null);
 };
-// Fields that pick WHICH thing is asked for: an answer about another session or another grouping is never a fair stand-in.
-const IDENTITY = ["sessionId", "key", "hash", "versionHash", "compareWith", "groupBy", "observation", "focus"];
+// Fields that pick WHICH thing is asked for: an answer about another study, session or grouping is never a fair stand-in.
+const IDENTITY = ["study", "sessionId", "key", "hash", "versionHash", "compareWith", "groupBy", "observation", "focus"];
 
 async function replay(name: string, data: unknown, options: { exact?: (recorded: unknown) => boolean } = {}): Promise<unknown> {
   const mine = (await recorded()).filter((c) => c.name === name && c.status === 200);
@@ -134,28 +139,40 @@ function demoError(code: string, message: string): Error {
 
 // ── Computed in the browser, as the functions compute them ──────────────────
 
-let live: Promise<{ summaries: SessionSummary[]; reviews: Map<string, ReviewDoc>; policy: Policy; releases: ReleaseIndex[] }> | null = null;
-const state = () =>
-  (live ??= import("./data/live.json").then((m) => {
-    const d = (m.default as Live).documents;
-    const under = (col: string) => Object.entries(d).filter(([p]) => p.startsWith(`studies/${STUDY}/${col}/`));
-    const strip = <T,>(v: Data): T => {
-      const { _ts, ...rest } = v;
-      void _ts;
-      return rest as T;
-    };
-    return {
-      summaries: under("sessionSummaries").map(([, v]) => strip<SessionSummary>(v)).filter((s) => !(s as unknown as Data)["deleted"]),
-      reviews: new Map(under("reviews").map(([p, v]) => [p.split("/").pop()!, strip<ReviewDoc>(v)])),
-      policy: readPolicy(d["config/policy"] ?? {}),
-      releases: under("releaseManifests").map(([, v]) => indexRelease(JSON.parse(String(v["manifestJson"])))),
-    };
-  }));
+type StudyState = { summaries: SessionSummary[]; reviews: Map<string, ReviewDoc>; policy: Policy; releases: ReleaseIndex[] };
+let live: Promise<Record<string, Data>> | null = null;
+const states = new Map<string, Promise<StudyState>>();
+/** One study's summaries, reviews, policy and versions, as the server keeps them for it. */
+const state = (study: string) => {
+  let s = states.get(study);
+  if (!s) {
+    s = (live ??= import("./data/live.json").then((m) => (m.default as Live).documents)).then((d) => {
+      const under = (col: string) => Object.entries(d).filter(([p]) => p.startsWith(`studies/${study}/${col}/`));
+      const strip = <T,>(v: Data): T => {
+        const { _ts, ...rest } = v;
+        void _ts;
+        return rest as T;
+      };
+      // Another study's policy is its own once saved there, the default study's (with no active version) until then.
+      const own = d[`studies/${study}/config/policy`];
+      const policy = own || study === DEFAULT_STUDY ? readPolicy(own ?? d["config/policy"] ?? {}) : { ...readPolicy(d["config/policy"] ?? {}), activeReleaseHash: null };
+      return {
+        summaries: under("sessionSummaries").map(([, v]) => strip<SessionSummary>(v)).filter((x) => !(x as unknown as Data)["deleted"]),
+        reviews: new Map(under("reviews").map(([p, v]) => [p.split("/").pop()!, strip<ReviewDoc>(v)])),
+        policy,
+        releases: under("releaseManifests").map(([, v]) => indexRelease(JSON.parse(String(v["manifestJson"])))),
+      };
+    });
+    states.set(study, s);
+  }
+  return s;
+};
 const notesAdded = new Map<string, NoteView[]>();
 
-async function rows(now: Date) {
-  const s = await state();
-  return { ...s, rows: buildRows(s.summaries, s.reviews, s.policy, now) };
+async function rows(study: string, now: Date) {
+  const s = await state(study);
+  const surveys = new Map(s.releases.map((r) => [r.hash, r.survey]));
+  return { ...s, rows: buildRows(s.summaries, s.reviews, s.policy, now, { surveyOf: (hash) => surveys.get(hash) ?? null }) };
 }
 const clampInt = (v: unknown, min: number, max: number, fallback: number) => Math.min(max, Math.max(min, typeof v === "number" && Number.isFinite(v) ? Math.floor(v) : fallback));
 const search = (v: unknown) => (typeof v === "string" ? v.slice(0, 80) : "");
@@ -163,7 +180,7 @@ const search = (v: unknown) => (typeof v === "string" ? v.slice(0, 80) : "");
 const handlers: Record<string, (data: Data) => Promise<unknown>> = {
   async querySessions(data) {
     const now = new Date();
-    const { rows: all, releases, policy } = await rows(now);
+    const { rows: all, releases, policy } = await rows(studyOf(data), now);
     const defs = definitionsFrom(releases);
     const pageSize = (PAGE_SIZES as readonly number[]).includes(data["pageSize"] as number) ? (data["pageSize"] as number) : 50;
     const result = runQuery(
@@ -177,7 +194,7 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
 
   async getAnalytics(data) {
     const now = new Date();
-    const { rows: all, releases, policy, summaries } = await rows(now);
+    const { rows: all, releases, policy, summaries } = await rows(studyOf(data), now);
     const filters = sanitiseFilters(data["filters"]);
     const ctx = { now, timeZone: policy.timeZone };
     const base = (await replay("getAnalytics", data)) as Data;
@@ -194,7 +211,7 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
 
   async getQuestionAnalytics(data) {
     const now = new Date();
-    const { rows: all, releases, policy } = await rows(now);
+    const { rows: all, releases, policy } = await rows(studyOf(data), now);
     const release = releases.find((r) => r.hash === data["versionHash"]);
     if (!release) throw demoError("not-found", "That survey version is not in the registry.");
     const other = releases.find((r) => r.hash === data["compareWith"]) ?? null;
@@ -210,20 +227,23 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
   },
 
   async getQuestionHistory(data) {
-    const { releases } = await state();
+    const { releases } = await state(studyOf(data));
     const key = String(data["key"] ?? "");
-    return { key, entries: questionHistory(key, releases) };
+    // Within one survey when one is chosen, as on the server.
+    const surveys = sanitiseFilters(data["filters"]).surveys;
+    return { key, entries: questionHistory(key, releases.filter((r) => surveys.length === 0 || (r.survey !== null && surveys.includes(r.survey)))) };
   },
 
   async getSessionDetail(data) {
+    const study = studyOf(data);
     const sessionId = String(data["sessionId"] ?? "");
-    const detail = (await replay("getSessionDetail", { sessionId, ...(data["context"] ? { context: data["context"] } : {}) })) as Data;
+    const detail = (await replay("getSessionDetail", { study, sessionId, ...(data["context"] ? { context: data["context"] } : {}) })) as Data;
     const now = new Date();
-    const { rows: all, releases, policy } = await rows(now);
+    const { rows: all, releases, policy } = await rows(study, now);
     const row = all.find((r) => r.summary.sessionId === sessionId);
     const release = releases.find((r) => r.hash === row?.summary.releaseHash);
     const context = data["context"] as Data | undefined;
-    audit("session.viewed", { type: "session", id: sessionId });
+    audit(study, "session.viewed", { type: "session", id: sessionId });
     return {
       ...detail,
       ...(row ? { item: toListItem(row, { studyCodes: true, ...(release ? { sectionTitle: (k: string) => release.sections.find((x) => x.key === k)?.title } : {}) }), warnings: row.status.signals } : {}),
@@ -236,14 +256,15 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
   },
 
   async updateReview(data) {
-    const s = await state();
+    const study = studyOf(data);
+    const s = await state(study);
     const sessionId = String(data["sessionId"] ?? "");
     const current = s.reviews.get(sessionId) ?? emptyReview(sessionId);
     if (typeof data["expectedRev"] === "number" && current.rev !== data["expectedRev"]) throw demoError("aborted", "Someone else changed this review a moment ago.");
     try {
       const { next, before, after } = applyReviewChange(current, data["change"] as ReviewChange, DEMO_USER, new Date(), () => crypto.randomUUID());
       s.reviews.set(sessionId, next);
-      audit("review.updated", { type: "session", id: sessionId }, { change: (data["change"] as Data)["kind"], before, after, rev: next.rev });
+      audit(study, "review.updated", { type: "session", id: sessionId }, { change: (data["change"] as Data)["kind"], before, after, rev: next.rev });
       return { review: next };
     } catch (e) {
       throw demoError("invalid-argument", (e as Error).message);
@@ -251,7 +272,8 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
   },
 
   async addNote(data) {
-    const s = await state();
+    const study = studyOf(data);
+    const s = await state(study);
     const sessionId = String(data["sessionId"] ?? "");
     let text: string;
     try {
@@ -264,14 +286,14 @@ const handlers: Record<string, (data: Data) => Promise<unknown>> = {
     notesAdded.set(sessionId, [...(notesAdded.get(sessionId) ?? []), note]);
     const noteCount = current.noteCount + 1;
     s.reviews.set(sessionId, { ...current, noteCount, updatedAt: note.createdAt!, updatedBy: DEMO_USER.uid, rev: current.rev + 1 });
-    audit("note.added", { type: "session", id: sessionId });
+    audit(study, "note.added", { type: "session", id: sessionId });
     return { id: note.id, noteCount };
   },
 
   // The version history is MySelf Studio's records, as recorded; the export is invented data, so it plays back too.
   async exportSurveyProvenance(data) {
     const out = await replay("exportSurveyProvenance", data);
-    audit("survey.provenance_exported", { type: "study", id: STUDY });
+    audit(studyOf(data), "survey.provenance_exported", { type: "study", id: studyOf(data) });
     return out;
   },
 
@@ -289,6 +311,7 @@ const SWITCHED_OFF: Record<string, string> = {
   saveScoringScheme: "Saving is switched off in this demo.",
   saveGroupSettings: "Saving is switched off in this demo.",
   updateAccessPolicy: "Settings cannot be changed in this demo.",
+  updateStudyAccess: "Settings cannot be changed in this demo.",
   updatePolicy: "Settings cannot be changed in this demo.",
   setDashboardRole: "Roles cannot be changed in this demo.",
   rebuildSummaries: "This demo has no server to rebuild.",

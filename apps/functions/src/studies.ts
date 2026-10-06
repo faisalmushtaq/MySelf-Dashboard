@@ -125,12 +125,16 @@ export async function studySurveys(study: string, fresh = false): Promise<Survey
   return value;
 }
 
-/** How the switcher shows a study: the default study with no document is titled by its live survey. */
+/**
+ * How the switcher shows a study. The default study with no document is titled
+ * by its live survey (§11.6) — with several, the one it has run longest, the
+ * one with the most registered versions (for ybm, ybm_nd2026_standard).
+ */
 export async function studyView(s: RegisteredStudy): Promise<StudyView> {
   let title = s.title;
   if (!title) {
-    const surveys = await studySurveys(s.study);
-    title = (surveys.find((x) => x.live) ?? surveys[0])?.title ?? s.study;
+    const surveys = [...(await studySurveys(s.study))].sort((a, b) => Number(!!b.live) - Number(!!a.live) || b.releases.length - a.releases.length);
+    title = surveys[0]?.title ?? s.study;
   }
   return { study: s.study, title, status: s.status, isDefault: s.isDefault };
 }
