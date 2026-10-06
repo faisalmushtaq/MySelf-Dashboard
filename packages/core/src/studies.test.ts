@@ -81,14 +81,12 @@ describe("ids, status and links, as the survey reads and builds them", () => {
     expect(() => participantLink("https://faisalmushtaq.github.io/MySelf/", { study: "Bad", surveyId: "x" })).toThrow();
   });
 
-  it("points Edit in Studio at the survey where Studio's addresses can name it", () => {
+  it("points Edit in Studio at the survey's versions, in its own study", () => {
     const studio = "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys";
-    expect(studioLink(studio, { study: "ybm", surveyId: "ybm_nd2026_standard" }, "ybm")).toEqual({
-      href: "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys/ybm_nd2026_standard/versions",
-      routed: true,
-    });
-    // Studio's addresses do not name a study: another study's survey opens Studio's list.
-    expect(studioLink(studio, { study: "future", surveyId: "future_v1" }, "ybm")).toEqual({ href: "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys", routed: false });
-    expect(studioLink(studio, null, "ybm").href).toBe("https://faisalmushtaq.github.io/MySelf/researcher/#/surveys");
+    // The default study's pages keep the addresses they had before study spaces.
+    expect(studioLink(studio, { study: "ybm", surveyId: "ybm_nd2026_standard" }, "ybm")).toBe("https://faisalmushtaq.github.io/MySelf/researcher/#/surveys/ybm_nd2026_standard/versions");
+    // Any other study's carry its prefix, as Studio's own router writes them.
+    expect(studioLink(studio, { study: "future", surveyId: "future_v1" }, "ybm")).toBe("https://faisalmushtaq.github.io/MySelf/researcher/#/study/future/surveys/future_v1/versions");
+    expect(studioLink(studio, null, "ybm")).toBe("https://faisalmushtaq.github.io/MySelf/researcher/#/surveys");
   });
 });

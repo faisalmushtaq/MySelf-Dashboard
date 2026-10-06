@@ -200,10 +200,11 @@ Survey versions shows the chosen study's history, one section per survey:
   `https://faisalmushtaq.github.io/MySelf/?study=<study>&survey=<surveyId>`,
   both parameters always, with a copy button. The address is
   `VITE_PARTICIPANT_URL`, by default the survey's GitHub Pages address;
-- **Edit in Studio**, pointing at the survey's own versions page in Studio
-  (`#/surveys/<surveyId>/versions`) for the default study. Studio's addresses do
-  not name a study yet, so for another study the link opens Studio's survey
-  list and the page says to choose the study there;
+- **Edit in Studio**, pointing at the survey's own versions page in Studio,
+  in its study: `#/surveys/<surveyId>/versions` for the default study, and
+  `#/study/<study>/surveys/<surveyId>/versions` for any other, as Studio's own
+  router writes its addresses (the survey's
+  `apps/researcher/src/studio/route.ts`, D-56);
 - the history of that survey's versions. A version only the registry knows is
   placed under the survey its manifest names.
 
@@ -245,5 +246,3 @@ Survey versions shows the chosen study's history, one section per survey:
    every study they may see.
 4. **A new study starts with the default study's settings and school names**
    (§12.3), changed per study once an administrator saves them there.
-5. **Studio links for other studies** open Studio's survey list until Studio's
-   addresses can name a study.

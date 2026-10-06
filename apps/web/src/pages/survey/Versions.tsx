@@ -158,12 +158,11 @@ function SurveySection({
           {group.title} {group.surveyId ? <code className="survey-id">{group.surveyId}</code> : null}
         </h2>
         {group.surveyId ? (
-          <a className="btn btn-primary btn-small" href={studio.href} target="_blank" rel="noopener noreferrer" aria-label={`Edit in Studio: ${group.title}`}>
+          <a className="btn btn-primary btn-small" href={studio} target="_blank" rel="noopener noreferrer" aria-label={`Edit in Studio: ${group.title}`}>
             Edit in Studio <Icon name="external" size={14} />
           </a>
         ) : null}
       </div>
-      {!studio.routed && group.surveyId ? <p className="hint">Studio opens on its list of surveys: choose {study} in Studio's study switcher there.</p> : null}
       {group.live ? (
         <>
           <LiveLine live={group.live} />

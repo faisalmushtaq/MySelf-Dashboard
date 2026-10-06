@@ -102,9 +102,9 @@ await page.locator(".study-tag", { hasText: "Perspectives of the future" }).wait
 for (const r of routes) await visit(r, "future: ");
 await page.goto(`${URL_}#/survey`);
 await page.waitForTimeout(1500);
-for (const want of ["https://faisalmushtaq.github.io/MySelf/?study=future&survey=future_perspectives", "choose future in Studio's study switcher"]) {
-  if ((await page.getByText(want, { exact: false }).count()) === 0) problems.push(`future survey versions: "${want}" is not on the page`);
-}
+if ((await page.getByText("https://faisalmushtaq.github.io/MySelf/?study=future&survey=future_perspectives", { exact: false }).count()) === 0) problems.push("future survey versions: its participant link is not on the page");
+const futureStudio = await page.getByRole("link", { name: /Edit in Studio/ }).first().getAttribute("href").catch(() => null);
+if (!futureStudio?.endsWith("#/study/future/surveys/future_perspectives/versions")) problems.push(`future survey versions: Edit in Studio is ${futureStudio}`);
 await page.goto(`${URL_}#/sessions`);
 await page.waitForTimeout(1500);
 console.log(`future sessions          ${await count()} sittings`);

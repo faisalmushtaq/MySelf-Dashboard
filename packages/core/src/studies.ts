@@ -144,16 +144,14 @@ export function accessListProblem(list: StudyAccessList): string | null {
 }
 
 /**
- * Where to edit a survey in MySelf Studio. `studioUrl` is Studio's survey list
- * (`…/researcher/#/surveys`). Studio's addresses name a survey but not a study,
- * so a survey of the default study opens on its own versions page, and one of
- * another study opens Studio's survey list (`routed: false`), where the study
- * is chosen in Studio's own switcher.
+ * Where to edit a survey in MySelf Studio: its versions page, in its study.
+ * `studioUrl` is Studio's survey list (`…/researcher/#/surveys`). Studio's
+ * addresses name the study as a prefix, `#/study/<id>/…`, except the default
+ * study's, which keep the addresses they had before study spaces (the
+ * survey's apps/researcher/src/studio/route.ts, D-56).
  */
-export function studioLink(studioUrl: string, choice: SurveyChoice | null, defaultStudy: string): { href: string; routed: boolean } {
+export function studioLink(studioUrl: string, choice: SurveyChoice | null, defaultStudy: string): string {
   const base = studioUrl.split("#")[0]!;
-  if (choice && choice.study === defaultStudy && isSurveyId(choice.surveyId)) {
-    return { href: `${base}#/surveys/${encodeURIComponent(choice.surveyId)}/versions`, routed: true };
-  }
-  return { href: `${base}#/surveys`, routed: false };
+  const study = choice && choice.study !== defaultStudy && isStudyId(choice.study) ? `#/study/${encodeURIComponent(choice.study)}` : "#";
+  return choice && isSurveyId(choice.surveyId) ? `${base}${study}/surveys/${encodeURIComponent(choice.surveyId)}/versions` : `${base}${study}/surveys`;
 }

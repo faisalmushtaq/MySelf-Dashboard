@@ -84,12 +84,14 @@ describe("the Survey versions page", () => {
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("https://faisalmushtaq.github.io/MySelf/?study=ybm&survey=ybm_followup"));
   });
 
-  it("opens Studio's survey list for a study Studio's addresses cannot name, and says so", async () => {
+  it("opens Studio on the survey's own page in another study, under the study's prefix", async () => {
     calls.study = { study: "future", defaultStudy: "ybm", title: "Perspectives of the future" };
     render(<Versions />);
     const links = await screen.findAllByRole("link", { name: /Edit in Studio/ });
-    expect(links.every((l) => l.getAttribute("href") === "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys")).toBe(true);
-    expect(screen.getAllByText(/choose future in Studio's study switcher/)).not.toHaveLength(0);
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "https://faisalmushtaq.github.io/MySelf/researcher/#/study/future/surveys/ybm_followup/versions",
+      "https://faisalmushtaq.github.io/MySelf/researcher/#/study/future/surveys/ybm_nd2026_standard/versions",
+    ]);
     expect(screen.getByText("https://faisalmushtaq.github.io/MySelf/?study=future&survey=ybm_followup")).toBeInTheDocument();
   });
 
