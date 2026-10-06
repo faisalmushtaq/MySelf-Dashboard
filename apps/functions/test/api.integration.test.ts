@@ -4,12 +4,13 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { DEFAULT_FILTERS, type AnalyticsResponse, type CodebookResponse, type ParticipantsResponse, type ResearcherViewResponse, type QuerySessionsResponse, type ScoresView, type ScoringSettingsView, type SessionDetailResponse, type SurveyVersionsResponse, PROVENANCE_COLUMNS } from "@myself-dashboard/core";
 import { contentHash, demoManifest } from "@myself-dashboard/core/node";
+import type { StudyAccessResponse, SurveysResponse, WhoAmIResponse, ExportJobView, ExportPreview } from "@myself-dashboard/core";
 import { anonymousDevice, demoManifests, person, req, resetEmulators, seedSittings, type Person } from "./support.js";
 import { pdfText } from "./pdfText.js";
 
 import { dash } from "../src/env.js";
 import { registerRelease, resetStudioCache } from "../src/releases.js";
-import { summariseSitting } from "../src/summaries.js";
+import { onSitting, summariseSitting } from "../src/summaries.js";
 import { handleOpsRequest } from "../src/ops.js";
 import { invalidateSettings } from "../src/settings.js";
 import { resetStore } from "../src/store.js";
@@ -24,6 +25,9 @@ import { getParticipants } from "../src/api/participants.js";
 import { getScores, getScoringSettings, saveGroupSettings, saveScoringScheme } from "../src/api/scores.js";
 import { invalidateScoring } from "../src/scoring.js";
 import { exportSurveyProvenance, getSurveyManifest, listSurveyVersions } from "../src/api/versions.js";
+import { getStudyAccess, getSurveys, updateStudyAccess } from "../src/api/studies.js";
+import { rebuildSummaries, updatePolicy } from "../src/api/admin.js";
+import { resetStudies } from "../src/studies.js";
 
 /**
  * The backend, end to end against the emulators: real ID tokens from the Auth
@@ -515,13 +519,14 @@ describe("summaries", () => {
 
 // Last, because it registers a new version: MySelf Studio's records, read from the survey's database.
 describe("survey versions from MySelf Studio", () => {
-  const SURVEY = "demo_survey";
+  // Studio's survey is the one the manifests name (release.assessment), as the survey's contract says (docs/16 §11.6).
+  const SURVEY = "demo_wellbeing";
   const at = (iso: string) => Timestamp.fromDate(new Date(iso));
   /** A version Studio published from 2.0.0, ending with MyStory: one the registry has never seen. */
   const studioVersion = (version: string) => {
     const { hash, ...body } = structuredClone(demoManifest("2.0.0")) as Record<string, any>;
     void hash;
-    body["release"] = { ...body["release"], version, key: `demo_survey_r${version.replaceAll(".", "_")}`, publishedAt: "2026-09-20T09:00:00.000Z" };
+    body["release"] = { ...body["release"], version, key: `${SURVEY}_r${version.replaceAll(".", "_")}`, publishedAt: "2026-09-20T09:00:00.000Z" };
     body["composition"]["sections"].push({ key: "mystory", title: "MyStory", components: [{ kind: "narrative", protocol: "np.phone_wellbeing", protocolVersion: "0.1.1" }] });
     return { ...body, hash: contentHash(body) } as Record<string, any>;
   };
@@ -644,7 +649,238 @@ describe("survey versions from MySelf Studio", () => {
   });
 });
 
-async function download(jobId: string, who: Person | null): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
+// Last of all: a second study space, and a second survey in the default study (docs/12).
+describe("study spaces and surveys", () => {
+  const FUTURE = "future";
+  const at = (iso: string) => Timestamp.fromDate(new Date(iso));
+  /** A release of another survey: demo 2.0.0's questions under a new study, survey, key and version. */
+  const variant = (study: string, survey: string, title: string) => {
+    const { hash, ...body } = structuredClone(demoManifest("2.0.0")) as Record<string, any>;
+    void hash;
+    body["release"] = { ...body["release"], study, assessment: survey, key: `${survey}_r1_0_0`, version: "1.0.0", publishedAt: "2026-09-25T09:00:00.000Z" };
+    body["composition"] = { ...body["composition"], key: survey, study, title };
+    return { ...body, hash: contentHash(body) } as Record<string, any>;
+  };
+  const futureRelease = variant(FUTURE, "future_perspectives", "Perspectives of the future");
+  const followUp = variant("demo", "demo_followup", "Demo follow-up");
+  const v2 = demoManifest("2.0.0")["hash"] as string;
+  /** Copies of ordinary demo sittings under v2.0.0, as new sittings under `release`. */
+  const copies = (release: Record<string, any>, prefix: string, study: string, n: number) =>
+    sittings
+      .filter((s) => s.doc.releaseHash === v2 && !s.doc.quarantined && s.scenario !== "unknown_release")
+      .slice(0, n)
+      .map((s, i) => ({ ...s.doc, sessionId: `${prefix}_${i}`, study, releaseHash: release["hash"], releaseKey: release["release"]["key"] }));
+  let futureSittings: ReturnType<typeof copies> = [];
+  let followUpSittings: ReturnType<typeof copies> = [];
+  const handlers = { querySessions, getAnalytics, getResearcherView, getQuestionHistory, getParticipants, getScores, getCodebook, listSurveyVersions, getSurveys, previewExport };
+
+  beforeAll(async () => {
+    futureSittings = copies(futureRelease, "ses_future", FUTURE, 5);
+    followUpSittings = copies(followUp, "ses_followup", "demo", 4);
+    const survey = getFirestore();
+    // The survey's registry: a study created in the Studio, and a closed one nobody has been added to.
+    await survey.doc(`studies/${FUTURE}`).set({ study: FUTURE, title: "Perspectives of the future", status: "open", createdAt: at("2026-09-24T09:00:00.000Z"), createdBy: "uid-a", updatedAt: at("2026-09-24T09:00:00.000Z"), updatedBy: "uid-a", closedAt: null });
+    await survey.doc("studies/stage").set({ study: "stage", title: "Stage two", status: "closed", createdAt: at("2026-09-24T09:00:00.000Z"), createdBy: "uid-a", updatedAt: at("2026-09-24T09:00:00.000Z"), updatedBy: "uid-a", closedAt: at("2026-09-30T09:00:00.000Z") });
+    // Studio published the future survey: its live pointer and frozen manifest, in its own study.
+    const manifest = JSON.stringify(futureRelease);
+    await survey.doc(`studies/${FUTURE}/publicReleases/${futureRelease["hash"].slice(7)}`).set({ surveyId: "future_perspectives", study: FUTURE, hash: futureRelease["hash"], version: "1.0.0", releaseKey: futureRelease["release"]["key"], engineVersion: futureRelease["release"]["engineVersion"], manifest, bytes: manifest.length, publishedAt: at("2026-09-25T09:00:00.000Z") });
+    await survey.doc(`studies/${FUTURE}/surveys/future_perspectives`).set({ surveyId: "future_perspectives", study: FUTURE, title: "Perspectives of the future", createdAt: at("2026-09-24T09:00:00.000Z"), createdBy: "uid-a", active: null, latestVersion: "1.0.0", versionCount: 1, draftEditors: [] });
+    await survey.doc(`studies/${FUTURE}/surveys/future_perspectives/versions/1.0.0`).set({ surveyId: "future_perspectives", version: "1.0.0", hash: futureRelease["hash"], releaseKey: futureRelease["release"]["key"], engineVersion: "0.1.0", releaseNote: "The first version", changeSummary: null, bump: null, itemKeys: [], variables: [], source: "studio", draftRevision: 3, basedOnVersion: null, authors: ["a@brainpop.example"], publishedAt: at("2026-09-25T09:00:00.000Z"), publishedBy: "uid-a", publishedByEmail: "a@brainpop.example", manifestPublishedAt: "2026-09-25T09:00:00.000Z" });
+    await survey.doc(`studies/${FUTURE}/published/future_perspectives`).set({ surveyId: "future_perspectives", study: FUTURE, hash: futureRelease["hash"], version: "1.0.0", releaseKey: futureRelease["release"]["key"], engineVersion: "0.1.0", generation: 1, publishedAt: at("2026-09-25T09:00:00.000Z") });
+    // A second survey of the default study, registered there.
+    await registerRelease(followUp, "demo", "test");
+    for (const s of [...futureSittings, ...followUpSittings]) await survey.doc(`studies/${s.study}/sessions/${s.sessionId}`).set(s);
+    resetStudies();
+    resetStudioCache();
+    invalidateSettings();
+    for (const s of futureSittings) expect(await onSitting(FUTURE, s.sessionId, s as never)).toBe("written");
+    for (const s of followUpSittings) expect(await onSitting("demo", s.sessionId, s as never)).toBe("written");
+  });
+
+  it("summarises a registered study's sittings into its own space, through a release resolved in that study", async () => {
+    const summary = (await dash().doc(`studies/${FUTURE}/sessionSummaries/${futureSittings[0]!.sessionId}`).get()).data()!;
+    expect(summary).toMatchObject({ study: FUTURE, releaseKnown: true, releaseVersion: "1.0.0" });
+    // Studio's copy was checked and registered in the future study's registry, and audited there.
+    expect((await dash().doc(`studies/${FUTURE}/releases/${futureRelease["hash"]}`).get()).get("provenance.source")).toBe("studio");
+    expect((await dash().doc(`studies/demo/releases/${futureRelease["hash"]}`).get()).exists).toBe(false);
+    expect((await dash().collection(`studies/${FUTURE}/auditLog`).where("action", "==", "release.registered").get()).size).toBe(1);
+    // Nothing of it in the default study.
+    expect((await dash().doc(`studies/demo/sessionSummaries/${futureSittings[0]!.sessionId}`).get()).exists).toBe(false);
+  });
+
+  it("summarises nothing for a sitting in an unregistered or malformed study, or one naming another study", async () => {
+    const doc = { ...futureSittings[1]!, sessionId: "ses_stray" };
+    expect(await onSitting("nosuchstudy", "ses_stray", { ...doc, study: "nosuchstudy" } as never)).toBe("ignored");
+    expect(await onSitting("Future", "ses_stray", doc as never)).toBe("ignored");
+    expect(await onSitting("demo", "ses_stray", doc as never)).toBe("ignored");
+    expect(await onSitting("nosuchstudy", "ses_stray", null)).toBe("ignored");
+    for (const study of ["demo", FUTURE, "nosuchstudy"]) expect((await dash().doc(`studies/${study}/sessionSummaries/ses_stray`).get()).exists).toBe(false);
+  });
+
+  it("never reads a sitting through another study's release", async () => {
+    // A future sitting naming one of the default study's versions: unknown in its own study.
+    const doc = { ...futureSittings[2]!, sessionId: "ses_future_v2", releaseHash: v2 };
+    const summary = await summariseSitting(FUTURE, doc.sessionId, doc as never);
+    expect(summary.releaseKnown).toBe(false);
+    await removeSummaryForTest(FUTURE, doc.sessionId);
+  });
+
+  it("lists each person's studies, and remembers the one they choose", async () => {
+    await run(updateStudyAccess, admin, { study: FUTURE, emails: [reviewer.email], domains: [] });
+    const ids = (r: WhoAmIResponse) => r.studies.map((s) => s.study);
+    const forAdmin = await run<WhoAmIResponse>(whoAmI, admin, {});
+    expect(ids(forAdmin)).toEqual(["demo", FUTURE, "stage"]);
+    expect(forAdmin.studies.find((s) => s.study === "stage")).toMatchObject({ title: "Stage two", status: "closed", isDefault: false });
+    expect(forAdmin.studies[0]).toMatchObject({ study: "demo", isDefault: true, status: "open" });
+    expect(ids(await run<WhoAmIResponse>(whoAmI, researcher, {}))).toEqual(["demo"]);
+    expect(ids(await run<WhoAmIResponse>(whoAmI, reviewer, {}))).toEqual(["demo", FUTURE]);
+    // Chosen, then remembered on the server; a study one may not see is never chosen.
+    expect((await run<WhoAmIResponse>(whoAmI, reviewer, { study: FUTURE })).study).toBe(FUTURE);
+    expect((await run<WhoAmIResponse>(whoAmI, reviewer, {})).study).toBe(FUTURE);
+    expect((await run<WhoAmIResponse>(whoAmI, researcher, { study: FUTURE })).study).toBe("demo");
+    await run(whoAmI, reviewer, { study: "demo" });
+  });
+
+  it("refuses, on every study-scoped call, a study the caller may not see, one that does not exist and one that is not an id", async () => {
+    for (const [name, handler] of Object.entries(handlers)) {
+      const data = { study: FUTURE, key: "demo_sleep.sleep_quality", kind: "completeness_summary", format: "csv", scope: "filtered" };
+      await expect(run(handler, researcher, data), name).rejects.toMatchObject({ code: "permission-denied" });
+      await expect(run(handler, admin, { ...data, study: "nosuchstudy" }), name).rejects.toMatchObject({ code: "not-found" });
+      await expect(run(handler, admin, { ...data, study: "../config" }), name).rejects.toMatchObject({ code: "invalid-argument" });
+    }
+    await expect(run(getSessionDetail, researcher, { study: FUTURE, sessionId: futureSittings[0]!.sessionId })).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run(updateReview, researcher, { study: FUTURE, sessionId: futureSittings[0]!.sessionId, change: { kind: "set_status", status: "reviewed" }, expectedRev: 0 })).rejects.toMatchObject({ code: "permission-denied" });
+    // A study nobody has been added to is the administrators'.
+    await expect(run(querySessions, reviewer, { study: "stage" })).rejects.toMatchObject({ code: "permission-denied" });
+    expect((await run<QuerySessionsResponse>(querySessions, admin, { study: "stage" })).total).toBe(0);
+    const denials = (await auditRows("auth.denied")).filter((r) => r["detail"]?.reason === "study_not_permitted");
+    expect(denials.some((r) => r["actorEmail"] === researcher.email && r["target"]?.id === FUTURE)).toBe(true);
+  });
+
+  it("serves a listed member that study's sittings, and nothing of one study through another", async () => {
+    const all = { filters: { ...DEFAULT_FILTERS, dataset: "all" }, pageSize: 200 };
+    const future = await run<QuerySessionsResponse>(querySessions, reviewer, { ...all, study: FUTURE });
+    expect(future.items.map((i) => i.sessionId).sort()).toEqual(futureSittings.map((s) => s.sessionId).sort());
+    expect(future.items.every((i) => i.survey === "future_perspectives")).toBe(true);
+    const demo = await run<QuerySessionsResponse>(querySessions, reviewer, { ...all });
+    expect(demo.items.some((i) => i.sessionId.startsWith("ses_future"))).toBe(false);
+    // A future sitting asked for in the default study is not there.
+    await expect(run(getSessionDetail, admin, { sessionId: futureSittings[0]!.sessionId })).rejects.toMatchObject({ code: "not-found" });
+    const detail = await run<SessionDetailResponse>(getSessionDetail, reviewer, { study: FUTURE, sessionId: futureSittings[0]!.sessionId });
+    expect(detail.item.survey).toBe("future_perspectives");
+    const versions = await run<SurveyVersionsResponse>(listSurveyVersions, reviewer, { study: FUTURE });
+    expect(versions.versions.map((v) => [v.version, v.survey])).toEqual([["1.0.0", "future_perspectives"]]);
+    expect(versions.live).toEqual([expect.objectContaining({ surveyId: "future_perspectives", version: "1.0.0" })]);
+  });
+
+  it("lists a study's surveys, and filters every view by survey with the survey's own counting rules", async () => {
+    const surveys = await run<SurveysResponse>(getSurveys, reviewer, { fresh: true });
+    const byId = (list: SurveysResponse["surveys"]) => [...list].sort((a, b) => a.surveyId.localeCompare(b.surveyId));
+    expect(byId(surveys.surveys).map((s) => [s.surveyId, s.title, s.live?.version ?? null])).toEqual([
+      ["demo_followup", "Demo follow-up", null],
+      // Studio's live pointer names it, so its title is the live version's.
+      ["demo_wellbeing", demoManifest("2.0.0")["composition"]["title"], "2.0.0"],
+    ]);
+    expect(surveys.surveys.find((s) => s.surveyId === "demo_followup")!.releases).toEqual([followUp["hash"]]);
+    const futureSurveys = await run<SurveysResponse>(getSurveys, reviewer, { study: FUTURE });
+    expect(futureSurveys.surveys).toEqual([{ surveyId: "future_perspectives", title: "Perspectives of the future", live: { version: "1.0.0", hash: futureRelease["hash"] }, releases: [futureRelease["hash"]] }]);
+
+    const only = (survey: string | null) => ({ filters: { ...DEFAULT_FILTERS, dataset: "all", surveys: survey ? [survey] : [] }, pageSize: 200 });
+    const everything = await run<QuerySessionsResponse>(querySessions, researcher, only(null));
+    const followed = await run<QuerySessionsResponse>(querySessions, researcher, only("demo_followup"));
+    const wellbeing = await run<QuerySessionsResponse>(querySessions, researcher, only("demo_wellbeing"));
+    expect(followed.items.map((i) => i.sessionId).sort()).toEqual(followUpSittings.map((s) => s.sessionId).sort());
+    // Sittings under an unregistered version belong to no survey: in "all surveys" only.
+    const unknown = everything.items.filter((i) => !i.releaseKnown).length;
+    expect(followed.total + wellbeing.total + unknown).toBe(everything.total);
+
+    const overview = await run<AnalyticsResponse>(getAnalytics, researcher, only("demo_followup"));
+    expect(overview.analytics.metrics.started).toBe(followUpSittings.length);
+    const counted = await run<ResearcherViewResponse>(getResearcherView, researcher, only("demo_followup"));
+    expect(counted.figures.sittings + counted.quarantined + counted.unreadable).toBe(followUpSittings.length);
+    const counts = (r: ResearcherViewResponse) => r.figures.sittings + r.quarantined + r.unreadable;
+    expect(counts(await run<ResearcherViewResponse>(getResearcherView, researcher, only("demo_wellbeing")))).toBe(wellbeing.total);
+
+    const people = await run<ParticipantsResponse>(getParticipants, researcher, { filters: only("demo_followup").filters });
+    expect(people.totals.linkedSittings).toBeLessThanOrEqual(followUpSittings.length);
+    expect(people.participants.flatMap((p) => p.sittings.map((s) => s.sessionId)).every((id) => id.startsWith("ses_followup"))).toBe(true);
+  });
+
+  it("names exports after the study and survey, files them in the study, and serves them only to those who may see it", async () => {
+    const preview = await run<ExportPreview>(previewExport, admin, { kind: "sessions", format: "csv", scope: "filtered", filters: { ...DEFAULT_FILTERS, dataset: "all", surveys: ["demo_followup"] } });
+    expect(preview.fileName).toMatch(/^myself_demo_demo_followup_sessions-filtered_all-time_/);
+    expect(preview.filters).toContain("Survey: Demo follow-up");
+    expect(preview.sessionCount).toBe(followUpSittings.length);
+
+    const job = await run<ExportJobView>(createExport, reviewer, { study: FUTURE, kind: "completeness_summary", format: "csv", scope: "filtered", filters: { ...DEFAULT_FILTERS, dataset: "all" } });
+    expect(job.status).toBe("ready");
+    expect(job.fileName).toMatch(/^myself_future_completeness-summary_/);
+    expect((await dash().doc(`studies/${FUTURE}/exportJobs/${job.id}`).get()).get("study")).toBe(FUTURE);
+    expect((await dash().doc(`studies/demo/exportJobs/${job.id}`).get()).exists).toBe(false);
+    expect((await download(job.id, reviewer, FUTURE)).status).toBe(200);
+    // Not found in another study, and refused to someone who may not see this one.
+    expect((await download(job.id, reviewer)).status).toBe(404);
+    expect((await download(job.id, researcher, FUTURE)).status).toBe(403);
+    expect((await download(job.id, admin, "../x")).status).toBe(400);
+
+    const sessions = await run<ExportJobView>(createExport, admin, { study: FUTURE, kind: "sessions", format: "csv", scope: "filtered", filters: { ...DEFAULT_FILTERS, dataset: "all" } });
+    const [header, ...lines] = (await download(sessions.id, admin, FUTURE)).body.toString("utf8").replace(/^﻿/, "").trim().split(/\r?\n/);
+    const surveyAt = header!.split(",").indexOf("survey");
+    expect(surveyAt).toBeGreaterThan(0);
+    expect(lines.every((l) => l.split(",")[surveyAt] === "future_perspectives")).toBe(true);
+  });
+
+  it("lets only administrators say who else may see a study; refuses public mail domains; audits each change in the study's log", async () => {
+    await expect(run(updateStudyAccess, researcher, { study: FUTURE, emails: [researcher.email], domains: [] })).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run(updateStudyAccess, admin, { study: FUTURE, emails: [], domains: ["gmail.com"] })).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(run(updateStudyAccess, admin, { study: "demo", emails: [researcher.email], domains: [] })).rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(run(updateAccessPolicy, admin, { emails: ["brainpopresearch@gmail.com"], domains: ["brainpop.example", "outlook.com"] })).rejects.toMatchObject({ code: "invalid-argument" });
+
+    await run(updateStudyAccess, admin, { study: FUTURE, emails: [reviewer.email], domains: ["brainpop.example"] });
+    expect((await run<WhoAmIResponse>(whoAmI, researcher, {})).studies.map((s) => s.study)).toEqual(["demo", FUTURE]);
+    const rows = (await dash().collection(`studies/${FUTURE}/auditLog`).where("action", "==", "study_access.changed").get()).docs.map((d) => d.data());
+    expect(rows).toContainEqual(expect.objectContaining({ actorEmail: admin.email, target: { type: "study", id: FUTURE }, detail: { before: { emails: [reviewer.email], domains: [] }, after: { emails: [reviewer.email], domains: ["brainpop.example"] } } }));
+    expect((await dash().collection("studies/demo/auditLog").where("action", "==", "study_access.changed").get()).size).toBe(0);
+    const access = await run<StudyAccessResponse>(getStudyAccess, admin, {});
+    expect(access.studies.map((s) => [s.study, s.list])).toEqual([["demo", null], [FUTURE, { emails: [reviewer.email], domains: ["brainpop.example"] }], ["stage", { emails: [], domains: [] }]]);
+    await expect(run(getStudyAccess, reviewer, {})).rejects.toMatchObject({ code: "permission-denied" });
+    await run(updateStudyAccess, admin, { study: FUTURE, emails: [reviewer.email], domains: [] });
+    await expect(run(querySessions, researcher, { study: FUTURE })).rejects.toMatchObject({ code: "permission-denied" });
+  });
+
+  it("keeps each study's settings its own, and never another study's version as its active one", async () => {
+    const before = (await dash().doc("config/policy").get()).data();
+    const policy = { requiredLevels: ["hard"], abandonAfterHours: 72, testCodePatterns: ["^TST"], reviewerCanViewFreeText: false, exportRetentionHours: 24, timeZone: "Europe/London", tooFastWarningCount: 10 };
+    await expect(run(updatePolicy, admin, { ...policy, study: FUTURE, activeReleaseHash: v2 })).rejects.toMatchObject({ code: "invalid-argument" });
+    await run(updatePolicy, admin, { ...policy, study: FUTURE, activeReleaseHash: futureRelease["hash"] });
+    expect((await dash().doc(`studies/${FUTURE}/config/policy`).get()).data()).toMatchObject({ abandonAfterHours: 72, activeReleaseHash: futureRelease["hash"] });
+    expect((await dash().doc("config/policy").get()).data()).toEqual(before);
+    expect((await run<WhoAmIResponse>(whoAmI, admin, { study: FUTURE })).policy).toMatchObject({ abandonAfterHours: 72 });
+    await run(whoAmI, admin, { study: "demo" });
+  });
+
+  it("rebuilds one study from Settings, and every registered study from the setup workflow", async () => {
+    const one = await run<{ scanned: number; written: number }>(rebuildSummaries, admin, { study: FUTURE });
+    expect(one.written).toBe(futureSittings.length);
+    const ref = dash().doc("ops/test-rebuild-all");
+    await ref.set({ kind: "rebuild_summaries", requestedBy: "test" });
+    await handleOpsRequest(ref, (await ref.get()).data());
+    const done = (await ref.get()).data()!;
+    expect(done["status"]).toBe("done");
+    expect(Object.keys(done["studies"]).sort()).toEqual(["demo", FUTURE, "stage"]);
+    expect(done["studies"][FUTURE]["written"]).toBe(futureSittings.length);
+    const bad = dash().doc("ops/test-rebuild-bad");
+    await bad.set({ kind: "rebuild_summaries", study: "nosuchstudy" });
+    await handleOpsRequest(bad, (await bad.get()).data());
+    expect((await bad.get()).get("status")).toBe("rejected");
+  });
+});
+
+async function removeSummaryForTest(study: string, sessionId: string): Promise<void> {
+  await dash().doc(`studies/${study}/sessionSummaries/${sessionId}`).delete();
+}
+
+async function download(jobId: string, who: Person | null, study?: string): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
   const headers: Record<string, string> = {};
   let status = 200;
   const chunks: Buffer[] = [];
@@ -672,7 +908,7 @@ async function download(jobId: string, who: Person | null): Promise<{ status: nu
   });
   const reqObj = {
     method: "GET",
-    query: { job: jobId },
+    query: { job: jobId, ...(study ? { study } : {}) },
     headers: { ...(who ? { authorization: `Bearer ${who.idToken}` } : {}), origin: "http://localhost:5173" },
     header: () => undefined,
     get: () => undefined,
