@@ -414,7 +414,8 @@ async function finish() {
   const cur = snap.exists ? snap.data() : {};
   const emails = [...new Set([...(cur.emails ?? []), ADMIN_EMAIL])];
   if (!snap.exists || !(cur.emails ?? []).includes(ADMIN_EMAIL)) {
-    await access.set({ emails, domains: cur.domains ?? [], updatedAt: FieldValue.serverTimestamp(), updatedBy: "firebase-setup workflow" });
+    // defaultStudy is kept: the security rules read the default study from here (docs/12 §12.4).
+    await access.set({ emails, domains: cur.domains ?? [], ...(cur.defaultStudy ? { defaultStudy: cur.defaultStudy } : {}), updatedAt: FieldValue.serverTimestamp(), updatedBy: "firebase-setup workflow" });
     ok("access list", `${ADMIN_EMAIL} allowed`);
   } else ok("access list already includes the administrator");
   try {
