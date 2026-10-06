@@ -19,8 +19,10 @@ import { join, resolve } from "node:path";
 export const VENDORED = {
   // `canonical` is the survey's one release-hash implementation: the dashboard
   // verifies a version MySelf Studio published with it before reading any
-  // sitting under that version (docs/11).
-  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "canonical", "index"],
+  // sitting under that version (docs/11). `link` holds the study and survey
+  // id patterns and the participant link (D-56): the dashboard accepts and
+  // builds exactly what the survey does (docs/12).
+  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "canonical", "link", "index"],
   scoring: ["executor", "definitions", "references", "index"],
   store: ["dataset", "identity", "ingest", "bids", "narratives", "zip", "summary", "completeness", "counting"],
 };
