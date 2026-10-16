@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { assessSitting } from "../completeness.js";
+import { codebookProblems } from "../codebook/index.js";
 import { indexRelease } from "../manifest.js";
 import { replaySitting } from "../replay.js";
 import { validateAnswer } from "../validate.js";
@@ -659,5 +660,32 @@ describe("shorter consent, sleep quality and the street search under r9.0.0 (D-5
   it("orders ethnic origins by West Yorkshire, keeping every code", () => {
     const eth = idx.byKey.get("ybm_demographics.ethnicity")!;
     expect(eth.options!.slice(0, 2).map((o) => o.code)).toEqual([13, 2]);
+  });
+});
+
+describe("the versions published from MySelf Studio: 10.0.0, 11.0.0 and 12.0.0", () => {
+  for (const version of ["10.0.0", "11.0.0", "12.0.0"]) {
+    it(`reads every ${version} sitting, with none held back, and names every question`, () => {
+      const raw = release(version) as { hash: string };
+      const idx = indexRelease(raw);
+      const { data, sittings } = crossCheck(version);
+      expect(data.excluded).toEqual([]);
+      expect(data.dataset.sessions).toHaveLength(sittings.length);
+      expect(codebookProblems(idx.questions.map((q) => ({ key: q.key, variable: q.variable })))).toEqual([]);
+    });
+  }
+
+  it("12.0.0: Mandarin and Cantonese apart, code 5 retired, understanding and speaking each asked, and the AI questions", () => {
+    const idx = indexRelease(release("12.0.0"));
+    const langs = idx.byKey.get("ybm_demographics.other_languages")!;
+    const codes = langs.options!.map((o) => o.code);
+    expect(codes).toEqual(expect.arrayContaining([16, 17]));
+    expect(codes).not.toContain(5);
+    expect(idx.byKey.get("ybm_demographics.understand_cantonese")).toMatchObject({ name: "understand_cantonese" });
+    expect(idx.byKey.get("ybm_demographics.speak_urdu")).toMatchObject({ name: "speak_urdu" });
+    expect(idx.byKey.get("ybm_ai_use.frequency")).toMatchObject({ name: "ai_use_frequency" });
+    expect(idx.byKey.get("ybm_ai_use.purpose_other")).toMatchObject({ name: "ai_use_purpose_other" });
+    // Linkage consent is a ticked statement now, no longer its own question.
+    expect(idx.byKey.get("ybm_intro_consent.linkage_consent")).toBeUndefined();
   });
 });

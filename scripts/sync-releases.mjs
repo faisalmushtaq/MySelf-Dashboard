@@ -58,6 +58,13 @@ for (const f of readdirSync(from).filter((x) => x.endsWith(".manifest.json")).so
     skipped += 1;
     continue;
   }
+  // Already registered (by an earlier run, or from MySelf Studio with its
+  // provenance): a release is immutable, so there is nothing to rewrite.
+  if ((await db.doc(`studies/${study}/releases/${idx.hash}`).get()).exists) {
+    console.log(`have   v${idx.version} ${idx.key} ${idx.hash.slice(0, 19)}… (already registered)`);
+    skipped += 1;
+    continue;
+  }
   console.log(`${dryRun ? "would " : ""}register v${idx.version} ${idx.key} ${idx.hash.slice(0, 19)}… (${idx.questions.length} questions)`);
   if (!dryRun) {
     const batch = db.batch();

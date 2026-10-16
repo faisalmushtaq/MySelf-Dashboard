@@ -207,6 +207,28 @@ export const DEFAULT_CODEBOOK: Readonly<Record<string, CodebookEntry>> = {
   "ybm_demographics.understand_bsl": e("understand_bsl", "How well they understand British Sign Language"),
   "ybm_demographics.understand_turkish": e("understand_turkish", "How well they understand Turkish"),
   "ybm_demographics.understand_other_language": e("understand_other_language", "How well they understand the other language they named"),
+  // Mandarin and Cantonese asked separately (r11.0.0 on, survey D-58 addendum);
+  // understand_chinese is kept for the sittings that asked it as one.
+  "ybm_demographics.understand_mandarin": e("understand_mandarin", "How well they understand Mandarin Chinese"),
+  "ybm_demographics.understand_cantonese": e("understand_cantonese", "How well they understand Cantonese Chinese"),
+  // Speaking, beside understanding (r11.0.0 on, survey D-58).
+  "ybm_demographics.speak_urdu": e("speak_urdu", "How well they speak Urdu"),
+  "ybm_demographics.speak_punjabi": e("speak_punjabi", "How well they speak Punjabi"),
+  "ybm_demographics.speak_polish": e("speak_polish", "How well they speak Polish"),
+  "ybm_demographics.speak_arabic": e("speak_arabic", "How well they speak Arabic"),
+  "ybm_demographics.speak_chinese": e("speak_chinese", "How well they speak Chinese (Mandarin or Cantonese; r10.0.0)"),
+  "ybm_demographics.speak_mandarin": e("speak_mandarin", "How well they speak Mandarin Chinese"),
+  "ybm_demographics.speak_cantonese": e("speak_cantonese", "How well they speak Cantonese Chinese"),
+  "ybm_demographics.speak_gujarati": e("speak_gujarati", "How well they speak Gujarati"),
+  "ybm_demographics.speak_bengali": e("speak_bengali", "How well they speak Bengali (including Sylheti)"),
+  "ybm_demographics.speak_portuguese": e("speak_portuguese", "How well they speak Portuguese"),
+  "ybm_demographics.speak_spanish": e("speak_spanish", "How well they speak Spanish"),
+  "ybm_demographics.speak_russian": e("speak_russian", "How well they speak Russian"),
+  "ybm_demographics.speak_french": e("speak_french", "How well they speak French"),
+  "ybm_demographics.speak_tamil": e("speak_tamil", "How well they speak Tamil"),
+  "ybm_demographics.speak_turkish": e("speak_turkish", "How well they speak Turkish"),
+  "ybm_demographics.speak_bsl": e("speak_bsl", "How well they sign in British Sign Language"),
+  "ybm_demographics.speak_other_language": e("speak_other_language", "How well they speak the other language they named"),
   "ybm_demographics.gender": e("gender", "Gender"),
   "ybm_demographics.medication": e("mh_medication", "Taking prescribed mental-health medication"),
   "ybm_eeg_practical.hair_type": e("hair_type", "Hair type (for fitting the EEG cap)"),
@@ -283,4 +305,9 @@ export const DEFAULT_CODEBOOK: Readonly<Record<string, CodebookEntry>> = {
   ...Object.fromEntries([1, 2, 3, 4, 5].map(game)),
   "ybm_gaming.social_pct": e("gaming_with_others_pct", "Share of gaming time spent playing with others (%)"),
   "ybm_future_self.message": e("future_self_message", "One sentence to their future self"),
+  // AI chatbot use (r12.0.0 on, survey D-59)
+  "ybm_ai_use.frequency": e("ai_use_frequency", "How often they use AI chatbots or assistants"),
+  "ybm_ai_use.purpose": e("ai_use_purpose", "What they use AI chatbots for"),
+  "ybm_ai_use.purpose_other": e("ai_use_purpose_other", "Other uses of AI chatbots, in their words"),
+  "ybm_ai_use.feeling": e("ai_use_feeling", "How they usually feel after using AI chatbots"),
 };
