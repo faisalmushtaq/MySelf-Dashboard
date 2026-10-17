@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@60addc9 packages/store/src/summary.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@9e4f777 packages/store/src/summary.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { Dataset, ScoreRow } from "./dataset.js";

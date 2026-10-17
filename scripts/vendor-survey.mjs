@@ -9,8 +9,8 @@
  * ingest, BIDS builder, or the completeness and counting rules the two tools
  * share, then run the tests: scripts/check-vendored.mjs fails CI until you do.
  *
- * `@myself/engine` resolves to the dashboard's hand-copied evaluator
- * (vendor/engine.ts), which check-vendored.mjs compares with the survey's.
+ * `@myself/engine` resolves to vendor/engine.ts, which re-exports the vendored
+ * engine files (vendor/myself/engine/).
  */
 import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -25,6 +25,11 @@ export const VENDORED = {
   schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "canonical", "link", "index"],
   scoring: ["executor", "definitions", "references", "index"],
   store: ["dataset", "identity", "ingest", "bids", "narratives", "zip", "summary", "completeness", "counting"],
+  // The engine's evaluator, answer store, cascading visibility and release
+  // flattening: the dashboard decides "was this question shown?" exactly as
+  // the iPad did, including a hidden question's answer not opening a branch
+  // (survey D-63). vendor/engine.ts re-exports the parts the dashboard uses.
+  engine: ["answers", "evaluate", "walker", "flatten"],
 };
 const REWRITES = {
   "@myself/schema": "../schema/index.js",
