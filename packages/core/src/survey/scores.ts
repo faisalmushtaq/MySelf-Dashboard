@@ -43,9 +43,13 @@ export function scoreStudy(
     const byVariable = new Map(responses.map((r) => [r.variable, r]));
     for (const r of responses) {
       let v = r.status === "answered" && typeof r.value === "number" ? r.value : null;
-      // "Prefer not to say", "don't know" and the like are answers, but not scores.
-      const option = v !== null ? release?.byKey.get(`${r.instrument}.${r.item}`)?.options?.find((o) => o.code === v) : undefined;
+      // "Prefer not to say", "don't know" and the like are answers, but not scores;
+      // and a code the question doesn't offer is no answer at all, so it is
+      // scored as missing rather than added into a sum (survey D-63).
+      const options = release?.byKey.get(`${r.instrument}.${r.item}`)?.options;
+      const option = v !== null ? options?.find((o) => o.code === v) : undefined;
       if (option && option.kind !== "substantive") v = null;
+      if (v !== null && options?.length && !option) v = null;
       values.set(`${r.instrument}.${r.item}`, v);
     }
 

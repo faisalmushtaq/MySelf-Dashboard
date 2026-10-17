@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * The dashboard evaluates the survey's display conditions with a verbatim copy
- * of the survey engine's evaluator (packages/core/src/vendor/engine.ts). This
- * compares the copied bodies with a checkout of faisalmushtaq/MySelf and fails
- * if they differ, so a change to branching semantics in the survey cannot
- * silently diverge from how the dashboard judges completeness.
+ * The dashboard evaluates the survey's display conditions, scores and ingests
+ * sittings with verbatim copies of the survey's code (packages/core/src/vendor/
+ * myself/). This compares the copies with a checkout of faisalmushtaq/MySelf
+ * and fails if they differ, so a change to branching semantics in the survey
+ * cannot silently diverge from how the dashboard judges completeness.
  *
  *   node scripts/check-vendored.mjs [path-to-MySelf-checkout]   (default ../MySelf)
  */
@@ -16,19 +16,7 @@ if (!existsSync(join(survey, "packages/engine/src/evaluate.ts"))) {
   console.log(`no survey checkout at ${survey}; skipping (CI checks one out)`);
   process.exit(0);
 }
-const vendored = readFileSync("packages/core/src/vendor/engine.ts", "utf8");
-const pieces = [
-  ["packages/engine/src/answers.ts", /\/\*\*\n \* The engine's view[\s\S]*$/],
-  ["packages/engine/src/evaluate.ts", /type Target = \{[\s\S]*$/],
-];
 let ok = true;
-for (const [file, re] of pieces) {
-  const src = readFileSync(join(survey, file), "utf8").match(re)?.[0]?.trim();
-  if (!src || !vendored.includes(src)) {
-    console.error(`DRIFT: ${file} no longer matches packages/core/src/vendor/engine.ts — re-vendor it and review the completeness tests.`);
-    ok = false;
-  }
-}
 // The data layer (schema, scoring, ingest, BIDS, and the completeness and
 // counting rules both tools count by): every file, byte for byte apart from
 // its header and rewritten package imports.

@@ -8,8 +8,11 @@ sittings with the same files, so the two tools cannot drift apart
 (`scripts/check-vendored.mjs` fails CI when the copies differ; §3.8). Here
 `packages/core/src/completeness.ts` and `status.ts` build on them, and every number in
 the dashboard comes from them. The same text is shown in the app (Help, and the ⓘ beside
-each metric). Rule set version: **`completeness@1`** — stored on every summary so a change
-of rules is a visible rebuild, not a silent drift.
+each metric). Rule set version: **`completeness@2`** — stored on every summary so a change
+of rules is a visible rebuild, not a silent drift. `@2` (survey D-63): a question
+hidden by branching no longer lets its stored answer show the questions below it, so
+changing an answer to hide a branch hides everything that branch opened, as on the iPad.
+Summaries made under `@1` are rebuilt by Settings → Data maintenance → re-summarise.
 
 ## 3.1 Inputs
 

@@ -93,7 +93,11 @@ export function deriveStudyDataset(input: {
   }
 
   let dataset = emptyDataset();
-  const collisions: StudyDataset["collisions"] = [];
+  let collisions: StudyDataset["collisions"] = [];
+  // Carried from pass to pass, so twins who gave their names under different
+  // versions are found too; each pass's collisions cover everything so far,
+  // so the last pass's list is the whole list (survey D-63).
+  let nameSightings: ReturnType<typeof ingest>["nameSightings"] | undefined;
   const schoolYearFromDob: Record<string, number> = {};
   for (const [hash, group] of [...groups.entries()].sort((a, b) => earliest(a[1]).localeCompare(earliest(b[1])))) {
     const result = ingest(
@@ -104,12 +108,14 @@ export function deriveStudyDataset(input: {
         existing: dataset,
         ...(input.aliases ? { aliases: input.aliases } : {}),
         ...(input.assignments ? { assignments: input.assignments } : {}),
+        ...(nameSightings ? { nameSightings } : {}),
       },
     );
     dataset = result.dataset;
+    nameSightings = result.nameSightings;
     excluded.push(...result.rejected);
     warnings.push(...result.warnings);
-    for (const c of result.collisions) collisions.push({ participantId: c.participantId, sessionIds: [...c.sessions] });
+    collisions = result.collisions.map((c) => ({ participantId: c.participantId, sessionIds: [...c.sessions] }));
     for (const id of result.identity) {
       if (id.variable !== "dob") continue;
       const year = schoolYearOn(id.value, id.recordedAt, input.schoolYearStartMonth ?? 9);

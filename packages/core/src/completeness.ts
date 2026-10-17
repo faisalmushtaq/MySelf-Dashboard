@@ -1,7 +1,7 @@
 import type { Assessment, Outcome } from "./vendor/myself/store/completeness.js";
 
 /**
- * Completeness, as defined in docs/03-completeness.md. Rule set `completeness@1`.
+ * Completeness, as defined in docs/03-completeness.md. Rule set `completeness@2`.
  *
  * THE RULES ARE THE SURVEY'S, vendored: `vendor/myself/store/completeness.ts` is a
  * verbatim copy of the survey's `packages/store/src/completeness.ts`, and the survey's
