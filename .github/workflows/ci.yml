@@ -11,7 +11,7 @@ permissions:
 jobs:
   unit:
     name: Build, typecheck, unit tests, privacy check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,7 +33,7 @@ jobs:
 
   rules:
     name: Security rules (Firestore emulator)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -52,7 +52,7 @@ jobs:
 
   integration:
     name: Backend against Auth/Firestore/Storage emulators
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -72,7 +72,7 @@ jobs:
 
   e2e:
     name: End to end (browser → functions → emulators)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -99,7 +99,7 @@ jobs:
 
   vendored:
     name: Vendored survey engine matches the survey
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The survey repository may be private: give this job read access with a
     # fine-grained token in SURVEY_REPO_TOKEN. Without it the check is skipped.
     env:

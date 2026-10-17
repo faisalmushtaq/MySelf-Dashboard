@@ -22,6 +22,8 @@ import {
   ExportSpecError,
   isSensitive,
   makePredicate,
+  deidentifiedListItem,
+  exportSessionLabels,
   parseExportSpec,
   poolingCompatibility,
   presentAnswers,
@@ -329,6 +331,7 @@ async function generate(
         return { body: await xlsxOf(tables, { title: "MySelf sessions export", createdBy: actor.email }), rowCount: table.rows.length };
       }
       // JSON (administrators only — enforced by authoriseExport).
+      const labels = exportSessionLabels(records);
       const json = {
         study: actor.study,
         survey: exportSurvey(spec),
@@ -336,7 +339,9 @@ async function generate(
         generatedBy: actor.email,
         spec: { ...spec, sessionIds: spec.scope === "selected" ? spec.sessionIds : [] },
         sessions: records.map((r) => ({
-          ...toListItem(r.row, { studyCodes: spec.includeStudyCode }),
+          ...(spec.deidentified
+            ? deidentifiedListItem(toListItem(r.row, { studyCodes: spec.includeStudyCode }), labels.get(r.row.summary.sessionId)!, tz)
+            : toListItem(r.row, { studyCodes: spec.includeStudyCode })),
           ...(spec.deidentified ? { participantLabel: r.participant ?? null } : { participantCode: r.participant ?? null }),
           wave: r.wave ?? null,
           ...(spec.includeAnswers && r.assessment && r.release ? { answers: presentAnswers(r.assessment, r.release, { freeText: spec.includeFreeText }) } : {}),
@@ -369,8 +374,9 @@ async function generate(
           };
         }
       }
+      const listed = toListItem(row, { studyCodes: spec.includeStudyCode });
       const body = await sessionReportPdf({
-        item: toListItem(row, { studyCodes: spec.includeStudyCode }),
+        item: spec.deidentified ? deidentifiedListItem(listed, "S00001", tz) : listed,
         releaseLabel: record?.release ? `v${record.release.version} (${record.release.key})` : "Unknown version",
         sections: record?.assessment && record.release ? presentAnswers(record.assessment, record.release, { freeText: spec.includeFreeText }) : null,
         review,

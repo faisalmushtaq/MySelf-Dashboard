@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { authoriseExport, exportFileName, FORMATS_BY_KIND, parseExportSpec, ExportSpecError } from "./exportSpec.js";
-import { codebookTable, sessionsTable } from "./exportData.js";
+import { codebookTable, deidentifiedListItem, sessionsTable } from "./exportData.js";
 import { buildRows } from "./query.js";
 import { buildSummary } from "./summary.js";
 import { DEFAULT_POLICY } from "./policy.js";
@@ -119,6 +119,22 @@ describe("export contents", () => {
     expect(t.headers).toContain("participant_label");
     const started = t.headers.indexOf("started_at");
     expect(t.rows.every((r) => r[started] === null || /^\d{4}-\d{2}-\d{2}$/.test(String(r[started])))).toBe(true);
+  });
+
+  it("de-identified exports carry an export label for each sitting, never its id (which encodes its start time)", () => {
+    for (const layout of ["wide", "long"] as const) {
+      const spec = parseExportSpec({ kind: "sessions", format: "csv", scope: "all", deidentified: true, includeAnswers: true, layout });
+      const t = sessionsTable(records, spec, "Europe/London");
+      const ids = new Set(records.map((r) => r.row.summary.sessionId));
+      expect(t.rows.every((r) => r.every((c) => !ids.has(String(c))))).toBe(true);
+      expect(String(t.rows[0]![t.headers.indexOf("session_id")])).toMatch(/^S\d{5}$/);
+    }
+    const item = deidentifiedListItem(
+      { sessionId: "ses_01J0000000", startedAt: "2026-10-25T00:15:00.000Z", lastActivityAt: null, completedAt: null, receivedAt: null, firstReceivedAt: null, lastReviewedAt: null },
+      "S00001",
+      "Europe/London",
+    );
+    expect(item).toMatchObject({ sessionId: "S00001", startedAt: "2026-10-25" });
   });
 
   it("marks questions a sitting's version did not have, rather than calling them missing", () => {

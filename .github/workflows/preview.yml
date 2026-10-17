@@ -9,8 +9,7 @@ name: Preview the dashboard
 # The functions accept calls from this site's preview channels only because
 # DASHBOARD_PREVIEW_SITE (apps/functions/.env.myself-research) names the site;
 # see previewOrigins() in apps/functions/src/env.ts. A web change that needs a
-# new or changed function asks for a functions deploy by bumping REQUEST in
-# .github/preview/functions.env, in the same push.
+# new or changed function has to be merged and deployed from main first.
 
 on:
   push:
@@ -26,7 +25,7 @@ concurrency:
 
 jobs:
   preview:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     steps:
       - uses: actions/checkout@v4
@@ -74,17 +73,9 @@ jobs:
           if [ -z "$url" ]; then echo "::error::Deployed, but no channel URL found in the output above."; exit 1; fi
           echo "Dashboard preview: $url"
           echo "### Dashboard preview: $url" >> "$GITHUB_STEP_SUMMARY"
-      # The live functions only when asked, by a change to .github/preview/functions.env
-      # in this push — never as a side effect of an ordinary push.
-      - name: Deploy the functions, if asked
-        run: |
-          before="${{ github.event.before }}"
-          if [ "${{ github.event_name }}" = "push" ] && git cat-file -e "$before" 2>/dev/null \
-             && git diff --name-only "$before" "${{ github.sha }}" | grep -qx '.github/preview/functions.env'; then
-            pnpm exec firebase deploy --only functions:dashboard --project myself-research --non-interactive
-          else
-            echo "Functions not requested in this push; the preview uses the functions already deployed."
-          fi
+      # The live functions are never deployed from here: a working branch is
+      # unreviewed, and the functions serve the real study. They go out only
+      # through the Deploy dashboard workflow, from main.
       - name: Remove credentials
         if: always()
         run: shred -u "$RUNNER_TEMP/key.json" 2>/dev/null || rm -f "$RUNNER_TEMP/key.json"

@@ -85,11 +85,44 @@ const SESSION_HEADERS = [
   "signals",
 ] as const;
 
-function sessionCells(rec: SessionRecord, spec: ExportSpec, tz: string): Record<(typeof SESSION_HEADERS)[number], CsvValue> {
+/**
+ * What a de-identified export calls each sitting: S00001, S00002… in export
+ * order. Never the sitting's own id, which is `ses_<ULID>` and so carries the
+ * moment it started to the millisecond — enough to pick a child out of a
+ * school's timetable (QC 2026-10-17).
+ */
+export function exportSessionLabels(records: readonly { row: { summary: { sessionId: string } } }[]): Map<string, string> {
+  return new Map(records.map((rec, i) => [rec.row.summary.sessionId, `S${String(i + 1).padStart(5, "0")}`]));
+}
+
+/** A session list item as a de-identified export may carry it: its label for its id, days for its times. */
+export function deidentifiedListItem<T extends { sessionId: string; startedAt: string | null; lastActivityAt: string | null; completedAt: string | null; receivedAt: string | null; firstReceivedAt: string | null; lastReviewedAt: string | null }>(
+  item: T,
+  label: string,
+  tz: string,
+): T {
+  const day = (iso: string | null) => {
+    if (!iso) return null;
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? dayKey(t, tz) : null;
+  };
+  return {
+    ...item,
+    sessionId: label,
+    startedAt: day(item.startedAt),
+    lastActivityAt: day(item.lastActivityAt),
+    completedAt: day(item.completedAt),
+    receivedAt: day(item.receivedAt),
+    firstReceivedAt: day(item.firstReceivedAt),
+    lastReviewedAt: day(item.lastReviewedAt),
+  };
+}
+
+function sessionCells(rec: SessionRecord, spec: ExportSpec, tz: string, labels: Map<string, string>): Record<(typeof SESSION_HEADERS)[number], CsvValue> {
   const r = rec.row;
   const s = r.summary;
   return {
-    session_id: s.sessionId,
+    session_id: spec.deidentified ? (labels.get(s.sessionId) ?? null) : s.sessionId,
     participant_code: spec.deidentified ? null : (rec.participant ?? null),
     participant_label: spec.deidentified ? (rec.participant ?? null) : null,
     wave: rec.wave ?? null,
@@ -170,12 +203,13 @@ export function unionQuestions(releases: readonly ReleaseIndex[]): QuestionDef[]
 
 export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpec, tz: string): Table {
   const headers = includedSessionHeaders(spec);
+  const labels = exportSessionLabels(records);
   if (!spec.includeAnswers) {
     return {
       name: "sessions",
       headers,
       rows: records.map((rec) => {
-        const cells = sessionCells(rec, spec, tz);
+        const cells = sessionCells(rec, spec, tz, labels);
         return headers.map((h) => cells[h as keyof typeof cells]);
       }),
     };
@@ -193,7 +227,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
         const value = o.outcome === "answered" || o.outcome === "invalid" || o.outcome === "answered_hidden" ? answerCell(q, o.value, spec.includeFreeText) : null;
         const code = typeof value === "number" ? value : null;
         rows.push([
-          rec.row.summary.sessionId,
+          spec.deidentified ? (labels.get(rec.row.summary.sessionId) ?? null) : rec.row.summary.sessionId,
           rec.participant ?? null,
           rec.wave ?? null,
           ...(spec.includeStudyCode ? [rec.row.summary.studyCode] : []),
@@ -232,7 +266,7 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
   });
   const allHeaders = [...headers, ...qCols.flatMap((c) => [c.value, c.status])];
   const rows = records.map((rec) => {
-    const cells = sessionCells(rec, spec, tz);
+    const cells = sessionCells(rec, spec, tz, labels);
     const base = headers.map((h) => cells[h as keyof typeof cells]);
     const byKey = new Map(rec.assessment?.outcomes.map((o) => [o.key, o]) ?? []);
     const answers = qCols.flatMap(({ q }) => {
