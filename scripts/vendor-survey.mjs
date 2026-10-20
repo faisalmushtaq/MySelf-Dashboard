@@ -29,7 +29,7 @@ export const VENDORED = {
   // flattening: the dashboard decides "was this question shown?" exactly as
   // the iPad did, including a hidden question's answer not opening a branch
   // (survey D-63). vendor/engine.ts re-exports the parts the dashboard uses.
-  engine: ["answers", "evaluate", "walker", "flatten"],
+  engine: ["answers", "evaluate", "walker", "flatten", "timegrid"],
 };
 const REWRITES = {
   "@myself/schema": "../schema/index.js",

@@ -13,3 +13,18 @@ export { AnswerStore, refKey, type AnswerLookup, type AnswerRecord, type AnswerV
 export { ageOn, evaluate } from "./myself/engine/evaluate.js";
 export { computeVisibility, type PresentableUnit, type Visibility, type VisibilityUnit } from "./myself/engine/walker.js";
 export { flattenManifest, type FlattenedRelease } from "./myself/engine/flatten.js";
+// The time grid (survey D-66): its rows, the condition that hides it when it
+// would have none, and one variable per row.
+export {
+  checkTimeGrid,
+  formatMinutes,
+  timeGridCandidates,
+  timeGridCondition,
+  timeGridMax,
+  timeGridRows,
+  timeGridVariable,
+  type GridOption,
+  type GridSourceItem,
+  type TimeGridItem,
+  type TimeGridRow,
+} from "./myself/engine/timegrid.js";

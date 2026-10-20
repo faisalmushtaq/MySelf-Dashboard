@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@9e4f777 packages/engine/src/answers.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@b0ce76b packages/engine/src/answers.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { ItemRef, ResponseStatus } from "../schema/index.js";
@@ -20,7 +20,12 @@ export type AnswerValue =
       /** option code -> { group key, rank within group (1-based) if ranked } */
       assignments: Record<number, { group: string; rank?: number }>;
     }
-  | { kind: "checkboxes"; checked: string[] };
+  | { kind: "checkboxes"; checked: string[] }
+  | {
+      kind: "time_grid";
+      /** option code -> total minutes; null for a row shown but left empty */
+      minutes: Record<string, number | null>;
+    };
 
 export interface AnswerRecord {
   status: ResponseStatus;

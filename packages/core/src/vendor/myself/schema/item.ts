@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@9e4f777 packages/schema/src/item.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@b0ce76b packages/schema/src/item.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import { z } from "zod";
@@ -48,6 +48,21 @@ export const optionLimit = z.object({
   ]),
   /** The date-of-birth item the age is computed from. */
   from: itemRef,
+});
+
+/**
+ * Where a time grid's rows come from: an earlier question's selection. For a
+ * `rank_group` question, the options placed in `group`; for a `multi_choice`
+ * question, the options ticked (never "Prefer not to say" or "None of these",
+ * which are not things anyone spends time on). Rows are labelled with that
+ * question's own option labels and keyed by its option codes.
+ */
+export const timeGridSource = z.object({
+  instrument: slug,
+  item: slug,
+  revision: z.number().int().positive(),
+  /** The rank_group group whose options become rows. Not used for multi_choice. */
+  group: slug.optional(),
 });
 
 /**
@@ -317,6 +332,19 @@ export const itemDefinition = z.discriminatedUnion("responseType", [
   }),
   z.object({
     ...baseItem,
+    /**
+     * Hours and minutes for each option chosen at an earlier question — "how
+     * long on each of the apps you use?" — on one screen, like a matrix. The
+     * rows are not declared here: they are whatever the participant chose, so
+     * nobody is asked about an app they have just said they do not have.
+     */
+    responseType: z.literal("time_grid"),
+    rowsFrom: timeGridSource,
+    /** Ceiling on one row's total, in minutes. Absent means a whole day (1440). */
+    maxMinutesPerRow: z.number().int().positive().max(1440).optional(),
+  }),
+  z.object({
+    ...baseItem,
     responseType: z.literal("checkbox_set"), // consent-style statement set
     statements: z
       .array(z.object({ key: slug, text: displayText, required: z.boolean().default(true) }))
@@ -333,3 +361,4 @@ export const itemDefinition = z.discriminatedUnion("responseType", [
 export type ItemDefinition = z.infer<typeof itemDefinition>;
 export type CrossCheck = z.infer<typeof crossCheck>;
 export type OptionLimit = z.infer<typeof optionLimit>;
+export type TimeGridSource = z.infer<typeof timeGridSource>;
