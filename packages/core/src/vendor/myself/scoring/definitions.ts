@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@9e4f777 packages/scoring/src/definitions.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@b0ce76b packages/scoring/src/definitions.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { z } from "zod";
@@ -177,6 +177,34 @@ export const scoreEhiSf: ScoringInput = {
   verified: false,
 };
 
+/** PHQ-4 (Kroenke et al., 2009): total 0–12, GAD-2 (items 1–2) and PHQ-2
+ * (items 3–4) 0–6 each; a subscale of 3 or more is the published screening
+ * cut-point. */
+export const scorePhq4: ScoringInput = {
+  key: "score.phq4",
+  version: "1.0.0",
+  instrument: "phq4",
+  instrumentVersion: "1.0",
+  steps: [
+    { op: "sum", items: ["nervous", "worrying", "interest", "down"], output: "phq4_total", minValid: 4 },
+    { op: "sum", items: ["nervous", "worrying"], output: "gad2", minValid: 2 },
+    { op: "sum", items: ["interest", "down"], output: "phq2", minValid: 2 },
+    {
+      op: "classify",
+      input: "phq4_total",
+      bands: [
+        { label: "normal", min: 0, max: 2 },
+        { label: "mild", min: 3, max: 5 },
+        { label: "moderate", min: 6, max: 8 },
+        { label: "severe", min: 9, max: 12 },
+      ],
+      output: "phq4_band",
+    },
+  ],
+  provenance: "Kroenke et al. (2009): total 0–12 banded normal 0–2, mild 3–5, moderate 6–8, severe 9–12; GAD-2 and PHQ-2 each ≥3 suggests a positive screen.",
+  verified: false,
+};
+
 export const allScoring: ScoringInput[] = [
   scoreSdq25S,
   scoreSdq25S18,
@@ -185,4 +213,5 @@ export const allScoring: ScoringInput[] = [
   scoreStai5,
   scoreBisbas12,
   scoreEhiSf,
+  scorePhq4,
 ];
