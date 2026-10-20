@@ -663,8 +663,8 @@ describe("shorter consent, sleep quality and the street search under r9.0.0 (D-5
   });
 });
 
-describe("the versions published from MySelf Studio: 10.0.0, 11.0.0 and 12.0.0", () => {
-  for (const version of ["10.0.0", "11.0.0", "12.0.0"]) {
+describe("the versions published from MySelf Studio: 10.0.0 to 13.0.0", () => {
+  for (const version of ["10.0.0", "11.0.0", "12.0.0", "13.0.0"]) {
     it(`reads every ${version} sitting, with none held back, and names every question`, () => {
       const raw = release(version) as { hash: string };
       const idx = indexRelease(raw);
