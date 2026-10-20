@@ -103,3 +103,12 @@ More in the [maintainers' guide](docs/10-maintainers-guide.md#105-tests).
 `releases/` (survey release manifests) · `e2e/` · `scripts/` · `docs/`. The
 [maintainers' guide](docs/10-maintainers-guide.md) maps each of them and has the
 recipes for common changes.
+
+## Public repository
+
+This repository is public. It holds the dashboard's code, never participant
+data: answers stay in the Firebase project, readable only through the
+dashboard's backend by signed-in, allowed Google accounts, and every fixture,
+screenshot and demo is made up. The dashboard needs no secrets; deploys
+authenticate with a GitHub Actions secret, and Actions run logs (public too)
+never print participant data.
