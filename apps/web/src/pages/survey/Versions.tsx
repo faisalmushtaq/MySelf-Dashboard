@@ -12,10 +12,8 @@ import { dateOnly, int } from "../../lib/format";
 import { useLoad } from "../../lib/hooks";
 import "./survey.css";
 
-/** Where researchers edit and publish versions: MySelf Studio's survey list, in the survey's researcher view. */
-export const STUDIO_URL: string = import.meta.env.VITE_STUDIO_URL ?? "https://faisalmushtaq.github.io/MySelf/researcher/#/surveys";
-/** The participant app's address, which every participant link starts from (survey docs/16 §11.2). */
-export const PARTICIPANT_URL: string = import.meta.env.VITE_PARTICIPANT_URL ?? "https://faisalmushtaq.github.io/MySelf/";
+import { PARTICIPANT_URL, STUDIO_URL } from "../../lib/links";
+export { PARTICIPANT_URL, STUDIO_URL };
 
 const HOW: Record<LivePeriod["how"], string> = {
   set_up: "already live when Studio was set up",

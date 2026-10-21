@@ -7,6 +7,7 @@ import { Popover } from "../components/Popover";
 import { Dialog } from "../components/Dialog";
 import { useAuth } from "./auth";
 import { useStudyData } from "./data";
+import { studioHome } from "../lib/links";
 import { filterQuery, surveyQuery } from "./filters";
 import { DateRangeControl, SurveyControl, VersionControl } from "./FilterControls";
 import { HelpContent } from "../pages/Help";
@@ -176,6 +177,14 @@ export function Shell() {
                 </NavLink>
               </li>
             ))}
+            {/* Where the surveys are made: MySelf Studio, in this study's space.
+                It checks its own access list, so it is offered to everyone. */}
+            <li>
+              <a href={studioHome(study)} target="_blank" rel="noopener noreferrer">
+                <Icon name="external" />
+                <span>Survey Studio</span>
+              </a>
+            </li>
           </ul>
         </nav>
         <div className="sidebar-foot">
