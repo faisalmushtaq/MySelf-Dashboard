@@ -1,9 +1,10 @@
-// Vendored from faisalmushtaq/MySelf@b0ce76b packages/schema/src/item.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@1c677b6 packages/schema/src/item.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import { z } from "zod";
 import { dottedKey, itemRef, semver, slug, variableName } from "./identifiers.js";
 import { logicExpr, pipeRef } from "./logic.js";
+import { provenance } from "./provenance.js";
 
 /**
  * The oldest age any participant may ever be recorded as, in any study, in any
@@ -140,6 +141,12 @@ const baseItem = {
   crossChecks: z.array(crossCheck).optional(),
   a11yNote: z.string().optional(),
   researcherNote: z.string().optional(),
+  /**
+   * Where this question came from, when that differs from its questionnaire's
+   * own record (D-68): a study-written question added to a module of borrowed
+   * ones, say. Never shown to participants.
+   */
+  provenance: provenance.optional(),
   /**
    * A reporting grouping for analysts ("Screen use", "Sleep"), set in the
    * Studio. Participants never see it and it changes nothing about how the

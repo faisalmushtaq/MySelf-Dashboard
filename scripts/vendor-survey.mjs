@@ -22,7 +22,7 @@ export const VENDORED = {
   // sitting under that version (docs/11). `link` holds the study and survey
   // id patterns and the participant link (D-56): the dashboard accepts and
   // builds exactly what the survey does (docs/12).
-  schema: ["identifiers", "response-scale", "logic", "item", "instrument", "assessment", "canonical", "link", "index"],
+  schema: ["identifiers", "response-scale", "logic", "item", "provenance", "instrument", "assessment", "canonical", "link", "index"],
   scoring: ["executor", "definitions", "references", "index"],
   store: ["dataset", "identity", "ingest", "bids", "narratives", "zip", "summary", "completeness", "counting"],
   // The engine's evaluator, answer store, cascading visibility and release
