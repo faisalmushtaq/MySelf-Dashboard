@@ -187,9 +187,21 @@ export function answerCell(q: QuestionDef, value: unknown, freeText: boolean): C
     case "fields":
     case "group_rank":
       return JSON.stringify(v["kind"] === "fields" ? v["values"] : v["assignments"]);
+    case "time_grid":
+      // One cell: minutes by row code. The wide layout splits it into a column per row (gridCell).
+      return typeof v["minutes"] === "object" && v["minutes"] !== null ? JSON.stringify(v["minutes"]) : null;
     default:
       return null;
   }
+}
+
+/** One row of a time grid: whole minutes, or null when the row was left empty or not shown. */
+export function gridCell(q: QuestionDef, value: unknown, code: number): CsvValue {
+  if (q.identifying) return null;
+  const v = (value ?? null) as Record<string, unknown> | null;
+  if (!v || v["kind"] !== "time_grid" || typeof v["minutes"] !== "object" || v["minutes"] === null) return null;
+  const n = (v["minutes"] as Record<string, unknown>)[String(code)];
+  return typeof n === "number" ? n : null;
 }
 
 /** Question columns across every release in the export, matched by stable id. */
@@ -260,23 +272,28 @@ export function sessionsTable(records: readonly SessionRecord[], spec: ExportSpe
     used.add(name);
     return name;
   };
+  // A time grid is one column per row it could have (minutes), named as the
+  // survey names them (`<variable>_<code>`, D-66), then its status.
   const qCols = questions.map((q) => {
     const value = columnName(q);
-    return { q, value, status: `${value}__status` };
+    const rows = q.responseType === "time_grid" ? (q.options ?? []).map((o) => ({ code: o.code, header: `${value}_${o.code}` })) : null;
+    return { q, value, status: `${value}__status`, rows };
   });
-  const allHeaders = [...headers, ...qCols.flatMap((c) => [c.value, c.status])];
+  const allHeaders = [...headers, ...qCols.flatMap((c) => (c.rows ? [...c.rows.map((r) => r.header), c.status] : [c.value, c.status]))];
   const rows = records.map((rec) => {
     const cells = sessionCells(rec, spec, tz, labels);
     const base = headers.map((h) => cells[h as keyof typeof cells]);
     const byKey = new Map(rec.assessment?.outcomes.map((o) => [o.key, o]) ?? []);
-    const answers = qCols.flatMap(({ q }) => {
-      if (!rec.release) return [null, "unavailable"];
+    const answers = qCols.flatMap(({ q, rows }) => {
+      const blank = rows ? rows.map(() => null) : [null];
+      if (!rec.release) return [...blank, "unavailable"];
       const own = rec.release.byKey.get(q.key);
-      if (!own) return [null, "not_in_version"];
+      if (!own) return [...blank, "not_in_version"];
       const o = byKey.get(q.key);
-      if (!o) return [null, null];
-      const value = o.outcome === "answered" || o.outcome === "invalid" || o.outcome === "answered_hidden" ? answerCell(own, o.value, spec.includeFreeText) : null;
-      return [value, o.outcome];
+      if (!o) return [...blank, null];
+      const given = o.outcome === "answered" || o.outcome === "invalid" || o.outcome === "answered_hidden";
+      if (rows) return [...rows.map((r) => (given ? gridCell(own, o.value, r.code) : null)), o.outcome];
+      return [given ? answerCell(own, o.value, spec.includeFreeText) : null, o.outcome];
     });
     return [...base, ...answers];
   });

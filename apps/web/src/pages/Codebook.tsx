@@ -22,6 +22,7 @@ const TYPE_LABELS: Record<string, string> = {
   text_long: "Long text",
   form_fields: "Several short texts",
   date: "Date",
+  time_grid: "Time for each chosen option (minutes)",
 };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-GB")} ${n === 1 ? one : many}`;
