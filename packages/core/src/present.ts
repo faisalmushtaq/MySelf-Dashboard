@@ -1,5 +1,6 @@
 import type { Assessment, Outcome } from "./completeness.js";
 import type { QuestionDef, ReleaseIndex } from "./manifest.js";
+import { formatMinutes } from "./vendor/engine.js";
 
 /**
  * Turning a recorded value into something a researcher can read — and deciding
@@ -82,6 +83,17 @@ export function renderAnswer(q: QuestionDef, value: unknown, options: { freeText
         byGroup.set(g, [...(byGroup.get(g) ?? []), item]);
       }
       return { display: [...byGroup.entries()].map(([g, xs]) => `${g}: ${xs.join(", ")}`).join("\n"), code: null, redacted: null, kind };
+    }
+    case "time_grid": {
+      // Minutes per row; the rows are the options of the question it was built from.
+      const minutes = (v["minutes"] ?? {}) as Record<string, unknown>;
+      const rows = (q.options ?? []).filter((o) => String(o.code) in minutes);
+      const known = new Set(rows.map((o) => String(o.code)));
+      const lines = [
+        ...rows.map((o) => [o.label, minutes[String(o.code)]] as const),
+        ...Object.entries(minutes).filter(([c]) => !known.has(c)).map(([c, n]) => [`Code ${c}`, n] as const),
+      ].map(([l, n]) => `${l}: ${typeof n === "number" ? formatMinutes(n) : "not given"}`);
+      return { display: lines.join("\n") || "No times given", code: null, redacted: null, kind };
     }
     default:
       return { display: kind ? `Unrecognised answer (${kind})` : "Unrecognised answer", code: null, redacted: null, kind };

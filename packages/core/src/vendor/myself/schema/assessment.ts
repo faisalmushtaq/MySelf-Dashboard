@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@1c677b6 packages/schema/src/assessment.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@02f613c packages/schema/src/assessment.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import { z } from "zod";
@@ -79,7 +79,7 @@ export const assessmentDraft = z.object({
   title: z.string().min(1),
   /**
    * Short label shown to participants on the opening screen — in practice the
-   * site and the year ("Notre Dame · 2026"). Set per fielding by the
+   * site and the year ("Leeds schools · 2026"). Set per fielding by the
    * researcher; the full title is not what a participant needs to read before
    * starting. Omit to show nothing.
    */
