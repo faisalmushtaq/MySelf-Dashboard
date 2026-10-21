@@ -1,15 +1,29 @@
 name: CI
 
+# Actions minutes are limited. CI runs once per change that matters: on a pull
+# request, and on main after a merge, never on every push to a working branch
+# as well (that ran all five jobs twice for each push to a PR). A newer push
+# cancels the run it supersedes, and a draft pull request runs nothing until it
+# is marked ready for review. Run it by hand from the Actions tab
+# (workflow_dispatch) when a branch needs it without a PR.
+
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   unit:
+    if: github.event.pull_request.draft != true
     name: Build, typecheck, unit tests, privacy check
     runs-on: ubuntu-24.04
     steps:
@@ -32,6 +46,7 @@ jobs:
           VITE_FIREBASE_CONFIG: '{"apiKey":"ci-placeholder","authDomain":"example.web.app","projectId":"example"}'
 
   rules:
+    if: github.event.pull_request.draft != true
     name: Security rules (Firestore emulator)
     runs-on: ubuntu-24.04
     steps:
@@ -51,6 +66,7 @@ jobs:
       - run: pnpm test:rules
 
   integration:
+    if: github.event.pull_request.draft != true
     name: Backend against Auth/Firestore/Storage emulators
     runs-on: ubuntu-24.04
     steps:
@@ -71,6 +87,7 @@ jobs:
       - run: pnpm test:integration
 
   e2e:
+    if: github.event.pull_request.draft != true
     name: End to end (browser → functions → emulators)
     runs-on: ubuntu-24.04
     steps:
@@ -98,6 +115,7 @@ jobs:
           retention-days: 7
 
   vendored:
+    if: github.event.pull_request.draft != true
     name: Vendored survey engine matches the survey
     runs-on: ubuntu-24.04
     # The survey repository may be private: give this job read access with a
