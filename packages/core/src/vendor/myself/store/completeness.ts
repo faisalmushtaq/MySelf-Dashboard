@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@02f613c packages/store/src/completeness.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@15a6ee9 packages/store/src/completeness.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { LogicExpr } from "../schema/index.js";
@@ -358,6 +358,12 @@ export interface ReplayResult {
   eventCount: number;
   /** Events whose timestamp could not be parsed. */
   badTimestamps: number;
+  /**
+   * A researcher ended the sitting before the end (D-70): why, as they chose it
+   * on the iPad ("time", "participant_stopped", "distress", "technical",
+   * "other"), and when. Absent for a sitting that ended any other way.
+   */
+  endedByStaff?: { reason: string; at?: string };
 }
 
 /** A sitting as far as the replay needs one: its log and its own completion flag. */
@@ -384,6 +390,7 @@ export function replaySitting(sitting: LoggedSitting): ReplayResult {
   };
 
   let completedEvent = false;
+  let endedByStaff: { reason: string; at?: string } | undefined;
   let hasPresentationEvents = false;
   let durationMs: number | undefined;
   let foregroundMs: number | undefined;
@@ -463,6 +470,11 @@ export function replaySitting(sitting: LoggedSitting): ReplayResult {
       case "session.resumed":
         resumedCount += 1;
         break;
+      case "session.ended_by_staff": {
+        const reason = typeof p["reason"] === "string" ? (p["reason"] as string) : "other";
+        endedByStaff = { reason, ...(typeof e.tWall === "string" ? { at: e.tWall } : {}) };
+        break;
+      }
       case "session.completed": {
         completedEvent = true;
         if (typeof p["totalMs"] === "number") durationMs = p["totalMs"] as number;
@@ -490,6 +502,7 @@ export function replaySitting(sitting: LoggedSitting): ReplayResult {
     inconsistentCount,
     eventCount: ordered.length,
     badTimestamps,
+    ...(endedByStaff ? { endedByStaff } : {}),
   };
 }
 
@@ -764,6 +777,8 @@ export interface Assessment {
   finalSectionKey?: string;
   /** Item keys in the log that this release does not define. */
   unknownItemKeys: string[];
+  /** A researcher ended it before the end, and why (D-70). */
+  endedByStaff?: { reason: string; at?: string };
 }
 
 const emptyCounts = (): Counts => ({
@@ -862,6 +877,7 @@ export function assessSitting(replay: ReplayResult, release: ReleaseQuestions | 
       missingRequiredKeys: [],
       invalidKeys: [],
       unknownItemKeys: [],
+      ...(replay.endedByStaff ? { endedByStaff: replay.endedByStaff } : {}),
     };
   }
 
@@ -1069,5 +1085,6 @@ export function assessSitting(replay: ReplayResult, release: ReleaseQuestions | 
     ...(lastPresentedKey ? { lastPresentedKey } : {}),
     ...(finalSectionKey ? { finalSectionKey } : {}),
     unknownItemKeys,
+    ...(replay.endedByStaff ? { endedByStaff: replay.endedByStaff } : {}),
   };
 }

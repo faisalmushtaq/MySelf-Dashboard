@@ -7,6 +7,7 @@ import { compareVersions } from "./manifest.js";
 import type { QuestionStat } from "./questions.js";
 import { REVIEW_STATUS_LABELS } from "./review.js";
 import { STATUS_LABELS } from "./status.js";
+import { ENDED_REASON_LABELS } from "./summary.js";
 import type { CsvValue } from "./csv.js";
 import type { ExportSpec } from "./exportSpec.js";
 
@@ -61,6 +62,7 @@ const SESSION_HEADERS = [
   "release_key",
   "release_hash",
   "status",
+  "ended_by_researcher",
   "lifecycle",
   "markers",
   "review_status",
@@ -134,6 +136,8 @@ function sessionCells(rec: SessionRecord, spec: ExportSpec, tz: string, labels: 
     release_key: s.releaseKey,
     release_hash: s.releaseHash,
     status: STATUS_LABELS[r.status.display],
+    // Why a researcher ended it on the iPad (survey D-70); empty for any other ending.
+    ended_by_researcher: s.endedByStaff ? (ENDED_REASON_LABELS[s.endedByStaff.reason] ?? s.endedByStaff.reason) : null,
     lifecycle: r.status.lifecycle,
     markers: r.status.markers.join(";"),
     review_status: REVIEW_STATUS_LABELS[r.review?.status ?? "unreviewed"],
