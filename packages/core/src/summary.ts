@@ -81,6 +81,11 @@ export interface SessionSummary {
   unknownItemKeys: string[];
   /** Policy-independent data-quality facts; see WARNING_LABELS. */
   warnings: string[];
+  /**
+   * A researcher ended the sitting on the iPad before the end (survey D-70), and
+   * why. Null otherwise; absent on summaries written before this existed.
+   */
+  endedByStaff?: { reason: string; at: string | null } | null;
   items: ItemEntry[];
   requiredLevels: RequiredLevel[];
   rulesVersion: string;
@@ -102,7 +107,27 @@ export const WARNING_LABELS: Record<string, string> = {
   no_presentation_events: "The log has no question-presentation events (legacy); shown/not-shown is inferred",
   imported: "Filed from a handover file rather than uploaded by the device",
   backfilled: "Summarised after the fact; first-received time is approximate",
+  // A researcher ended the sitting on the iPad (survey D-70), one code per reason chosen there.
+  ended_by_researcher_time: "Ended by a researcher: time was up",
+  ended_by_researcher_participant_stopped: "Ended by a researcher: the participant asked to stop",
+  ended_by_researcher_distress: "Ended by a researcher: the participant was upset or unwell",
+  ended_by_researcher_technical: "Ended by a researcher: a technical problem",
+  ended_by_researcher_other: "Ended by a researcher",
 };
+
+/** The reasons a researcher can give on the iPad when ending a sitting (survey D-70), in words. */
+export const ENDED_REASON_LABELS: Record<string, string> = {
+  time: "Time was up",
+  participant_stopped: "The participant asked to stop",
+  distress: "The participant was upset or unwell",
+  technical: "Technical problem",
+  other: "Something else",
+};
+
+/** The warning code for a researcher's wrap-up with this reason. */
+export function endedWarning(reason: string): string {
+  return ENDED_REASON_LABELS[reason] && reason !== "other" ? `ended_by_researcher_${reason}` : "ended_by_researcher_other";
+}
 
 /** Warnings that, on an unreviewed sitting, mark it as needing review. */
 export const REVIEW_WARNINGS: ReadonlySet<string> = new Set([
@@ -169,6 +194,7 @@ export function buildSummary(
 
   const backfilled = options.previous?.backfilled ?? options.backfill === true;
   if (backfilled) warnings.add("backfilled");
+  if (replay.endedByStaff) warnings.add(endedWarning(replay.endedByStaff.reason));
 
   const items: ItemEntry[] = [];
   for (const o of assessment.outcomes) {
@@ -234,6 +260,7 @@ export function buildSummary(
     finalSectionKey: assessment.finalSectionKey ?? null,
     unknownItemKeys: assessment.unknownItemKeys.slice(0, 50),
     warnings: [...warnings].sort(),
+    endedByStaff: replay.endedByStaff ? { reason: replay.endedByStaff.reason, at: replay.endedByStaff.at ?? null } : null,
     items,
     requiredLevels: [...policy.requiredLevels],
     rulesVersion: assessment.rulesVersion,
