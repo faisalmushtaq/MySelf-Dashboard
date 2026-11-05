@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@85f8f5d packages/engine/src/flatten.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@4ae132d packages/engine/src/flatten.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import type { InstrumentForm, ItemDefinition, LogicExpr, ReleaseManifest } from "../schema/index.js";

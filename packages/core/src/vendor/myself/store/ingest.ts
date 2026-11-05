@@ -1,4 +1,4 @@
-// Vendored from faisalmushtaq/MySelf@85f8f5d packages/store/src/ingest.ts — do not edit.
+// Vendored from faisalmushtaq/MySelf@4ae132d packages/store/src/ingest.ts — do not edit.
 // Only package imports are rewritten to relative paths; scripts/check-vendored.mjs
 // fails CI if the survey's copy changes. Re-vendor with scripts/vendor-survey.mjs.
 import {
