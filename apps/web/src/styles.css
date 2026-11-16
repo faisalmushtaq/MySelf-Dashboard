@@ -2166,6 +2166,16 @@ table.data .col-check input {
 .export-form .radio-row label {
   margin-bottom: 4px;
 }
+.identity-approval textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  resize: vertical;
+}
 .export-preview {
   background: var(--off-white);
   border: 1px solid var(--hairline);

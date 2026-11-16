@@ -40,6 +40,12 @@ export const CAPABILITIES = [
   "export.freeText",
   "export.studyCode",
   "export.json",
+  /**
+   * Names, dates of birth and home addresses, in a file of their own, for
+   * record linkage. Administrators only, and only with a stated purpose
+   * and a confirmation the server checks (docs/02 §2.5.1).
+   */
+  "export.identity",
   "audit.readAll",
   "audit.readOwn",
   "settings.access",

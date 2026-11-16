@@ -9,6 +9,8 @@ import {
   compareRows,
   decideStudyAccess,
   exportSurvey,
+  identifiersTable,
+  identityApprovalProblem,
   buildSchoolReportView,
   compareVersions,
   composeFigure,
@@ -116,8 +118,14 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
   const verdict = authoriseExport(actor.role, spec, actor.policy);
 
   const warnings: string[] = [];
+  if (spec.kind === "identifiers") {
+    warnings.push(
+      "This file names children. It holds each participant's first and last name, date of birth and home address as they gave them, with their participant code so it can be joined to a research export. Make it only for a purpose the study's ethics approval and data management plan allow (for example, sending the linkage list to Connected West Yorkshire), keep it apart from the answers, share it only by an approved secure route, and delete your copy when that purpose is done.",
+    );
+    warnings.push("Pupils of 16 or over who answered \"No, don't link my records\" are listed with that answer in linkage_choice_16_plus: leave them out of any linkage list.");
+  }
   if (spec.includeFreeText) warnings.push("Includes free-text answers, which may contain names or other identifying details a participant typed. Store the file only where the study's data management plan allows.");
-  if (isSensitive(spec) && !spec.deidentified) {
+  if (isSensitive(spec) && !spec.deidentified && spec.kind !== "identifiers") {
     warnings.push(
       "Includes identifiers for linkage: participant codes (up to survey version 7.3.0 built from each child's secret-code answers, readable by anyone who knows the scheme; from 8.0.0 made from name and date of birth, recomputable by anyone who has both — pseudonymous either way), study codes, sitting and device IDs and exact times. Names, dates of birth, home addresses, UPNs and NHS numbers are never included.",
     );
@@ -161,7 +169,9 @@ async function buildPreview(spec: ExportSpec, actor: Actor, now: Date): Promise<
           ? ["per question: eligible, shown, answered, skipped, invalid, rates, distribution"]
           : spec.kind === "school_report"
             ? ["each measure's school average with a 95% CI, against the other schools combined and the benchmarks", "shares in each threshold band", "the school's year groups"]
-            : ["session details", "answers in that version's wording", "review status and flags"];
+            : spec.kind === "identifiers"
+              ? ["participant_code", "wave", "session_id", "study_code", "site", "started_at", "first_name", "last_name", "dob", "address (house, street, area, postcode, postcode district, UPRN)", "linkage_choice_16_plus"]
+              : ["session details", "answers in that version's wording", "review status and flags"];
 
   const describe = describeFilters(spec.filters, {
     version: (h) => relByHash.get(h)?.version ?? h.slice(7, 15),
@@ -469,6 +479,33 @@ async function generate(
       });
       return { body, rowCount: view.counts.pupils };
     }
+    case "identifiers": {
+      // Built for this file only: the identifying answers are never cached (studyData.ts).
+      const { study } = await loadStudyDataset(actor.study, { fresh: true, keepIdentity: true, onProgress: (f) => progress(0.05 + 0.8 * f) });
+      const ids = rows.map((r) => r.summary.sessionId);
+      const linkage = participantsFor(study, ids, false);
+      const chosen = new Set(ids);
+      const choice = new Map<string, string>();
+      for (const r of study.dataset.responses) {
+        if (r.variable === "linkage_agree_16" && chosen.has(r.sessionId) && r.value !== null) choice.set(r.sessionId, r.label ?? String(r.value));
+      }
+      const table = identifiersTable(
+        rows.map((r) => ({
+          sessionId: r.summary.sessionId,
+          participant: linkage.get(r.summary.sessionId)?.participant ?? null,
+          wave: linkage.get(r.summary.sessionId)?.wave ?? null,
+          site: r.summary.site ?? null,
+          studyCode: r.summary.studyCode ?? null,
+          startedAt: r.summary.startedAt ?? null,
+          linkageChoice: choice.get(r.summary.sessionId) ?? null,
+        })),
+        (study.identity ?? []).filter((a) => chosen.has(a.sessionId)),
+      );
+      return {
+        body: spec.format === "xlsx" ? await xlsxOf([table], { title: "MySelf identifying information", createdBy: actor.email }) : csvOf(table),
+        rowCount: table.rows.length,
+      };
+    }
     case "question_summary": {
       const release = releases.find((r) => r.hash === spec.versionHash);
       if (!release) throw new HttpsError("not-found", "That survey version is not in the registry.");
@@ -487,10 +524,16 @@ export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeout
   const now = new Date();
   const { preview, rows, releases } = await buildPreview(spec, actor, now);
   const survey = exportSurvey(spec);
-  const describe = { study: actor.study, ...(survey ? { survey } : {}), kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, identifiers: !spec.deidentified && isSensitive(spec), deidentified: spec.deidentified, includesAnswers: spec.includeAnswers, ...(spec.kind === "school_report" ? { school: spec.school, yearGroup: spec.yearGroup ?? null } : {}) };
+  const describe = { study: actor.study, ...(survey ? { survey } : {}), kind: spec.kind, format: spec.format, scope: spec.scope, sessions: preview.sessionCount, filters: preview.filters, dateRange: preview.dateRange, includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, identifiers: !spec.deidentified && isSensitive(spec), deidentified: spec.deidentified, includesAnswers: spec.includeAnswers, ...(spec.kind === "identifiers" ? { identifyingInformation: true, purpose: spec.identityPurpose ?? null, confirmed: spec.identityConfirmed } : {}), ...(spec.kind === "school_report" ? { school: spec.school, yearGroup: spec.yearGroup ?? null } : {}) };
   if (!preview.allowed) {
     await audit({ action: "export.created", ...actorFields(actor), detail: { ...describe, refusal: preview.refusal }, outcome: "denied" });
     throw new HttpsError("permission-denied", preview.refusal ?? "not permitted");
+  }
+  // Identifying information: the administrator's stated purpose and confirmation, checked here.
+  const approval = identityApprovalProblem(spec);
+  if (approval) {
+    await audit({ action: "export.created", ...actorFields(actor), detail: { ...describe, refusal: approval }, outcome: "denied" });
+    throw new HttpsError("failed-precondition", `Before identifying information can be exported, ${approval}.`);
   }
   if (preview.sessionCount === 0 && spec.kind !== "question_summary") throw new HttpsError("failed-precondition", "No sessions match — there is nothing to export.");
 
@@ -507,6 +550,7 @@ export const createExport = onCall({ ...callableOptions, memory: "2GiB", timeout
     format: spec.format,
     scope: spec.scope,
     fileName: preview.fileName,
+    ...(spec.kind === "identifiers" ? { identity: { purpose: spec.identityPurpose ?? null, confirmed: spec.identityConfirmed } } : {}),
     preview: { sessionCount: preview.sessionCount, dateRange: preview.dateRange, filters: preview.filters, versions: preview.versions.map((v) => v.version), includesFreeText: spec.includeFreeText, includesStudyCode: spec.includeStudyCode, deidentified: spec.deidentified },
     status: "running",
     progress: 0.02,
@@ -593,9 +637,12 @@ export const downloadExport = onRequest({ cors: ALLOWED_ORIGINS, memory: "512MiB
   const job = await dash().doc(dpaths.exportJob(study, jobId)).get();
   const data = job.data() ?? {};
   if (!job.exists) return deny(404, "No such export.");
+  // Identifying information is downloaded only by the administrator who made it, never by another.
+  if (data["kind"] === "identifiers" && data["requestedBy"] !== decoded.uid) return deny(403, "Identifying information can be downloaded only by the administrator who created it.");
   if (data["requestedBy"] !== decoded.uid && decision.role !== "owner") return deny(403, "Only the person who created an export (or an administrator) can download it.");
   const policy = await studyPolicy(study);
-  if (!can(decision.role, data["kind"] === "sessions" || data["kind"] === "session_report" ? "export.sessions" : "export.aggregate", policy)) {
+  const needs = data["kind"] === "identifiers" ? "export.identity" : data["kind"] === "sessions" || data["kind"] === "session_report" ? "export.sessions" : "export.aggregate";
+  if (!can(decision.role, needs, policy)) {
     return deny(403, "Your role no longer allows this export.");
   }
   if (data["status"] !== "ready") return deny(409, data["status"] === "expired" ? "This export has expired and been deleted. Create it again." : "This export is not ready.");

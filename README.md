@@ -22,7 +22,10 @@ It reads every study space the survey runs in that project, each kept apart.
   received, distinguishing unanswered, hidden-by-branching, not-reached, invalid,
   declined and never-collected questions ([definitions](docs/03-completeness.md)).
 - **Privacy:** raw logs never reach a browser; names, dates of birth, home
-  addresses and code components are never shown or exported; exports are generated server-side,
+  addresses and code components are never shown, and never in a research export.
+  Administrators alone can export names, dates of birth and addresses for record
+  linkage, in a file of their own, after stating why and approving it
+  ([details](docs/02-architecture.md)); exports are generated server-side,
   downloaded through an authenticated endpoint, audited and deleted after 24 hours.
 - **Participants and linkage:** sittings joined into participants and waves by the
   survey's participant code (the secret code up to survey version 7.3.0, an ID

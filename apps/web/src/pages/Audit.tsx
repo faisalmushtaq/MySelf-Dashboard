@@ -102,7 +102,7 @@ export default function Audit() {
   const summary = (r: Row) => {
     const d = r.detail ?? {};
     if (r.action === "review.updated") return `${String(d["change"] ?? "")}`;
-    if (r.action.startsWith("export")) return [d["kind"], d["format"], d["sessions"] !== undefined ? `${d["sessions"]} sessions` : null, d["fileName"], d["reason"], d["refusal"]].filter(Boolean).join(" · ");
+    if (r.action.startsWith("export")) return [d["kind"], d["format"], d["sessions"] !== undefined ? `${d["sessions"]} sessions` : null, d["fileName"], d["purpose"] ? `purpose: ${String(d["purpose"])}` : null, d["reason"], d["refusal"]].filter(Boolean).join(" · ");
     if (r.action === "role.changed") return `${d["email"]}: ${d["before"] ?? "none"} → ${d["after"] ?? "none"}`;
     if (r.action === "auth.denied") return String(d["reason"] ?? "");
     return "";

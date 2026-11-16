@@ -9,7 +9,7 @@ import { OBSERVATIONS, type Observation } from "./scoring/aggregate.js";
  * in the browser shows the same decisions but does not make them.
  */
 
-export const EXPORT_KINDS = ["sessions", "session_report", "completeness_summary", "question_summary", "school_report"] as const;
+export const EXPORT_KINDS = ["sessions", "session_report", "completeness_summary", "question_summary", "school_report", "identifiers"] as const;
 export type ExportKind = (typeof EXPORT_KINDS)[number];
 
 export const EXPORT_KIND_LABELS: Record<ExportKind, string> = {
@@ -18,6 +18,7 @@ export const EXPORT_KIND_LABELS: Record<ExportKind, string> = {
   completeness_summary: "Completeness summary",
   question_summary: "Question-level summary",
   school_report: "School report",
+  identifiers: "Identifying information (for record linkage)",
 };
 
 export const EXPORT_FORMATS = ["bids", "csv", "xlsx", "pdf", "json"] as const;
@@ -40,6 +41,7 @@ export const FORMATS_BY_KIND: Record<ExportKind, readonly ExportFormat[]> = {
   completeness_summary: ["csv", "xlsx", "pdf"],
   question_summary: ["csv", "xlsx"],
   school_report: ["pdf"],
+  identifiers: ["csv", "xlsx"],
 };
 
 export const EXPORT_SCOPES = ["all", "filtered", "selected", "single"] as const;
@@ -79,6 +81,13 @@ export const exportSpecSchema = z.object({
   school: z.string().regex(/^[A-Z]{2,12}$/).optional(),
   yearGroup: z.number().int().min(1).max(13).nullable().optional(),
   observation: z.enum(OBSERVATIONS).default("latest"),
+  /**
+   * Identifying information (administrators only): why it is needed, in the
+   * administrator's words, and their confirmation. Both are checked by the
+   * server before the file is made, and both go in the audit log.
+   */
+  identityPurpose: z.string().max(500).optional(),
+  identityConfirmed: z.boolean().default(false),
   /** Search text is never accepted for exports: exports are reproducible from filters alone. */
 });
 
@@ -100,6 +109,8 @@ export interface ExportSpec {
   school?: string;
   yearGroup?: number | null;
   observation: Observation;
+  identityPurpose?: string;
+  identityConfirmed: boolean;
 }
 
 export class ExportSpecError extends Error {}
@@ -122,6 +133,7 @@ export function parseExportSpec(raw: unknown): ExportSpec {
   if (d.kind === "question_summary" && !d.versionHash) throw new ExportSpecError("choose the survey version for a question-level summary");
   if (d.kind === "school_report" && !d.school) throw new ExportSpecError("choose the school the report is for");
   if (d.kind === "school_report" && (d.scope === "selected" || d.scope === "single")) throw new ExportSpecError("a school report covers the filtered sittings, not chosen ones");
+  if (d.kind === "identifiers" && d.deidentified) throw new ExportSpecError("identifying information cannot be de-identified");
   const spec: ExportSpec = {
     kind: d.kind,
     format: d.format,
@@ -139,6 +151,8 @@ export function parseExportSpec(raw: unknown): ExportSpec {
     ...(d.versionHash ? { versionHash: d.versionHash } : {}),
     ...(d.kind === "school_report" && d.school ? { school: d.school, yearGroup: d.yearGroup ?? null } : {}),
     observation: d.observation,
+    ...(d.kind === "identifiers" && d.identityPurpose?.trim() ? { identityPurpose: d.identityPurpose.trim() } : {}),
+    identityConfirmed: d.kind === "identifiers" && d.identityConfirmed,
   };
   if (spec.scope === "all") spec.filters = { ...spec.filters, datePreset: "all", statuses: [], surveys: [], versions: [], sites: [], sources: [], flagged: "any", reviewStatuses: [], questionOutcomes: [] };
   return spec;
@@ -150,8 +164,23 @@ export function exportSurvey(spec: Pick<ExportSpec, "scope" | "filters">): strin
 }
 
 /** Row-level data (one row per sitting or per answer) is sensitive; aggregates are not. */
-export function isSensitive(spec: ExportSpec): boolean {
-  return spec.kind === "sessions" || spec.kind === "session_report";
+export function isSensitive(spec: Pick<ExportSpec, "kind">): boolean {
+  return spec.kind === "sessions" || spec.kind === "session_report" || spec.kind === "identifiers";
+}
+
+/** The shortest purpose accepted for identifying information: a sentence, not a word. */
+export const IDENTITY_PURPOSE_MIN = 15;
+
+/**
+ * Why identifying information may not be made yet, or null when it may: the
+ * administrator has said what it is for and confirmed they are authorised.
+ * Checked by the server when the file is created (a preview needs neither).
+ */
+export function identityApprovalProblem(spec: Pick<ExportSpec, "kind" | "identityPurpose" | "identityConfirmed">): string | null {
+  if (spec.kind !== "identifiers") return null;
+  if ((spec.identityPurpose ?? "").length < IDENTITY_PURPOSE_MIN) return "say what the identifying information is needed for (at least a sentence)";
+  if (!spec.identityConfirmed) return "confirm that you are authorised to receive identifying information and will handle it as the study's approvals allow";
+  return null;
 }
 
 export function authoriseExport(
@@ -168,6 +197,7 @@ export function authoriseExport(
   if (spec.includeFreeText && !can(role, "export.freeText")) return { ok: false, reason: "your role may not export free-text answers" };
   if (spec.includeStudyCode && !can(role, "export.studyCode")) return { ok: false, reason: "your role may not export study codes" };
   if (spec.format === "json" && !can(role, "export.json")) return { ok: false, reason: "JSON exports are for administrators" };
+  if (spec.kind === "identifiers" && !can(role, "export.identity")) return { ok: false, reason: "only administrators can export identifying information" };
   void policy;
   return { ok: true };
 }

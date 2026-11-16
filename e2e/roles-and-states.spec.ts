@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { ADMIN, RESEARCHER, REVIEWER, signIn } from "./support";
+import { ADMIN, RESEARCHER, REVIEWER, signIn, signOut } from "./support";
 
 test("a read-only reviewer sees data but cannot change reviews or export session data", async ({ page }) => {
   await signIn(page, REVIEWER);
@@ -79,6 +80,46 @@ test("an administrator sees the audit log, access settings and filter-empty stat
   await expect(page.getByRole("heading", { name: "No sessions match these filters" })).toBeVisible();
   await page.getByRole("button", { name: "Clear search and filters" }).click();
   await expect(page.locator("tbody tr[data-row]").first()).toBeVisible();
+});
+
+test("only an administrator exports identifying information, after stating why and approving it", async ({ page }) => {
+  // A researcher is not offered it.
+  await signIn(page, RESEARCHER);
+  await page.getByRole("link", { name: "Sessions", exact: true }).click();
+  await page.getByRole("button", { name: "Export filtered" }).click();
+  const dialog = page.getByRole("dialog", { name: "Export data" });
+  await expect(dialog.getByRole("option", { name: /Identifying information/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await signOut(page);
+
+  await signIn(page, ADMIN);
+  await page.getByRole("link", { name: "Sessions", exact: true }).click();
+  await page.getByRole("button", { name: "Export filtered" }).click();
+  await dialog.getByLabel("What to export").selectOption({ label: "Identifying information (for record linkage)" });
+  const preview = dialog.locator(".export-preview");
+  await expect(preview).toContainText("Names, dates of birth and home addresses, with participant codes");
+  await expect(preview).toContainText("This file names children");
+  const generate = dialog.getByRole("button", { name: "Generate export" });
+  // Neither the purpose alone nor the approval alone is enough.
+  await expect(generate).toBeDisabled();
+  await dialog.getByLabel("What is this identifying information needed for?").fill("Linkage list for the record-linkage service (test)");
+  await expect(generate).toBeDisabled();
+  await dialog.getByLabel(/I approve this export/).check();
+  await expect(generate).toBeEnabled();
+  await generate.click();
+  await expect(dialog.getByText(/is ready/)).toBeVisible({ timeout: 60_000 });
+  const [file] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Download" }).click()]);
+  expect(file.suggestedFilename()).toMatch(/^myself_demo_identifiers_.*\.csv$/);
+  const csv = readFileSync((await file.path())!, "utf8");
+  expect(csv.startsWith("\uFEFFparticipant_code,wave,session_id,study_code,site,started_at,first_name,last_name,dob,")).toBe(true);
+  // Identities only: no answers travel with them.
+  expect(csv).not.toContain("demo_sleep");
+  await page.keyboard.press("Escape");
+
+  // The purpose is in the audit log.
+  await page.getByRole("link", { name: "Audit activity" }).click();
+  await expect(page.locator("table.data")).toContainText("identifiers");
+  await expect(page.locator("table.data")).toContainText("purpose: Linkage list for the record-linkage service (test)");
 });
 
 test("the main screens have no serious accessibility violations (axe, WCAG 2.1 AA)", async ({ page }) => {
