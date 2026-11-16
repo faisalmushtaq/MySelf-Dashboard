@@ -5,6 +5,7 @@ import {
   EXPORT_SCOPE_LABELS,
   EXPORT_FORMAT_LABELS,
   FORMATS_BY_KIND,
+  IDENTITY_PURPOSE_MIN,
   type ExportFormat,
   type ExportJobView,
   type ExportKind,
@@ -83,12 +84,18 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
   const [job, setJob] = useState<ExportJobView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // Identifying information (administrators): why, and an explicit confirmation.
+  const [purpose, setPurpose] = useState("");
+  const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  const identityKind = kind === "identifiers";
 
   useEffect(() => {
     if (!open) return;
     setJob(null);
     setError(null);
     setConfirmed(false);
+    setPurpose("");
+    setIdentityConfirmed(false);
     setKind(initial.kind ?? (rowLevel ? "sessions" : "completeness_summary"));
     setScope(initial.scope ?? "filtered");
     setFormat(initial.format ?? (initial.kind === "session_report" ? "pdf" : FORMATS_BY_KIND[initial.kind ?? (rowLevel ? "sessions" : "completeness_summary")][0]!));
@@ -121,7 +128,9 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     ...(kind === "question_summary" ? { versionHash } : {}),
     ...(kind === "school_report" ? { school: school || undefined, yearGroup, observation } : {}),
   };
+  // The preview does not depend on the purpose, so typing it does not re-check the export.
   const specKey = useDebounced(JSON.stringify(spec), 250);
+  const purposeOk = purpose.trim().length >= IDENTITY_PURPOSE_MIN;
 
   useEffect(() => {
     if (!open || job) return;
@@ -165,7 +174,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     setError(null);
     announce("Export started. This can take a little while for large exports.", "info", false);
     try {
-      const j = await api.createExport(spec);
+      const j = await api.createExport(identityKind ? { ...spec, identityPurpose: purpose.trim(), identityConfirmed } : spec);
       setJob(j);
       if (j.status === "ready") announce(`Export ready: ${j.fileName}`, "success");
       else {
@@ -191,7 +200,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
     }
   };
 
-  const kinds: ExportKind[] = ["sessions", "session_report", "completeness_summary", "question_summary", "school_report"];
+  const kinds: ExportKind[] = ["sessions", "session_report", "completeness_summary", "question_summary", "school_report", ...(can("export.identity") ? (["identifiers"] as ExportKind[]) : [])];
   const scopes: ExportScope[] = ["all", "filtered", ...(initial.sessionIds?.length && kind !== "school_report" ? (["selected"] as ExportScope[]) : [])];
 
   return (
@@ -342,7 +351,37 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                 </span>
               </label>
             ) : null}
-            <p className="hint">Names, dates of birth, home addresses, UPNs, NHS numbers and secret-code answers are never exported from this dashboard.</p>
+            {identityKind ? (
+              <div className="identity-approval">
+                <Notice tone="warn">
+                  This export names children: their first and last name, date of birth and home address, with their participant code. It is for administrators, for a
+                  purpose the study's ethics approval and data management plan allow, such as sending the linkage list to Connected West Yorkshire.
+                </Notice>
+                <label>
+                  What is this identifying information needed for?
+                  <textarea
+                    value={purpose}
+                    maxLength={500}
+                    rows={3}
+                    placeholder="For example: the linkage list for Connected West Yorkshire, for the November 2026 sittings."
+                    onChange={(e) => setPurpose(e.target.value)}
+                  />
+                  <span className="hint block">Recorded in the audit log with your name. At least {IDENTITY_PURPOSE_MIN} characters.</span>
+                </label>
+                <label className="check confirm">
+                  <input type="checkbox" checked={identityConfirmed} onChange={(e) => setIdentityConfirmed(e.target.checked)} />
+                  <span>
+                    I approve this export. I am authorised to receive this identifying information, I need it for the purpose above, and I will keep it apart from the
+                    answers, share it only by a route the study has approved, and delete my copy when the purpose is done.
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <p className="hint">
+                Names, dates of birth, home addresses, UPNs, NHS numbers and secret-code answers are never in this export.
+                {can("export.identity") ? " Administrators can export names, dates of birth and addresses separately, as “Identifying information (for record linkage)”." : ""}
+              </p>
+            )}
           </form>
 
           <section className="export-preview" aria-live="polite" aria-busy={previewing}>
@@ -359,7 +398,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                   <div><dt>Survey versions</dt><dd>{preview.versions.length ? preview.versions.map((v) => `${v.version === "unknown" ? "unknown" : `v${v.version}`} (${v.sessions})`).join(", ") : "—"}</dd></div>
                   <div><dt>Fields</dt><dd className="fields">{preview.fields.join(", ")}</dd></div>
                   <div><dt>Free-text answers</dt><dd>{preview.includesFreeText ? "Included" : "Not included"}</dd></div>
-                  <div><dt>Identifiers</dt><dd>{!preview.sensitive ? "None (summary)" : preview.deidentified ? "None (de-identified)" : "Participant codes, study codes, sitting and device IDs, exact times"}</dd></div>
+                  <div><dt>Identifiers</dt><dd>{preview.kind === "identifiers" ? "Names, dates of birth and home addresses, with participant codes" : !preview.sensitive ? "None (summary)" : preview.deidentified ? "None (de-identified)" : "Participant codes, study codes, sitting and device IDs, exact times"}</dd></div>
                   <div><dt>Format</dt><dd>{EXPORT_FORMAT_LABELS[preview.format]}</dd></div>
                   <div><dt>File name</dt><dd><code>{preview.fileName}</code></dd></div>
                 </dl>
@@ -369,7 +408,7 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
                   </Notice>
                 ))}
                 {!preview.allowed ? <Notice tone="warn">{preview.refusal}</Notice> : null}
-                {preview.allowed && preview.sensitive ? (
+                {preview.allowed && preview.sensitive && preview.kind !== "identifiers" ? (
                   <label className="check confirm">
                     <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
                     I will store and share this file only as the study's data management plan allows.
@@ -388,7 +427,14 @@ export function ExportDialog({ open, onClose, initial }: { open: boolean; onClos
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={!preview || !preview.allowed || running || previewing || (preview.sensitive && !confirmed) || preview.sessionCount === 0}
+                disabled={
+                  !preview ||
+                  !preview.allowed ||
+                  running ||
+                  previewing ||
+                  preview.sessionCount === 0 ||
+                  (preview.kind === "identifiers" ? !(purposeOk && identityConfirmed) : preview.sensitive && !confirmed)
+                }
                 onClick={() => void create()}
               >
                 <Icon name="download" size={16} /> {running ? "Generating…" : "Generate export"}

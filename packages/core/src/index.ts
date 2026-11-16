@@ -18,6 +18,7 @@ export * from "./present.js";
 export * from "./csv.js";
 export * from "./exportSpec.js";
 export * from "./exportData.js";
+export * from "./identifiers.js";
 export * from "./api.js";
 export * from "./figures/index.js";
 export * from "./scoring/index.js";

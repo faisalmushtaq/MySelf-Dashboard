@@ -194,10 +194,37 @@ headroom; the code is tested at that size.
 Formats: BIDS (the default for session data: a zip laid out as the survey's own
 export, with `linkage.tsv` when identifiers are included), CSV (with formula-injection
 neutralisation), XLSX, PDF (session report, completeness report), JSON (administrators
-only). Identifying items (names, dates of birth, UPN, NHS number, the secret-code
-answers) are **never** exported by this dashboard — they belong to the identity project.
+only). Identifying items (names, dates of birth, home addresses, the secret-code answers)
+are never in any of these exports; administrators can export names, dates of birth and
+addresses separately, as described in 2.5.1. UPNs and NHS numbers are not collected.
 Participant codes and waves are included unless the user chooses "de-identified"; study
 codes only when the role also allows them.
+
+### 2.5.1 Identifying information (administrators only)
+
+The survey diverts names, dates of birth, home addresses and secret-code answers into
+an identity partition at ingest, so no other export can contain them. Record linkage
+(for example, the list sent to Connected West Yorkshire) needs them, so administrators
+have one export that does: **Identifying information (for record linkage)**, CSV or
+XLSX, one row per sitting with participant code, wave, session id, study code, site,
+start time, first and last name, date of birth, the address in its parts (house,
+street, area, postcode, postcode district, UPRN), any other identifying answers, and
+the 16+ linkage answer (`linkage_choice_16_plus`; a "No" is left out of any linkage
+list). No answers are in it, so identities and responses never share a file.
+
+- **Who:** the capability `export.identity`, held only by administrators (`owner`).
+  `authoriseExport` refuses every other role, on the server, for preview and create.
+- **Approval:** the administrator writes what it is for (at least 15 characters) and
+  ticks a confirmation that they are authorised, need it for that purpose, will keep it
+  apart from the answers, share it only by an approved route and delete their copy
+  when done. `createExport` refuses the file without both (`identityApprovalProblem`),
+  and records the refusal.
+- **Record:** the purpose and confirmation are stored on the export job and in the
+  audit entry (`identifyingInformation: true`), beside who made it and when.
+- **Handling:** the identifying answers are read for that one file only and never
+  cached (`loadStudyDataset({ keepIdentity: true })`); the file is formula-safe,
+  stored privately, downloadable only by the administrator who made it (not by other
+  administrators), audited on download, and deleted after `exportRetentionHours`.
 
 PDF reports are laid out on the server (`exporters/report.ts`, a small kit on pdfkit:
 running head and "Page N of M" footer, key-figure tiles, ruled tables that repeat their

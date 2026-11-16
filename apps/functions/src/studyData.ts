@@ -70,11 +70,13 @@ const TTL_MS = 5 * 60_000;
 
 export async function loadStudyDataset(
   study: string,
-  options: { fresh?: boolean; onProgress?: (fraction: number) => Promise<void>; schoolYearStartMonth?: number } = {},
+  options: { fresh?: boolean; onProgress?: (fraction: number) => Promise<void>; schoolYearStartMonth?: number; keepIdentity?: boolean } = {},
 ): Promise<{ study: StudyDataset; sittings: Map<string, Sitting> }> {
   const hit = cache.get(study);
+  // Identifying answers are built for the one export that asked, and never cached.
+  const keepIdentity = options.keepIdentity === true;
   const startMonth = options.schoolYearStartMonth ?? hit?.startMonth ?? 9;
-  if (!options.fresh && hit && hit.startMonth === startMonth && Date.now() - hit.at < TTL_MS) return hit.value;
+  if (!keepIdentity && !options.fresh && hit && hit.startMonth === startMonth && Date.now() - hit.at < TTL_MS) return hit.value;
   const { rows } = await currentRows(study);
   const ids = rows.map((r) => r.summary.sessionId);
   const sittings = new Map<string, Sitting>();
@@ -83,8 +85,9 @@ export async function loadStudyDataset(
     await options.onProgress?.(Math.min(1, (i + 200) / Math.max(1, ids.length)));
   }
   const [releases, links] = await Promise.all([surveyManifests(study), linkageRecords(study)]);
-  const dataset = deriveStudyDataset({ study, sittings: [...sittings.values()], manifests: releases, ...links, schoolYearStartMonth: startMonth });
+  const dataset = deriveStudyDataset({ study, sittings: [...sittings.values()], manifests: releases, ...links, schoolYearStartMonth: startMonth, keepIdentity });
   const value = { study: dataset, sittings };
+  if (keepIdentity) return value;
   cache.set(study, { at: Date.now(), startMonth, value });
   return value;
 }

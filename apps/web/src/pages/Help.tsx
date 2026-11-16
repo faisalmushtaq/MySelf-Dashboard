@@ -116,7 +116,9 @@ export function HelpContent() {
         <p>
           Session exports default to a BIDS dataset with identifiers (participant code, wave, study code, session id) so the data can be linked to other
           records; <code>linkage.tsv</code> holds the identifiers and is kept out of what a BIDS validator reads. Untick &ldquo;Include identifiers&rdquo; for a
-          de-identified copy. Names, dates of birth, home addresses, UPNs, NHS numbers and the secret-code answers are never exported by the dashboard.
+          de-identified copy. Names, dates of birth, home addresses and the secret-code answers are never in these exports. Administrators can export names,
+          dates of birth and home addresses for record linkage as &ldquo;Identifying information (for record linkage)&rdquo;: a separate file, with no answers in
+          it, made only after they say what it is for and approve it. The purpose is recorded in the audit log.
         </p>
         <h3>Keyboard</h3>
         <dl className="defs keys">
@@ -132,7 +134,7 @@ export function HelpContent() {
       <section>
         <h3>Privacy</h3>
         <ul>
-          <li>Names, dates of birth and study-code components are never shown or exported here, for any role.</li>
+          <li>Names, dates of birth and study-code components are never shown here, for any role. Only administrators can export names, dates of birth and addresses, in a separate file, after stating why and approving it.</li>
           <li>Researcher notes and flags are kept apart from the participant's answers and never change them.</li>
           <li>Every session viewed, review change, export and download is recorded in the audit log.</li>
           <li>Exports are generated on the server, downloadable only by the person who made them, and deleted after {p?.exportRetentionHours ?? 24} hours.</li>

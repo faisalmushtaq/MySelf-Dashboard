@@ -33,6 +33,12 @@ export interface StudyDataset {
    * year is kept: the date of birth, like every identifying answer, is dropped.
    */
   schoolYearFromDob: Record<string, number>;
+  /**
+   * The identifying answers (names, dates of birth, addresses), kept only when
+   * asked for with `keepIdentity` — for the administrators' identifying-
+   * information export, and never cached.
+   */
+  identity?: { sessionId: string; participantId: string; variable: string; value: string }[];
 }
 
 /**
@@ -66,6 +72,8 @@ export function deriveStudyDataset(input: {
   assignments?: Record<string, string>;
   /** First month of the school year, for year groups from dates of birth (9 = September). */
   schoolYearStartMonth?: number;
+  /** Keep the identifying answers (administrators' identifying-information export only). */
+  keepIdentity?: boolean;
 }): StudyDataset {
   const excluded: Excluded[] = [];
   const warnings: string[] = [];
@@ -99,6 +107,7 @@ export function deriveStudyDataset(input: {
   // so the last pass's list is the whole list (survey D-63).
   let nameSightings: ReturnType<typeof ingest>["nameSightings"] | undefined;
   const schoolYearFromDob: Record<string, number> = {};
+  const identity: NonNullable<StudyDataset["identity"]> = [];
   for (const [hash, group] of [...groups.entries()].sort((a, b) => earliest(a[1]).localeCompare(earliest(b[1])))) {
     const result = ingest(
       [...group].sort((a, b) => a.startedAt.localeCompare(b.startedAt)),
@@ -117,12 +126,13 @@ export function deriveStudyDataset(input: {
     warnings.push(...result.warnings);
     collisions = result.collisions.map((c) => ({ participantId: c.participantId, sessionIds: [...c.sessions] }));
     for (const id of result.identity) {
+      if (input.keepIdentity) identity.push({ sessionId: id.sessionId, participantId: id.participantId, variable: id.variable, value: id.value });
       if (id.variable !== "dob") continue;
       const year = schoolYearOn(id.value, id.recordedAt, input.schoolYearStartMonth ?? 9);
       if (year !== null) schoolYearFromDob[id.sessionId] = year;
     }
   }
-  return { dataset, excluded, collisions, warnings, schoolYearFromDob };
+  return { dataset, excluded, collisions, warnings, schoolYearFromDob, ...(input.keepIdentity ? { identity } : {}) };
 }
 
 /**
